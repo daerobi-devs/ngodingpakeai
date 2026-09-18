@@ -30,20 +30,31 @@ export const metadata: Metadata = {
     title: 'ngodingpakeprd — Generator PRD Standar Industri untuk AI Coding',
     description: 'Ubah ide mentah menjadi PRD & arsitektur teknis terstruktur dengan AI Engine, siap dieksekusi oleh Cursor, Claude Code, dan Roo Code.',
     siteName: 'ngodingpakeprd',
+    locale: 'id_ID',
     images: [
       {
-        url: '/og-image.jpg',
-        width: 1280,
-        height: 720,
+        url: `${APP_URL}/og-image.jpg`,
+        secureUrl: `${APP_URL}/og-image.jpg`,
+        width: 1200,
+        height: 630,
+        type: 'image/jpeg',
         alt: 'ngodingpakeprd — AI Architecture & PRD Engine',
+      },
+      {
+        url: `${APP_URL}/logo-square.jpg`,
+        secureUrl: `${APP_URL}/logo-square.jpg`,
+        width: 600,
+        height: 600,
+        type: 'image/jpeg',
+        alt: 'ngodingpakeprd Logo',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ngodingpakeprd — Generator PRD Standar Industri untuk AI Coding',
-    description: 'Ubah ide mentah menjadi PRD & arsitektur teknis terstruktur dengan AI Engine.',
-    images: ['/og-image.jpg'],
+    description: 'Ubah ide mentah menjadi PRD & arsitektur teknis terstruktur dengan AI Engine, siap dieksekusi oleh Cursor, Claude Code, dan Roo Code.',
+    images: [`${APP_URL}/og-image.jpg`],
   },
 };
 
