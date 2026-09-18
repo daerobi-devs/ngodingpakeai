@@ -1,5 +1,5 @@
 {
-  "name": "temp-app",
+  "name": "prd-architect",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,9 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/genai": "^2.22.0",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/jszip": "^3.4.0",
+    "canvas-confetti": "^1.9.4",
+    "jszip": "^3.10.2",
+    "lucide-react": "^1.46.0",
+    "mermaid": "^12.0.0",
     "next": "16.3.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

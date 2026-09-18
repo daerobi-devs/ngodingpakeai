@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { SystemSettings } from '@/lib/supabase/types';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const DEFAULT_SETTINGS: SystemSettings = {
+  id: 'default',
+  auth_mode: 'hybrid',
+  api_key_mode: 'server_managed',
+  monetization_mode: 'freemium',
+  ai_provider: 'gemini_direct',
+  trial_limit: 1,
+  qris_merchant_name: 'NGODINGPAKEPRD OFFICIAL',
+  qris_gopay_number: '0821-4475-4089',
+  qris_image_url: '/qris-gopay-placeholder.png',
+  pro_price_rp: 49000,
+  pro_price_formatted: 'Rp 49.000 / Lifetime Access',
+  admin_passcode: 'prdadmin99',
+  admin_emails: ['daerobi.devs@gmail.com'],
+};
+
+export async function GET() {
+  try {
+    const adminSupabase = createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('system_settings')
+      .select('*')
+      .eq('id', 'default')
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ success: true, settings: DEFAULT_SETTINGS }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      });
+    }
+
+    const sanitizedSlots = Array.isArray(data.gemini_slots)
+      ? data.gemini_slots.map((slot: any) => ({
+          ...slot,
+          key: slot.key ? '●●●●●●●●' : '',
+        }))
+      : undefined;
+
+    const publicSettings = {
+      ...data,
+      gemini_slots: sanitizedSlots,
+      nine_router_key: data.nine_router_key ? '●●●●●●●●' : undefined,
+      gemini_master_keys: data.gemini_master_keys ? '●●●●●●●●' : undefined,
+      openrouter_key: data.openrouter_key ? '●●●●●●●●' : undefined,
+      admin_passcode: undefined,
+    };
+
+    return NextResponse.json({ success: true, settings: publicSettings }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
+  } catch (e: unknown) {
+    const err = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ success: true, settings: DEFAULT_SETTINGS, note: err });
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const adminPasscode = req.headers.get('x-admin-passcode');
+    const envPasscode = process.env.ADMIN_PASSCODE ?? '';
+
+    if (!adminPasscode || !envPasscode || adminPasscode !== envPasscode) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Akses Admin Diperlukan' }, { status: 401 });
+    }
+
+    const adminSupabase = createAdminClient();
+    const body = await req.json();
+
+    const { id, ...updates } = body;
+
+    if (updates.nine_router_key === '●●●●●●●●') delete updates.nine_router_key;
+    if (updates.gemini_master_keys === '●●●●●●●●') delete updates.gemini_master_keys;
+    if (updates.openrouter_key === '●●●●●●●●') delete updates.openrouter_key;
+
+    updates.updated_at = new Date().toISOString();
+
+    let { data, error } = await adminSupabase
+      .from('system_settings')
+      .upsert({ id: 'default', ...updates })
+      .select()
+      .single();
+
+    if (error && (error.message?.includes('does not exist') || error.code === '42703')) {
+      // Gracefully retry with core columns if optional extension columns are not yet migrated
+      const coreUpdates = { ...updates };
+      delete coreUpdates.gemini_slots;
+      delete coreUpdates.pro_ai_provider;
+      delete coreUpdates.pro_model;
+      delete coreUpdates.free_ai_provider;
+      delete coreUpdates.free_model;
+
+      const retry = await adminSupabase
+        .from('system_settings')
+        .upsert({ id: 'default', ...coreUpdates })
+        .select()
+        .single();
+
+      if (!retry.error) {
+        return NextResponse.json({
+          success: true,
+          settings: retry.data,
+          note: 'Pengaturan tersimpan. Silakan jalankan supabase_schema.sql di Supabase untuk mengaktifkan kolom multi-slot permanen.',
+        });
+      }
+      return NextResponse.json({ success: false, error: retry.error.message }, { status: 500 });
+    }
+
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, settings: data });
+  } catch (e: unknown) {
+    const err = e instanceof Error ? e.message : 'Gagal memperbarui pengaturan';
+    return NextResponse.json({ success: false, error: err }, { status: 500 });
+  }
+}
