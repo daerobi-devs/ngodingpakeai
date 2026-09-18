@@ -2,7 +2,6 @@
 # Dockerfile — ngodingpakeprd
 # Multi-stage build: Builder + Runner (minimal image)
 # Optimized for Coolify / self-hosted Docker deploy
-# Node 22 required by mermaid 12.x & modern Supabase packages
 # ============================================================
 
 # Stage 1: Dependencies
@@ -12,10 +11,15 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 
-# Increase network timeout & retry to handle slow registry fetches in CI/Coolify
-RUN npm config set fetch-retry-maxtimeout 120000 && \
+# Prevent ECONNRESET & network timeouts on VPS/Coolify:
+# - Limit concurrent sockets (avoids connection drops from npm registry)
+# - Set retry and network timeouts
+RUN npm config set maxsockets 5 && \
     npm config set fetch-retries 5 && \
-    npm ci --legacy-peer-deps
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci --legacy-peer-deps --no-audit --no-fund || \
+    npm install --legacy-peer-deps --no-audit --no-fund
 
 # ============================================================
 # Stage 2: Builder
