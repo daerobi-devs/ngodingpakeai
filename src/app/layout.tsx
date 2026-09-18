@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
 });
 
-const APP_URL = 'https://ngodingpakeprd.com';
+const APP_URL = 'https://ngodingpakeprd.daeroom.my.id';
 
 export const metadata: Metadata = {
   title: 'ngodingpakeprd — Generator PRD Standar Industri untuk AI Coding',
