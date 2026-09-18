@@ -2,25 +2,30 @@
 # Dockerfile — ngodingpakeprd
 # Multi-stage build: Builder + Runner (minimal image)
 # Optimized for Coolify / self-hosted Docker deploy
+# Node 22 required by mermaid 12.x & modern Supabase packages
 # ============================================================
 
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --frozen-lockfile
+
+# Increase network timeout & retry to handle slow registry fetches in CI/Coolify
+RUN npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retries 5 && \
+    npm ci --legacy-peer-deps
 
 # ============================================================
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build args — akan diisi saat docker build atau dari Coolify
+# Build args untuk Next.js client-side public environment
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -32,7 +37,7 @@ RUN npm run build
 
 # ============================================================
 # Stage 3: Runner (image production yang ringan ~150MB)
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -42,7 +47,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy file hasil build standalone
+# Copy file hasil build standalone Next.js
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
