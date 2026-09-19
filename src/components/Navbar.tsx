@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -14,9 +14,21 @@ import {
   LogOut,
   Crown,
   Settings,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
+
+function formatCompactNumber(num: number): string {
+  if (!num || num <= 0) return '0';
+  if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1_000) {
+    return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return num.toLocaleString('id-ID');
+}
 
 interface NavbarProps {
   hasApiKey?: boolean;
@@ -48,6 +60,35 @@ export const Navbar: React.FC<NavbarProps> = ({
   const router = useRouter();
   const { user, profile, isPro, isAdmin, remainingTrials, logout, systemSettings } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [stats, setStats] = useState<{ users: number; prds: number }>({ users: 0, prds: 0 });
+
+  useEffect(() => {
+    if (!isLandingPage) return;
+
+    let isMounted = true;
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success) {
+          setStats({
+            users: Number(data.users) || 0,
+            prds: Number(data.prds) || 0,
+          });
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 60000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isLandingPage]);
 
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
   const isStrictLogin = systemSettings?.auth_mode === 'strict_login';
@@ -78,13 +119,32 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800/80 bg-[#09090b]/95 backdrop-blur-md text-white shadow-sm">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-        {/* Brand Logo */}
+        {/* Brand Logo & Realtime Community Stats */}
         <div className="flex items-center gap-3">
           <Link href="/" className="text-lg font-bold tracking-tight text-white flex items-center gap-1 hover:opacity-90 transition-opacity">
             <span className="font-extrabold tracking-tight">
               ngodingpake<span className="text-amber-500 font-black">prd</span>
             </span>
           </Link>
+
+          {isLandingPage && (
+            <div className="hidden sm:flex items-center gap-3.5 border-l border-zinc-800/90 pl-3.5 py-0.5 text-xs select-none">
+              <div className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="font-extrabold text-white text-[13px] tracking-tight">
+                  {formatCompactNumber(stats.users)}
+                </span>
+                <span className="text-zinc-400 text-xs font-medium">User</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="font-extrabold text-white text-[13px] tracking-tight">
+                  {formatCompactNumber(stats.prds)}
+                </span>
+                <span className="text-zinc-400 text-xs font-medium">PRD</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Controls */}
