@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { PRDOutput, RoadmapPhaseNode } from '@/types/prd';
+import { PRDOutput, RoadmapPhaseNode, SubFeatureNode } from '@/types/prd';
 import {
   GitBranch,
   Layers,
@@ -25,6 +25,14 @@ interface PhasedFeatureTreeProps {
   theme?: 'dark' | 'light';
 }
 
+const SCHEMA_GARBAGE_KEYS = new Set([
+  'status', 'description', 'icon', 'sub_features', 'id', 'label', 'priority', 'children'
+]);
+
+function isGarbageString(s: string): boolean {
+  return SCHEMA_GARBAGE_KEYS.has(s.trim().toLowerCase());
+}
+
 export const PhasedFeatureTree: React.FC<PhasedFeatureTreeProps> = ({
   prd,
   theme = 'dark',
@@ -38,7 +46,34 @@ export const PhasedFeatureTree: React.FC<PhasedFeatureTreeProps> = ({
   // Derive or use existing roadmap tree nodes
   const nodes: RoadmapPhaseNode[] = useMemo(() => {
     if (prd.roadmap_tree && prd.roadmap_tree.length > 0) {
-      return prd.roadmap_tree;
+      // Sanitize sub_features against schema key garbage
+      const sanitizedTree = prd.roadmap_tree.map((node) => {
+        const validSubFeatures = (node.sub_features || []).filter((item) => {
+          if (typeof item === 'string') return !isGarbageString(item);
+          if (typeof item === 'object' && item !== null) return !isGarbageString(item.label || '');
+          return true;
+        });
+
+        if (validSubFeatures.length === 0 && prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+          const matchingFeat = prd.feature_breakdown.find(
+            (f) => f.id === node.id || f.name.toLowerCase().includes(node.title.toLowerCase()) || node.title.toLowerCase().includes(f.name.toLowerCase())
+          ) || prd.feature_breakdown[0];
+          const subItems = matchingFeat.happy_path && matchingFeat.happy_path.length > 0
+            ? matchingFeat.happy_path.slice(0, 4)
+            : matchingFeat.business_rules.slice(0, 4);
+          return {
+            ...node,
+            sub_features: subItems.length > 0 ? subItems : [`Tampilan Antarmuka ${node.title}`, `Alur Proses & Validasi`, `Integrasi Data & Status`],
+          };
+        }
+
+        return {
+          ...node,
+          sub_features: validSubFeatures.length > 0 ? validSubFeatures : [`Tampilan Antarmuka ${node.title}`, `Alur Proses & Validasi`, `Integrasi Data & Status`],
+        };
+      });
+
+      return sanitizedTree;
     }
 
     // Fallback generator from feature_breakdown or scope
@@ -128,7 +163,7 @@ export const PhasedFeatureTree: React.FC<PhasedFeatureTreeProps> = ({
     const prompt = `Halo AI Coding Agent! Saya ingin mengeksekusi pembangunan ${phaseLabel} untuk proyek "${prd.title}".
 
 Daftar modul yang harus diselesaikan pada ${phaseLabel}:
-${phaseNodes.map((n, i) => `${i + 1}. ${n.title}\n   Sub-fitur:\n   ${n.sub_features.map((sf) => `• ${sf}`).join('\n   ')}`).join('\n\n')}
+${phaseNodes.map((n, i) => `${i + 1}. ${n.title}\n   Sub-fitur:\n   ${n.sub_features.map((sf) => `• ${typeof sf === 'string' ? sf : sf.label}`).join('\n   ')}`).join('\n\n')}
 
 Instruksi:
 1. Baca dan patuhi aturan arsitektur di docs/PRD.md dan docs/DESIGN.md.
@@ -327,17 +362,44 @@ Instruksi:
                     </div>
 
                     <ul className="space-y-1.5 text-xs">
-                      {(isExpanded ? node.sub_features : node.sub_features.slice(0, 3)).map((item, idx) => (
-                        <li
-                          key={idx}
-                          className={`flex items-start gap-2 leading-relaxed ${
-                            isLight ? 'text-zinc-700' : 'text-zinc-300'
-                          }`}
-                        >
-                          <span className="text-amber-400/80 font-bold shrink-0">•</span>
-                          <span className="line-clamp-1 sm:line-clamp-2">{item}</span>
-                        </li>
-                      ))}
+                      {(isExpanded ? node.sub_features : node.sub_features.slice(0, 3)).map((item, idx) => {
+                        const isObj = typeof item === 'object' && item !== null;
+                        const label = isObj ? item.label : String(item);
+                        const priority = isObj ? item.priority : undefined;
+                        const children = isObj && Array.isArray(item.children) ? item.children : [];
+
+                        return (
+                          <li key={idx} className="space-y-1">
+                            <div className={`flex items-start gap-2 leading-relaxed ${
+                              isLight ? 'text-zinc-700' : 'text-zinc-300'
+                            }`}>
+                              <span className="text-amber-400/80 font-bold shrink-0 mt-0.5">•</span>
+                              <span className="flex-1 line-clamp-1 sm:line-clamp-2">{label}</span>
+                              {priority && (
+                                <span className={`shrink-0 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                                  priority === 'P0'
+                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                }`}>
+                                  {priority}
+                                </span>
+                              )}
+                            </div>
+                            {children.length > 0 && (
+                              <ul className="ml-4 pl-2 border-l border-zinc-700/50 space-y-1">
+                                {children.map((child, ci) => (
+                                  <li key={ci} className={`flex items-start gap-1.5 text-[11px] ${
+                                    isLight ? 'text-zinc-600' : 'text-zinc-400'
+                                  }`}>
+                                    <span className="text-zinc-500">-</span>
+                                    <span>{typeof child === 'string' ? child : child.label}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
 
                     {node.sub_features.length > 3 && (

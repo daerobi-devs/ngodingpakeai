@@ -12,6 +12,8 @@ import {
   SlidersHorizontal,
   Wrench,
   Lock,
+  Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import {
   TEMPLATE_ARCHETYPES,
@@ -122,6 +124,54 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+
+  // Auto-enrich idea states
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [originalIdea, setOriginalIdea] = useState<string | null>(null);
+  const [enrichNotification, setEnrichNotification] = useState<string | null>(null);
+
+  const handleEnrichIdea = async () => {
+    if (!idea.trim() || isEnriching) return;
+    try {
+      setIsEnriching(true);
+      setEnrichNotification(null);
+      setOriginalIdea(idea);
+
+      const res = await fetch('/api/enrich-idea', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userIdea: idea.trim(),
+          language: selectedLanguage,
+          templateId: selectedTemplateId,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.enrichedIdea) {
+        setIdea(data.enrichedIdea);
+        setEnrichNotification('Ide berhasil diperkaya dengan konsep arsitektur modern!');
+        setTimeout(() => setEnrichNotification(null), 5000);
+      } else {
+        setEnrichNotification('Gagal memperkaya ide. Silakan coba lagi.');
+        setTimeout(() => setEnrichNotification(null), 3000);
+      }
+    } catch (e) {
+      console.error('Enrich idea error:', e);
+      setEnrichNotification('Terjadi kendala saat menghubungi server.');
+      setTimeout(() => setEnrichNotification(null), 3000);
+    } finally {
+      setIsEnriching(false);
+    }
+  };
+
+  const handleUndoEnrich = () => {
+    if (originalIdea !== null) {
+      setIdea(originalIdea);
+      setOriginalIdea(null);
+      setEnrichNotification(null);
+    }
+  };
 
   useEffect(() => {
     if (initialTemplateId && TEMPLATE_ARCHETYPES[initialTemplateId]) {
@@ -358,9 +408,15 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                 if (customError) setCustomError(null);
               }}
               onKeyDown={handleKeyDown}
-              rows={4}
+              rows={
+                idea.split('\n').length > 4
+                  ? Math.min(14, Math.max(7, idea.split('\n').length + 1))
+                  : idea.length > 180
+                  ? 9
+                  : 4
+              }
               placeholder="Jelaskan aplikasi yang ingin kamu buat... (Contoh: Web profil sekolah & PPDB, Toko online e-commerce UMKM, Sistem sewa alat camping, Aplikasi kasir POS, atau Platform booking tiket reservasi...)"
-              className={`w-full resize-none bg-transparent text-sm sm:text-base placeholder:text-zinc-500 focus:outline-hidden leading-relaxed ${
+              className={`w-full bg-transparent text-sm sm:text-base placeholder:text-zinc-500 focus:outline-hidden leading-relaxed min-h-[110px] max-h-[480px] overflow-y-auto transition-all ${
                 isLight ? 'text-zinc-900' : 'text-zinc-100'
               }`}
               disabled={isLoading}
@@ -478,43 +534,45 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                 {/* Language Dropdown Popover */}
                 {isLangMenuOpen && (
                   <div className="absolute left-0 bottom-full mb-2 w-48 rounded-xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-1.5 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedLanguage('id');
-                        setIsLangMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
-                        selectedLanguage === 'id'
-                          ? 'bg-amber-500/15 text-amber-300 font-bold'
-                          : 'text-zinc-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>🇮🇩</span>
-                        <span>Bahasa Indonesia</span>
-                      </div>
-                      {selectedLanguage === 'id' && <Check className="h-3.5 w-3.5 text-amber-400" />}
-                    </button>
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLanguage('id');
+                          setIsLangMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                          selectedLanguage === 'id'
+                            ? 'bg-amber-500/15 text-amber-300 font-bold'
+                            : 'text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono px-1 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">ID</span>
+                          <span>Bahasa Indonesia</span>
+                        </div>
+                        {selectedLanguage === 'id' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedLanguage('en');
-                        setIsLangMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
-                        selectedLanguage === 'en'
-                          ? 'bg-amber-500/15 text-amber-300 font-bold'
-                          : 'text-zinc-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>🇬🇧</span>
-                        <span>English</span>
-                      </div>
-                      {selectedLanguage === 'en' && <Check className="h-3.5 w-3.5 text-amber-400" />}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLanguage('en');
+                          setIsLangMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                          selectedLanguage === 'en'
+                            ? 'bg-amber-500/15 text-amber-300 font-bold'
+                            : 'text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono px-1 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">EN</span>
+                          <span>English</span>
+                        </div>
+                        {selectedLanguage === 'en' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -529,6 +587,43 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                 >
                   <Wrench className="h-3.5 w-3.5" />
                   <span>Ubah Stack</span>
+                </button>
+              )}
+
+              {/* Tombol Perkaya Ide (AI) */}
+              <button
+                type="button"
+                onClick={handleEnrichIdea}
+                disabled={isEnriching || isLoading || !idea.trim()}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isLight
+                    ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    : 'border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
+                }`}
+                title="Sempurnakan ide singkat menjadi konsep arsitektur modern dalam 1 detik"
+              >
+                {isEnriching ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                )}
+                <span>{isEnriching ? 'Memperkaya...' : 'Perkaya Ide (AI)'}</span>
+              </button>
+
+              {/* Tombol Urungkan jika ide telah diperkaya */}
+              {originalIdea !== null && !isEnriching && (
+                <button
+                  type="button"
+                  onClick={handleUndoEnrich}
+                  className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+                    isLight
+                      ? 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-100'
+                      : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  title="Kembalikan ke teks ide awal Anda"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span>Urungkan</span>
                 </button>
               )}
             </div>
@@ -548,6 +643,14 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Notifikasi Sukses Perkaya Ide */}
+        {enrichNotification && (
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-blue-500/10 text-blue-300 border border-blue-500/30 animate-in fade-in slide-in-from-top-1">
+            <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />
+            <span>{enrichNotification}</span>
+          </div>
+        )}
 
         {customError && (
           <p className="text-xs text-red-400 px-2 font-medium">{customError}</p>

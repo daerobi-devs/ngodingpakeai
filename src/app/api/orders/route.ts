@@ -5,7 +5,7 @@ import { createMpgInvoice, getMpgConfig } from '@/lib/mpg/client';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, userEmail, userName, amount, amountFormatted, tierId, paymentMethod } = body;
+    const { userId, userEmail, userName, amount, amountFormatted, tierId, paymentMethod, checkoutMode } = body;
 
     if (!userId || !userEmail) {
       return NextResponse.json(
@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     const mpgConfig = getMpgConfig(settings);
+    const isManualRequested = checkoutMode === 'manual';
 
     let randomCode = Math.floor(1000 + Math.random() * 9000);
     let orderCode = 'PRD-' + randomCode;
@@ -35,22 +36,30 @@ export async function POST(req: NextRequest) {
       order_code: orderCode,
       amount: amount || 49000,
       amount_formatted: amountFormatted || 'Rp 49.000',
-      payment_method: paymentMethod || 'QRIS GoPay',
+      payment_method: isManualRequested ? 'Manual GoPay / WhatsApp' : (paymentMethod || 'QRIS Dinamis Mandiri'),
       status: 'pending',
     };
     if (tierId) {
-      insertData.admin_notes = `Tier: ${tierId.toUpperCase()}`;
+      insertData.admin_notes = `Tier: ${tierId.toUpperCase()}${isManualRequested ? ' (Manual GoBiz)' : ''}`;
     }
 
-    // 2. If Mandiri Private Gateway is active, request dynamic QRIS invoice
-    if (mpgConfig.isMpgActive) {
+    // 2. If Mandiri Private Gateway is active and not manual mode, request dynamic QRIS invoice
+    if (mpgConfig.isMpgActive && !isManualRequested) {
       const generatedOrderId = `INV-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const packageName = tierId === 'plus' ? 'Paket PLUS (10 PRD/Hari)' : 'Paket PRO (50 PRD/Hari)';
       const mpgResult = await createMpgInvoice(
         {
           orderId: generatedOrderId,
           amount: amount || 49000,
           customerName: userName || userEmail.split('@')[0],
           customerEmail: userEmail,
+          items: [
+            {
+              name: packageName,
+              price: Math.round(amount || 49000),
+              quantity: 1,
+            },
+          ],
         },
         settings
       );
@@ -111,9 +120,17 @@ export async function POST(req: NextRequest) {
       final_amount: insertData.final_amount || res.data?.final_amount,
       unique_code: insertData.unique_code || res.data?.unique_code,
       expired_at: insertData.expired_at || res.data?.expired_at,
+      checkout_url: insertData.checkout_url || res.data?.checkout_url,
     };
 
-    return NextResponse.json({ success: true, order: finalOrder });
+    return NextResponse.json({
+      success: true,
+      order: finalOrder,
+      checkoutUrl: finalOrder.checkout_url,
+      checkout_url: finalOrder.checkout_url,
+      qr_string: finalOrder.qr_string,
+      mode: isManualRequested ? 'manual' : (checkoutMode || (mpgConfig.isHosted ? 'hosted' : 'headless')),
+    });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Gagal membuat pesanan';
     return NextResponse.json({ success: false, error: err }, { status: 500 });

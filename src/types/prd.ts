@@ -108,16 +108,28 @@ export interface PRDOutput {
     database_erd?: string;            // Mermaid erDiagram
     api_integration_matrix?: string;  // Mermaid flowchart / classDiagram
     sequence_diagram?: string;        // Mermaid sequenceDiagram
+    infrastructure_topology?: string; // Mermaid flowchart LR - Cloudflare, Nginx, Docker, DB, Cache
+    rbac_permission_matrix?: string;  // Mermaid flowchart TD - RBAC roles & permissions
+    data_pipeline_flow?: string;      // Mermaid flowchart LR - Data input, queue, worker, storage
   };
   metadata?: {
     modelUsed: string;
     generatedAt: string;
+    tokenUsage?: number;
+    tokensUsed?: number;
     retries?: number;
     fallbackCount?: number;
-    tokensUsed?: number;
+    geminiSlotUsed?: string | null;
     isServerKey?: boolean;
-    geminiSlotUsed?: string;
+    costEstimateRp?: number;
   };
+}
+
+export interface SubFeatureNode {
+  id?: string;
+  label: string;
+  priority?: 'P0' | 'P1' | 'P2';
+  children?: SubFeatureNode[];
 }
 
 export interface RoadmapPhaseNode {
@@ -127,13 +139,16 @@ export interface RoadmapPhaseNode {
   status?: "Direncanakan" | "Sedang Dikerjakan" | "Selesai" | string;
   description?: string;
   icon?: string;
-  sub_features: string[];
+  sub_features: (string | SubFeatureNode)[];
 }
 
 export interface ClarificationOption {
   id: string;
   label: string;
   description?: string;
+  isRecommended?: boolean;
+  recommendationReason?: string;
+  badge?: string;
 }
 
 export interface ClarificationQuestion {
@@ -150,6 +165,7 @@ export interface ClarificationQuestion {
   question: string;
   options: ClarificationOption[];
   recommendedOptionId: string;
+  recommendedOptionIds?: string[];
   isMultiSelect?: boolean;
   inputType?: "chips" | "textarea";
 }

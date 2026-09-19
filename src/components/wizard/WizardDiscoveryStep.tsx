@@ -39,8 +39,15 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
   const [answers, setAnswers] = useState<Record<string, string[]>>(() => {
     const initial: Record<string, string[]> = {};
     questions.forEach((q) => {
-      // Pre-select recommended option or first option by default
-      if (q.recommendedOptionId) {
+      // Pre-select all recommended options or primary recommendation
+      const recOptions = q.options.filter((o) => o.isRecommended);
+      if (recOptions.length > 0) {
+        if (q.isMultiSelect) {
+          initial[q.id] = recOptions.map((o) => o.label);
+        } else {
+          initial[q.id] = [recOptions[0].label];
+        }
+      } else if (q.recommendedOptionId) {
         const found = q.options.find((o) => o.id === q.recommendedOptionId);
         if (found) {
           initial[q.id] = [found.label];
@@ -339,22 +346,47 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {question.options.map((option) => {
                   const isSelected = selectedLabels.includes(option.label);
+                  const isRec = Boolean(option.isRecommended) || option.id === question.recommendedOptionId;
+                  const recLabel = option.recommendationReason || option.badge || 'Rekomendasi';
 
                   return (
                     <button
                       key={option.id}
                       type="button"
                       onClick={() => handleToggleOption(question, option.label)}
+                      title={option.description ? `${option.description}${isRec ? ` (${recLabel})` : ''}` : undefined}
                       className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all active:scale-95 cursor-pointer ${
                         isSelected
-                          ? 'border border-amber-500 bg-amber-500/15 text-amber-300 font-semibold shadow-xs shadow-amber-500/10'
+                          ? isLight
+                            ? 'border-2 border-blue-600 bg-blue-50 text-blue-800 font-bold shadow-xs'
+                            : 'border border-amber-500 bg-amber-500/15 text-amber-300 font-semibold shadow-xs shadow-amber-500/10'
+                          : isRec
+                          ? isLight
+                            ? 'border border-blue-300/80 bg-white text-slate-800 hover:border-blue-400'
+                            : 'border border-amber-500/30 bg-zinc-900/90 text-zinc-200 hover:border-amber-500/50'
                           : isLight
                           ? 'border border-zinc-300 bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                           : 'border border-zinc-800 bg-zinc-900/90 text-zinc-300 hover:border-zinc-700 hover:text-white'
                       }`}
                     >
-                      {isSelected && <Check className="h-3 w-3 text-amber-400" />}
+                      {isSelected && <Check className={`h-3 w-3 ${isLight ? 'text-blue-600' : 'text-amber-400'}`} />}
                       <span>{option.label}</span>
+                      {isRec && (
+                        <span
+                          className={`text-[9px] font-mono px-1.5 py-0.2 rounded-md font-bold uppercase tracking-wider ${
+                            isSelected
+                              ? isLight
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-amber-500 text-zinc-950 font-bold'
+                              : isLight
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                              : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                          }`}
+                          title={`Alasan: ${recLabel}`}
+                        >
+                          {recLabel}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

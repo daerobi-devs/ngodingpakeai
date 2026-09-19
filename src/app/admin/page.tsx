@@ -44,6 +44,9 @@ import {
   Play,
   Copy,
   Database,
+  Sun,
+  Moon,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -139,6 +142,10 @@ export default function AdminDashboard() {
   const [usersList, setUsersList] = useState<Profile[]>([]);
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'expiring' | 'expired' | 'free' | 'banned'>('all');
   const [ordersList, setOrdersList] = useState<PaymentOrder[]>([]);
+  const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [clearingRejectedOrders, setClearingRejectedOrders] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -173,6 +180,33 @@ export default function AdminDashboard() {
     totalServerTokens?: number;
   } | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+
+  // Theme Mode (Dark vs Light - Blue & White Theme)
+  const [adminTheme, setAdminTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem('admin_theme') as 'dark' | 'light' | null;
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        setAdminTheme(savedTheme);
+      }
+    } catch {}
+  }, []);
+
+  const toggleAdminTheme = () => {
+    const nextTheme = adminTheme === 'dark' ? 'light' : 'dark';
+    setAdminTheme(nextTheme);
+    try {
+      localStorage.setItem('admin_theme', nextTheme);
+    } catch {}
+    showToast('success', nextTheme === 'light' ? 'Mode Terang (Biru & Putih) aktif' : 'Mode Gelap aktif');
+  };
+
+  // Live Generation Optimization & Delete States
+  const [deletingGenId, setDeletingGenId] = useState<string | null>(null);
+  const [clearingGenerations, setClearingGenerations] = useState(false);
+  const [genSearchQuery, setGenSearchQuery] = useState('');
+  const [genKeyFilter, setGenKeyFilter] = useState<'all' | 'server' | 'byok'>('all');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -359,6 +393,95 @@ export default function AdminDashboard() {
       console.error('Failed to load monitoring:', e);
     } finally {
       setLoadingMonitoring(false);
+    }
+  };
+
+  const handleDeleteGeneration = async (id: string, title?: string) => {
+    if (!window.confirm(`Hapus log riwayat PRD "${title || id.slice(0, 8)}"?`)) return;
+
+    try {
+      setDeletingGenId(id);
+      // Optimistic local update
+      setMonitoringData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recentGenerations: prev.recentGenerations.filter((g: any) => g.id !== id),
+          totalGenerations: Math.max(0, (prev.totalGenerations || 1) - 1),
+        };
+      });
+
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAdminHeaders(),
+        },
+        body: JSON.stringify({
+          action: 'delete_generation',
+          id,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('success', 'Log riwayat PRD berhasil dihapus');
+      } else {
+        showToast('error', data.error || 'Gagal menghapus log');
+        fetchMonitoring();
+      }
+    } catch (e: any) {
+      showToast('error', e.message || 'Gagal menghapus log');
+      fetchMonitoring();
+    } finally {
+      setDeletingGenId(null);
+    }
+  };
+
+  const handleClearAllGenerations = async () => {
+    if (
+      !window.confirm(
+        'Apakah Anda yakin ingin MENGHAPUS SEMUA riwayat log generate PRD? Tindakan ini tidak dapat dibatalkan.'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setClearingGenerations(true);
+      // Optimistic local update
+      setMonitoringData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recentGenerations: [],
+          totalGenerations: 0,
+        };
+      });
+
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAdminHeaders(),
+        },
+        body: JSON.stringify({
+          action: 'clear_all_generations',
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('success', 'Semua riwayat log generasi berhasil dibersihkan');
+      } else {
+        showToast('error', data.error || 'Gagal membersihkan log');
+        fetchMonitoring();
+      }
+    } catch (e: any) {
+      showToast('error', e.message || 'Gagal membersihkan log');
+      fetchMonitoring();
+    } finally {
+      setClearingGenerations(false);
     }
   };
 
@@ -764,6 +887,79 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteOrder = async (orderId: string, orderCode?: string) => {
+    if (!confirm(`Hapus transaksi pesanan ${orderCode || orderId.slice(0, 8)} dari database?`)) {
+      return;
+    }
+
+    try {
+      setDeletingOrderId(orderId);
+      // Optimistic local update
+      setOrdersList((prev) => prev.filter((o) => o.id !== orderId));
+
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'delete_order',
+          orderId,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', 'Pesanan berhasil dihapus');
+      } else {
+        showToast('error', data.error || 'Gagal menghapus pesanan');
+        fetchOrders();
+      }
+    } catch (e: any) {
+      showToast('error', e.message || 'Gagal menghapus pesanan');
+      fetchOrders();
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
+  const handleClearRejectedOrders = async () => {
+    const rejectedCount = ordersList.filter((o) => o.status === 'rejected').length;
+    if (rejectedCount === 0) {
+      showToast('error', 'Tidak ada transaksi berstatus ditolak untuk dibersihkan');
+      return;
+    }
+
+    if (!confirm(`Hapus permanen semua ${rejectedCount} transaksi berstatus ditolak?`)) {
+      return;
+    }
+
+    try {
+      setClearingRejectedOrders(true);
+      // Optimistic local update
+      setOrdersList((prev) => prev.filter((o) => o.status !== 'rejected'));
+
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'clear_rejected_orders',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', `${rejectedCount} pesanan ditolak berhasil dibersihkan`);
+      } else {
+        showToast('error', data.error || 'Gagal membersihkan pesanan ditolak');
+        fetchOrders();
+      }
+    } catch (e: any) {
+      showToast('error', e.message || 'Gagal membersihkan pesanan');
+      fetchOrders();
+    } finally {
+      setClearingRejectedOrders(false);
+    }
+  };
+
   const handleToggleUserPro = async (userId: string, currentTier: string) => {
     const nextTier = currentTier === 'pro' ? 'free' : 'pro';
     try {
@@ -1029,7 +1225,7 @@ export default function AdminDashboard() {
 
 
   return (
-    <div className="min-h-screen flex bg-[#09090b] text-zinc-100 font-sans">
+    <div className={`min-h-screen flex font-sans transition-colors duration-200 ${adminTheme === 'light' ? 'admin-light bg-slate-50 text-slate-900' : 'bg-[#09090b] text-zinc-100'}`}>
       {/* Toast Floating Notification */}
       {toastMessage && (
         <div
@@ -1045,20 +1241,20 @@ export default function AdminDashboard() {
       )}
 
       {/* LEFT SIDEBAR */}
-      <aside className="w-64 border-r border-zinc-800/80 bg-[#0d0d10] flex flex-col justify-between shrink-0 hidden md:flex">
+      <aside className={`w-64 border-r flex flex-col justify-between shrink-0 hidden md:flex transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-[#0d0d10]'}`}>
         <div>
           {/* Logo & Brand */}
-          <div className="p-5 border-b border-zinc-800/80">
+          <div className={`p-5 border-b ${adminTheme === 'light' ? 'border-slate-200' : 'border-zinc-800/80'}`}>
             <div className="flex items-center gap-2.5">
               <Link href="/" className="flex items-center gap-1.5">
-                <span className="font-extrabold tracking-tight text-lg text-white">
-                  ngodingpake<span className="text-amber-500 font-black">prd</span>
+                <span className={`font-extrabold tracking-tight text-lg ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                  ngodingpake<span className={`${adminTheme === 'light' ? 'text-blue-600' : 'text-amber-500'} font-black`}>prd</span>
                 </span>
               </Link>
             </div>
             <div className="mt-2 flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-400 uppercase">
+              <span className={`text-[10px] font-mono font-bold tracking-wider uppercase ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>
                 ADMIN CONTROL v1.0
               </span>
             </div>
@@ -1083,20 +1279,24 @@ export default function AdminDashboard() {
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
                     isActive
-                      ? 'bg-amber-500/15 text-amber-400 font-bold border border-amber-500/30 shadow-xs'
+                      ? adminTheme === 'light'
+                        ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200 shadow-xs'
+                        : 'bg-amber-500/15 text-amber-400 font-bold border border-amber-500/30 shadow-xs'
+                      : adminTheme === 'light'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                       : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className={`h-4 w-4 ${isActive ? 'text-amber-400' : 'text-zinc-400'}`} />
+                    <Icon className={`h-4 w-4 ${isActive ? (adminTheme === 'light' ? 'text-blue-600' : 'text-amber-400') : (adminTheme === 'light' ? 'text-slate-400' : 'text-zinc-400')}`} />
                     <span>{tab.label}</span>
                   </div>
                   {tab.badge && (
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                         tab.id === 'orders' && pendingOrders > 0
-                          ? 'bg-amber-500 text-zinc-950 animate-bounce'
-                          : 'bg-zinc-800 text-zinc-400'
+                          ? adminTheme === 'light' ? 'bg-blue-600 text-white animate-bounce' : 'bg-amber-500 text-zinc-950 animate-bounce'
+                          : adminTheme === 'light' ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-zinc-800 text-zinc-400'
                       }`}
                     >
                       {tab.badge}
@@ -1109,16 +1309,20 @@ export default function AdminDashboard() {
         </div>
 
         {/* Footer info in sidebar */}
-        <div className="p-4 border-t border-zinc-800/80 bg-zinc-950/40 text-[11px] text-zinc-400 space-y-2">
+        <div className={`p-4 border-t text-[11px] space-y-2 ${adminTheme === 'light' ? 'border-slate-200 bg-slate-50 text-slate-500' : 'border-zinc-800/80 bg-zinc-950/40 text-zinc-400'}`}>
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500">Database:</span>
-            <span className="text-emerald-400 font-semibold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Supabase
+            <span className={adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}>Database:</span>
+            <span className="text-emerald-500 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Supabase
             </span>
           </div>
           <Link
             href="/generator"
-            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold transition-colors border border-zinc-800"
+            className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-colors border ${
+              adminTheme === 'light'
+                ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-xs'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-zinc-800'
+            }`}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Ke Generator App</span>
@@ -1129,19 +1333,53 @@ export default function AdminDashboard() {
       {/* RIGHT MAIN VIEW */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between">
+        <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between transition-colors ${
+          adminTheme === 'light'
+            ? 'border-slate-200 bg-white/90 shadow-xs'
+            : 'border-zinc-800 bg-zinc-950/80'
+        }`}>
           <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-white tracking-tight capitalize flex items-center gap-2">
+            <h1 className={`text-base font-bold tracking-tight capitalize flex items-center gap-2 ${
+              adminTheme === 'light' ? 'text-slate-900' : 'text-white'
+            }`}>
               <span>{activeTab.replace('_', ' ')}</span>
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Theme Switcher Toggle (Mode Terang vs Gelap) */}
+            <button
+              type="button"
+              onClick={toggleAdminTheme}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-xs ${
+                adminTheme === 'light'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                  : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800 hover:text-white'
+              }`}
+              title={adminTheme === 'light' ? 'Beralih ke Mode Gelap' : 'Beralih ke Mode Terang (Biru & Putih)'}
+            >
+              {adminTheme === 'light' ? (
+                <>
+                  <Moon className="h-3.5 w-3.5 text-blue-600" />
+                  <span className="hidden sm:inline">Mode Gelap</span>
+                </>
+              ) : (
+                <>
+                  <Sun className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Mode Terang</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={handleSaveSettings}
               disabled={savingSettings}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-98 disabled:opacity-50"
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-98 disabled:opacity-50 ${
+                adminTheme === 'light'
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20'
+                  : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'
+              }`}
             >
               {savingSettings ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
               <span>Simpan Perubahan</span>
@@ -1150,13 +1388,21 @@ export default function AdminDashboard() {
         </header>
 
         {/* Mobile Navigation Tabs */}
-        <div className="md:hidden flex items-center gap-1 border-b border-zinc-800 p-2 overflow-x-auto bg-zinc-950 text-xs">
+        <div className={`md:hidden flex items-center gap-1 border-b p-2 overflow-x-auto text-xs ${
+          adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800 bg-zinc-950'
+        }`}>
           {['overview', 'switchboard', 'ai_engine', 'orders', 'users', 'pricing'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
               className={`px-3 py-1.5 rounded-lg whitespace-nowrap capitalize ${
-                activeTab === tab ? 'bg-amber-500 text-zinc-950 font-bold' : 'text-zinc-400'
+                activeTab === tab
+                  ? adminTheme === 'light'
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'bg-amber-500 text-zinc-950 font-bold'
+                  : adminTheme === 'light'
+                  ? 'text-slate-600 hover:bg-slate-100'
+                  : 'text-zinc-400'
               }`}
             >
               {tab.replace('_', ' ')}
@@ -1167,280 +1413,431 @@ export default function AdminDashboard() {
         {/* Main Body */}
         <main className="p-4 sm:p-8 max-w-6xl w-full mx-auto space-y-6">
           {/* TAB 1: OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Stat Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-400 mb-2">
-                    <span className="text-xs font-semibold">Total Pengguna</span>
-                    <Users className="h-4 w-4 text-blue-400" />
+          {activeTab === 'overview' && (() => {
+            const filteredGenerations = (monitoringData?.recentGenerations || []).filter((gen: any) => {
+              if (genKeyFilter === 'server' && !gen.is_server_key) return false;
+              if (genKeyFilter === 'byok' && gen.is_server_key) return false;
+              if (genSearchQuery.trim()) {
+                const q = genSearchQuery.toLowerCase().trim();
+                const matchEmail = (gen.userEmail || '').toLowerCase().includes(q);
+                const matchName = (gen.userName || '').toLowerCase().includes(q);
+                const matchTitle = (gen.title || '').toLowerCase().includes(q);
+                const matchModel = (gen.model_used || '').toLowerCase().includes(q);
+                const matchSlot = (gen.gemini_slot_used || '').toLowerCase().includes(q);
+                const matchId = (gen.id || '').toLowerCase().includes(q);
+                return matchEmail || matchName || matchTitle || matchModel || matchSlot || matchId;
+              }
+              return true;
+            });
+
+            return (
+              <div className="space-y-6">
+                {/* Stat Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className={`rounded-2xl border p-5 shadow-xs transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <div className="flex items-center justify-between text-zinc-400 mb-2">
+                      <span className={`text-xs font-semibold ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>Total Pengguna</span>
+                      <Users className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div className={`text-2xl font-black ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>{totalUsers}</div>
+                    <div className={`text-[11px] mt-1 ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>{proUsers} Pengguna PRO</div>
                   </div>
-                  <div className="text-2xl font-black text-white">{totalUsers}</div>
-                  <div className="text-[11px] text-zinc-500 mt-1">{proUsers} Pengguna PRO</div>
+
+                  <div className={`rounded-2xl border p-5 shadow-xs transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <div className="flex items-center justify-between text-zinc-400 mb-2">
+                      <span className={`text-xs font-semibold ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>Pesanan QRIS Pending</span>
+                      <Clock className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <div className="text-2xl font-black text-amber-500">{pendingOrders}</div>
+                    <div className={`text-[11px] mt-1 ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>Perlu dicek di GoBiz</div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-5 shadow-xs transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <div className="flex items-center justify-between text-zinc-400 mb-2">
+                      <span className={`text-xs font-semibold ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>Estimasi Pendapatan</span>
+                      <DollarSign className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <div className="text-2xl font-black text-emerald-500">
+                      Rp {totalRevenue.toLocaleString('id-ID')}
+                    </div>
+                    <div className={`text-[11px] mt-1 ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>{approvedOrders} Transaksi Sukses</div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-5 shadow-xs transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <div className="flex items-center justify-between text-zinc-400 mb-2">
+                      <span className={`text-xs font-semibold ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>Token Server Terpakai</span>
+                      <Zap className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div className={`text-2xl font-black font-mono ${adminTheme === 'light' ? 'text-blue-600' : 'text-amber-400'}`}>
+                      {((monitoringData as any)?.totalServerTokens || 0).toLocaleString('id-ID')}
+                    </div>
+                    <div className={`text-[11px] mt-1 ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>
+                      ~{Math.round(((monitoringData as any)?.totalServerTokens || 0) / 6000)} PRD dari Kuota Admin
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-5 shadow-xs transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <div className="flex items-center justify-between text-zinc-400 mb-2">
+                      <span className={`text-xs font-semibold ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>AI Provider Aktif</span>
+                      <Cpu className="h-4 w-4 text-purple-500" />
+                    </div>
+                    <div className={`text-lg font-black truncate uppercase ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                      {settings.ai_provider.replace('_', ' ')}
+                    </div>
+                    <div className={`text-[11px] mt-1 ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>
+                      {settings.api_key_mode === 'server_managed' ? 'Server-Managed (Trial 1x)' : 'BYOK (User Key)'}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-400 mb-2">
-                    <span className="text-xs font-semibold">Pesanan QRIS Pending</span>
-                    <Clock className="h-4 w-4 text-amber-400" />
-                  </div>
-                  <div className="text-2xl font-black text-amber-400">{pendingOrders}</div>
-                  <div className="text-[11px] text-zinc-500 mt-1">Perlu dicek di GoBiz</div>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-400 mb-2">
-                    <span className="text-xs font-semibold">Estimasi Pendapatan</span>
-                    <DollarSign className="h-4 w-4 text-emerald-400" />
-                  </div>
-                  <div className="text-2xl font-black text-emerald-400">
-                    Rp {totalRevenue.toLocaleString('id-ID')}
-                  </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">{approvedOrders} Transaksi Sukses</div>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-400 mb-2">
-                    <span className="text-xs font-semibold">Token Server Terpakai</span>
-                    <Zap className="h-4 w-4 text-amber-400" />
-                  </div>
-                  <div className="text-2xl font-black text-amber-400 font-mono">
-                    {((monitoringData as any)?.totalServerTokens || 0).toLocaleString('id-ID')}
-                  </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">
-                    ~{Math.round(((monitoringData as any)?.totalServerTokens || 0) / 6000)} PRD dari Kuota Admin
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-400 mb-2">
-                    <span className="text-xs font-semibold">AI Provider Aktif</span>
-                    <Cpu className="h-4 w-4 text-purple-400" />
-                  </div>
-                  <div className="text-lg font-black text-white truncate uppercase">
-                    {settings.ai_provider.replace('_', ' ')}
-                  </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">
-                    {settings.api_key_mode === 'server_managed' ? 'Server-Managed (Trial 1x)' : 'BYOK (User Key)'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions & Status */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-6 space-y-4">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-amber-400" />
-                    <span>Konfigurasi Cepat (Quick Switch)</span>
-                  </h3>
-                  <div className="space-y-3 text-xs">
-                    <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800/80 bg-zinc-900/50">
-                      <div>
-                        <div className="font-semibold text-white">Mode Akses Pengunjung</div>
-                        <div className="text-zinc-400 text-[11px]">{settings.auth_mode}</div>
+                {/* Quick Actions & Status */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className={`rounded-2xl border p-6 space-y-4 transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                      <Radio className={`h-4 w-4 ${adminTheme === 'light' ? 'text-blue-600' : 'text-amber-400'}`} />
+                      <span>Konfigurasi Cepat (Quick Switch)</span>
+                    </h3>
+                    <div className="space-y-3 text-xs">
+                      <div className={`flex items-center justify-between p-3 rounded-xl border ${adminTheme === 'light' ? 'border-slate-200 bg-slate-50' : 'border-zinc-800/80 bg-zinc-900/50'}`}>
+                        <div>
+                          <div className={`font-semibold ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>Mode Akses Pengunjung</div>
+                          <div className={`text-[11px] ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>{settings.auth_mode}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('switchboard')}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                            adminTheme === 'light'
+                              ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          Ubah
+                        </button>
                       </div>
+
+                      <div className={`flex items-center justify-between p-3 rounded-xl border ${adminTheme === 'light' ? 'border-slate-200 bg-slate-50' : 'border-zinc-800/80 bg-zinc-900/50'}`}>
+                        <div>
+                          <div className={`font-semibold ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>Mesin AI Pembuat PRD</div>
+                          <div className={`text-[11px] ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>{settings.ai_provider}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('ai_engine')}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                            adminTheme === 'light'
+                              ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          Kelola
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-6 space-y-3 transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                      <Activity className="h-4 w-4 text-emerald-500" />
+                      <span>Petunjuk Sinkronisasi GoBiz</span>
+                    </h3>
+                    <p className={`text-xs leading-relaxed ${adminTheme === 'light' ? 'text-slate-600' : 'text-zinc-400'}`}>
+                      Saat pengguna memilih upgrade PRO dan melakukan scan QRIS GoPay, pesanan akan langsung muncul di tab <strong>GoBiz QRIS Orders</strong>. Buka aplikasi GoBiz di ponsel Anda, cocokkan nama pengirim/nominal, lalu klik tombol verifikasi.
+                    </p>
+                    <div className="pt-2">
                       <button
                         type="button"
-                        onClick={() => setActiveTab('switchboard')}
-                        className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                        onClick={() => setActiveTab('orders')}
+                        className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${
+                          adminTheme === 'light' ? 'text-blue-600 hover:text-blue-700' : 'text-amber-400 hover:text-amber-300'
+                        }`}
                       >
-                        Ubah
+                        <span>Buka Antrean Pesanan ({pendingOrders} Pending)</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                  </div>
+                </div>
 
-                    <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800/80 bg-zinc-900/50">
+                {/* Live Generation & Active Users Activity Feed */}
+                <div className={`rounded-2xl border p-5 sm:p-6 space-y-4 transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white shadow-xs' : 'border-zinc-800/80 bg-zinc-950'}`}>
+                  {/* Feed Header */}
+                  <div className={`flex flex-wrap items-center justify-between gap-3 border-b pb-4 ${adminTheme === 'light' ? 'border-slate-200' : 'border-zinc-800'}`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <div>
-                        <div className="font-semibold text-white">Mesin AI Pembuat PRD</div>
-                        <div className="text-zinc-400 text-[11px]">{settings.ai_provider}</div>
+                        <h3 className={`text-sm font-bold flex items-center gap-2 ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                          <span>Live Generation & User Activity</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                            REAL-TIME
+                          </span>
+                        </h3>
+                        <p className={`text-[11px] ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'}`}>
+                          Histori PRD yang digenerate oleh pengguna ({monitoringData?.totalGenerations || 0} total tercatat di database).
+                        </p>
                       </div>
+                    </div>
+
+                    {/* Header Action Buttons */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Tombol Hapus Semua Log */}
                       <button
                         type="button"
-                        onClick={() => setActiveTab('ai_engine')}
-                        className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                        onClick={handleClearAllGenerations}
+                        disabled={clearingGenerations || !monitoringData?.recentGenerations || monitoringData.recentGenerations.length === 0}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                          adminTheme === 'light'
+                            ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'
+                            : 'bg-red-950/40 hover:bg-red-900/50 text-red-400 border-red-800/50'
+                        }`}
+                        title="Hapus seluruh log riwayat generate PRD"
                       >
-                        Kelola
+                        <Trash2 className={`h-3.5 w-3.5 ${clearingGenerations ? 'animate-spin' : ''}`} />
+                        <span>{clearingGenerations ? 'Membersihkan...' : 'Bersihkan Semua'}</span>
+                      </button>
+
+                      {/* Tombol Refresh Feed */}
+                      <button
+                        type="button"
+                        onClick={fetchMonitoring}
+                        disabled={loadingMonitoring}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                          adminTheme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                            : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                        }`}
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${loadingMonitoring ? 'animate-spin' : ''}`} />
+                        <span>Perbarui</span>
                       </button>
                     </div>
                   </div>
-                </div>
 
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-6 space-y-3">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-emerald-400" />
-                    <span>Petunjuk Sinkronisasi GoBiz</span>
-                  </h3>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    Saat pengguna memilih upgrade PRO dan melakukan scan QRIS GoPay, pesanan akan langsung muncul di tab <strong>GoBiz QRIS Orders</strong>. Buka aplikasi GoBiz di ponsel Anda, cocokkan nama pengirim/nominal, lalu klik tombol verifikasi.
-                  </p>
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('orders')}
-                      className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 font-bold"
-                    >
-                      <span>Buka Antrean Pesanan ({pendingOrders} Pending)</span>
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+                  {/* Search & Key Filter Bar for Efficiency */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div className="relative flex-1 min-w-[220px] max-w-md">
+                      <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 ${adminTheme === 'light' ? 'text-slate-400' : 'text-zinc-500'}`} />
+                      <input
+                        type="text"
+                        value={genSearchQuery}
+                        onChange={(e) => setGenSearchQuery(e.target.value)}
+                        placeholder="Cari user, email, judul PRD, model..."
+                        className={`w-full pl-9 pr-3 py-1.5 rounded-xl text-xs border transition-all ${
+                          adminTheme === 'light'
+                            ? 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-500'
+                            : 'bg-zinc-900/90 border-zinc-800 text-white placeholder:text-zinc-500 focus:border-amber-500'
+                        }`}
+                      />
+                    </div>
 
-              {/* Live Generation & Active Users Activity Feed */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <div>
-                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <span>Live Generation & User Activity</span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                          REAL-TIME
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-zinc-400">
-                        Histori PRD yang baru saja digenerate oleh user ({monitoringData?.totalGenerations || 0} total dibuat).
-                      </p>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[11px] font-medium mr-1 ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>Filter Kunci:</span>
+                      {[
+                        { id: 'all', label: `Semua (${monitoringData?.recentGenerations?.length || 0})` },
+                        { id: 'server', label: 'Server Key' },
+                        { id: 'byok', label: 'BYOK' },
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setGenKeyFilter(f.id as any)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                            genKeyFilter === f.id
+                              ? adminTheme === 'light'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-amber-500 text-zinc-950 font-bold'
+                              : adminTheme === 'light'
+                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={fetchMonitoring}
-                    disabled={loadingMonitoring}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 transition-colors"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${loadingMonitoring ? 'animate-spin' : ''}`} />
-                    <span>Perbarui Feed</span>
-                  </button>
-                </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px]">
-                      <tr className="border-b border-zinc-800">
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[24%] min-w-[180px]">
-                          User / Akun
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[28%] min-w-[220px]">
-                          Judul Dokumen PRD
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
-                          Mesin AI & Slot Key
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[14%] min-w-[120px]">
-                          Konsumsi Token
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[8%] min-w-[80px]">
-                          Tier
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider text-right w-[8%] min-w-[80px]">
-                          Waktu
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
-                      {!monitoringData?.recentGenerations || monitoringData.recentGenerations.length === 0 ? (
+                  {/* Table with Compact Rows & Delete Button */}
+                  <div className={`overflow-x-auto rounded-xl border ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800 bg-zinc-950'}`}>
+                    <table className="w-full text-left text-xs">
+                      <thead className={`uppercase text-[10px] tracking-wider border-b ${
+                        adminTheme === 'light' ? 'bg-slate-100/90 text-slate-600 border-slate-200' : 'bg-zinc-900/70 text-zinc-400 border-zinc-800'
+                      }`}>
                         <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 font-medium">
-                            Belum ada aktivitas generate PRD yang tercatat di database.
-                          </td>
+                          <th className="px-3.5 py-2.5 font-semibold w-[22%] min-w-[170px]">
+                            User / Akun
+                          </th>
+                          <th className="px-3.5 py-2.5 font-semibold w-[26%] min-w-[210px]">
+                            Judul Dokumen PRD
+                          </th>
+                          <th className="px-3.5 py-2.5 font-semibold w-[18%] min-w-[140px]">
+                            Mesin AI & Slot
+                          </th>
+                          <th className="px-3.5 py-2.5 font-semibold w-[13%] min-w-[110px]">
+                            Token
+                          </th>
+                          <th className="px-3.5 py-2.5 font-semibold w-[7%] min-w-[70px]">
+                            Tier
+                          </th>
+                          <th className="px-3.5 py-2.5 font-semibold text-right w-[8%] min-w-[75px]">
+                            Waktu
+                          </th>
+                          <th className="px-3.5 py-2.5 font-semibold text-center w-[6%] min-w-[60px]">
+                            Aksi
+                          </th>
                         </tr>
-                      ) : (
-                        monitoringData.recentGenerations.map((gen: any) => (
-                          <tr key={gen.id} className="hover:bg-zinc-900/40 transition-colors">
-                            {/* User Account */}
-                            <td className="px-4 py-3 align-middle">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-7 h-7 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-[10px] font-bold text-amber-400 shrink-0 select-none">
-                                  {(gen.userName || gen.userEmail || 'U').charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-white truncate max-w-[170px]" title={gen.userEmail}>
-                                    {gen.userEmail}
-                                  </div>
-                                  <div className="text-[10px] text-zinc-500 truncate max-w-[170px]" title={gen.userName}>
-                                    {gen.userName || 'Guest / Pengguna'}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Judul PRD */}
-                            <td className="px-4 py-3 align-middle">
-                              <div className="font-semibold text-amber-300/90 hover:text-amber-200 transition-colors truncate max-w-[240px]" title={gen.title}>
-                                {gen.title}
-                              </div>
-                              <div className="text-[10px] text-zinc-500 font-mono">
-                                ID: {gen.id.slice(0, 8)}...
-                              </div>
-                            </td>
-
-                            {/* Mesin AI & Slot Key */}
-                            <td className="px-4 py-3 align-middle">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
-                                  {gen.model_used || 'AI Engine'}
-                                </span>
-                                {gen.gemini_slot_used && (
-                                  <span className="px-2 py-0.5 rounded-md text-[9px] font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                                    {gen.gemini_slot_used}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* Token Consumption */}
-                            <td className="px-4 py-3 align-middle">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono text-xs font-bold text-white">
-                                  {(gen.tokens_used || 0).toLocaleString('id-ID')}
-                                </span>
-                                <span
-                                  className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
-                                    gen.is_server_key
-                                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                  }`}
-                                >
-                                  {gen.is_server_key ? 'Server' : 'BYOK'}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* Tier */}
-                            <td className="px-4 py-3 align-middle">
-                              <span
-                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded uppercase font-mono tracking-wide ${
-                                  gen.userTier === 'pro'
-                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : gen.userTier === 'plus'
-                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                    : 'bg-zinc-800/90 text-zinc-400 border border-zinc-700/50'
-                                }`}
-                              >
-                                {gen.userTier || 'FREE'}
-                              </span>
-                            </td>
-
-                            {/* Timestamp */}
-                            <td className="px-4 py-3 text-right text-zinc-400 font-mono text-[11px] align-middle">
-                              {gen.created_at
-                                ? new Date(gen.created_at).toLocaleTimeString('id-ID', {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    second: '2-digit',
-                                  })
-                                : '—'}
+                      </thead>
+                      <tbody className={`divide-y text-xs ${
+                        adminTheme === 'light' ? 'divide-slate-200 text-slate-800' : 'divide-zinc-800/60 text-zinc-300'
+                      }`}>
+                        {filteredGenerations.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className={`px-4 py-8 text-center font-medium ${adminTheme === 'light' ? 'text-slate-400' : 'text-zinc-500'}`}>
+                              {genSearchQuery ? 'Tidak ada hasil yang cocok dengan pencarian.' : 'Belum ada aktivitas generate PRD yang tercatat.'}
                             </td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                        ) : (
+                          filteredGenerations.map((gen: any) => (
+                            <tr
+                              key={gen.id}
+                              className={`transition-colors ${
+                                adminTheme === 'light' ? 'hover:bg-blue-50/40' : 'hover:bg-zinc-900/40'
+                              }`}
+                            >
+                              {/* User Account */}
+                              <td className="px-3.5 py-2.5 align-middle">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 select-none ${
+                                    adminTheme === 'light'
+                                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                      : 'bg-zinc-800/90 text-amber-400 border border-zinc-700/50'
+                                  }`}>
+                                    {(gen.userName || gen.userEmail || 'U').charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className={`font-semibold truncate max-w-[160px] ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`} title={gen.userEmail}>
+                                      {gen.userEmail}
+                                    </div>
+                                    <div className={`text-[10px] truncate max-w-[160px] ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`} title={gen.userName}>
+                                      {gen.userName || 'Guest / Tamu'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Judul PRD */}
+                              <td className="px-3.5 py-2.5 align-middle">
+                                <div
+                                  className={`font-semibold truncate max-w-[220px] transition-colors ${
+                                    adminTheme === 'light'
+                                      ? 'text-blue-700 hover:text-blue-800'
+                                      : 'text-amber-300/90 hover:text-amber-200'
+                                  }`}
+                                  title={gen.title}
+                                >
+                                  {gen.title}
+                                </div>
+                                <div className={`text-[10px] font-mono ${adminTheme === 'light' ? 'text-slate-400' : 'text-zinc-500'}`}>
+                                  ID: {gen.id.slice(0, 8)}...
+                                </div>
+                              </td>
+
+                              {/* Mesin AI & Slot Key */}
+                              <td className="px-3.5 py-2.5 align-middle">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-medium border ${
+                                    adminTheme === 'light'
+                                      ? 'bg-slate-100 text-slate-700 border-slate-200'
+                                      : 'bg-zinc-900 text-zinc-300 border-zinc-800'
+                                  }`}>
+                                    {gen.model_used || 'AI Engine'}
+                                  </span>
+                                  {gen.gemini_slot_used && (
+                                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-mono font-semibold bg-blue-500/10 text-blue-600 border border-blue-500/30">
+                                      {gen.gemini_slot_used}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Token Consumption */}
+                              <td className="px-3.5 py-2.5 align-middle">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`font-mono text-xs font-bold ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                                    {(gen.tokens_used || 0).toLocaleString('id-ID')}
+                                  </span>
+                                  <span
+                                    className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                      gen.is_server_key
+                                        ? adminTheme === 'light'
+                                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                          : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                        : 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
+                                    }`}
+                                  >
+                                    {gen.is_server_key ? 'Server' : 'BYOK'}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Tier */}
+                              <td className="px-3.5 py-2.5 align-middle">
+                                <span
+                                  className={`text-[9px] font-extrabold px-2 py-0.5 rounded uppercase font-mono tracking-wide ${
+                                    gen.userTier === 'pro'
+                                      ? adminTheme === 'light'
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                      : gen.userTier === 'plus'
+                                      ? 'bg-sky-100 text-sky-700 border border-sky-300'
+                                      : adminTheme === 'light'
+                                      ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                      : 'bg-zinc-800/90 text-zinc-400 border border-zinc-700/50'
+                                  }`}
+                                >
+                                  {gen.userTier || 'FREE'}
+                                </span>
+                              </td>
+
+                              {/* Timestamp */}
+                              <td className={`px-3.5 py-2.5 text-right font-mono text-[11px] align-middle ${
+                                adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                              }`}>
+                                {gen.created_at
+                                  ? new Date(gen.created_at).toLocaleTimeString('id-ID', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                    })
+                                  : '—'}
+                              </td>
+
+                              {/* Action: Delete Single Generation */}
+                              <td className="px-3.5 py-2.5 text-center align-middle">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteGeneration(gen.id, gen.title)}
+                                  disabled={deletingGenId === gen.id}
+                                  title="Hapus log riwayat ini"
+                                  className={`p-1.5 rounded-lg transition-colors inline-flex items-center justify-center disabled:opacity-40 ${
+                                    adminTheme === 'light'
+                                      ? 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                      : 'text-zinc-400 hover:text-red-400 hover:bg-red-950/40'
+                                  }`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 2: MASTER SWITCHBOARD */}
           {activeTab === 'switchboard' && (
@@ -2436,189 +2833,509 @@ export default function AdminDashboard() {
           )}
 
           {/* TAB 4: ORDERS & GOBIZ VERIFICATION */}
-          {activeTab === 'orders' && (
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 flex items-start gap-3">
-                <CreditCard className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-zinc-300 space-y-1">
-                  <div className="font-bold text-white text-sm">Alur Verifikasi Pembayaran GoBiz</div>
-                  <p className="text-zinc-400 leading-relaxed">
-                    1. Pengguna klik "Saya Sudah Selesai Bayar via QRIS" &rarr; Order muncul di tabel dengan status <span className="text-amber-400 font-bold">PENDING</span>.<br />
-                    2. Cek notifikasi transaksi masuk di aplikasi GoBiz HP Anda.<br />
-                    3. Klik tombol <strong className="text-emerald-400">[ Terima Order ]</strong> untuk mengaktifkan status PRO user seketika.
-                  </p>
+          {activeTab === 'orders' && (() => {
+            const totalOrdersCount = ordersList.length;
+            const pendingOrdersCount = ordersList.filter((o) => o.status === 'pending').length;
+            const approvedOrdersCount = ordersList.filter((o) => o.status === 'approved').length;
+            const rejectedOrdersCount = ordersList.filter((o) => o.status === 'rejected').length;
+            const totalApprovedRevenue = ordersList
+              .filter((o) => o.status === 'approved')
+              .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+            const filteredOrders = ordersList.filter((order) => {
+              if (orderFilter !== 'all' && order.status !== orderFilter) return false;
+              if (orderSearchQuery.trim()) {
+                const q = orderSearchQuery.toLowerCase().trim();
+                const matchCode = (order.order_code || '').toLowerCase().includes(q);
+                const matchEmail = (order.user_email || '').toLowerCase().includes(q);
+                const matchName = (order.user_name || '').toLowerCase().includes(q);
+                return matchCode || matchEmail || matchName;
+              }
+              return true;
+            });
+
+            return (
+              <div className="space-y-6">
+                {/* Info Panduan GoBiz */}
+                <div className={`rounded-2xl border p-4.5 flex items-start gap-3.5 transition-colors ${
+                  adminTheme === 'light'
+                    ? 'border-blue-200 bg-blue-50/70 text-slate-800'
+                    : 'border-amber-500/30 bg-amber-500/5 text-zinc-300'
+                }`}>
+                  <CreditCard className={`h-5 w-5 shrink-0 mt-0.5 ${adminTheme === 'light' ? 'text-blue-600' : 'text-amber-400'}`} />
+                  <div className="text-xs space-y-1">
+                    <div className={`font-bold text-sm ${adminTheme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                      Panduan Verifikasi Pembayaran GoBiz
+                    </div>
+                    <p className={`leading-relaxed ${adminTheme === 'light' ? 'text-slate-600' : 'text-zinc-400'}`}>
+                      1. Pelanggan menyelesaikan pembayaran QRIS dan mengirim konfirmasi ke sistem (status <span className={`font-bold ${adminTheme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>PENDING</span>).<br />
+                      2. Verifikasi mutasi pembayaran di aplikasi GoBiz / Rekening Bank penerima.<br />
+                      3. Klik tombol <strong className="text-emerald-600 font-bold">[ Terima ]</strong> untuk mengaktifkan akun PRO seketika, atau <strong className="text-red-500 font-bold">[ Hapus ]</strong> untuk membersihkan data uji coba/batal.
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
-                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                    Antrean Transaksi QRIS ({ordersList.length})
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={fetchOrders}
-                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${loadingData ? 'animate-spin' : ''}`} />
-                    <span>Refresh</span>
-                  </button>
+                {/* Mini Stat Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  <div className={`p-4 rounded-xl border transition-all ${
+                    adminTheme === 'light'
+                      ? 'border-slate-200 bg-white text-slate-900 shadow-xs'
+                      : 'border-zinc-800 bg-zinc-950 text-white'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider ${
+                        adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}>Total Antrean</span>
+                      <CreditCard className={`h-4 w-4 ${adminTheme === 'light' ? 'text-blue-600' : 'text-zinc-400'}`} />
+                    </div>
+                    <div className="mt-2 text-2xl font-black font-mono">
+                      {totalOrdersCount}
+                    </div>
+                    <div className={`mt-0.5 text-[10px] ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>
+                      Semua data transaksi tersimpan
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border transition-all ${
+                    pendingOrdersCount > 0
+                      ? adminTheme === 'light'
+                        ? 'border-amber-300 bg-amber-50/50 text-slate-900 shadow-xs'
+                        : 'border-amber-500/40 bg-amber-500/5 text-white'
+                      : adminTheme === 'light'
+                      ? 'border-slate-200 bg-white text-slate-900 shadow-xs'
+                      : 'border-zinc-800 bg-zinc-950 text-white'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider ${
+                        pendingOrdersCount > 0
+                          ? adminTheme === 'light' ? 'text-amber-700 font-bold' : 'text-amber-400 font-bold'
+                          : adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}>Perlu Tindakan</span>
+                      <Clock className={`h-4 w-4 ${pendingOrdersCount > 0 ? 'text-amber-500 animate-pulse' : 'text-zinc-400'}`} />
+                    </div>
+                    <div className={`mt-2 text-2xl font-black font-mono ${pendingOrdersCount > 0 ? 'text-amber-600' : ''}`}>
+                      {pendingOrdersCount}
+                    </div>
+                    <div className={`mt-0.5 text-[10px] ${
+                      pendingOrdersCount > 0
+                        ? adminTheme === 'light' ? 'text-amber-700 font-semibold' : 'text-amber-400 font-semibold'
+                        : adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'
+                    }`}>
+                      {pendingOrdersCount > 0 ? 'Menunggu verifikasi admin' : 'Tidak ada antrean pending'}
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border transition-all ${
+                    adminTheme === 'light'
+                      ? 'border-slate-200 bg-white text-slate-900 shadow-xs'
+                      : 'border-zinc-800 bg-zinc-950 text-white'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider ${
+                        adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}>Disetujui</span>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <div className="mt-2 text-2xl font-black font-mono text-emerald-600">
+                      {approvedOrdersCount}
+                    </div>
+                    <div className={`mt-0.5 text-[10px] font-mono ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>
+                      Total: Rp {totalApprovedRevenue.toLocaleString('id-ID')}
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border transition-all ${
+                    adminTheme === 'light'
+                      ? 'border-slate-200 bg-white text-slate-900 shadow-xs'
+                      : 'border-zinc-800 bg-zinc-950 text-white'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider ${
+                        adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}>Ditolak</span>
+                      <XCircle className="h-4 w-4 text-rose-500" />
+                    </div>
+                    <div className="mt-2 text-2xl font-black font-mono text-rose-600">
+                      {rejectedOrdersCount}
+                    </div>
+                    <div className={`mt-0.5 text-[10px] ${adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-500'}`}>
+                      Tidak diverifikasi / kedaluwarsa
+                    </div>
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px]">
-                      <tr className="border-b border-zinc-800">
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[140px]">
-                          Kode Order
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[26%] min-w-[200px]">
-                          Pengguna / Email
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[16%] min-w-[130px]">
-                          Paket & Nominal
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[12%] min-w-[100px]">
-                          Status
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[12%] min-w-[110px]">
-                          Waktu
-                        </th>
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider text-right w-[16%] min-w-[150px]">
-                          Aksi Verifikasi
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
-                      {ordersList.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 font-medium">
-                            Belum ada transaksi QRIS yang tercatat di sistem.
-                          </td>
-                        </tr>
-                      ) : (
-                        ordersList.map((order) => {
-                          const isPlus = order.amount <= 30000 || (order.admin_notes && order.admin_notes.toLowerCase().includes('plus'));
-                          return (
-                            <tr key={order.id} className="hover:bg-zinc-900/40 transition-colors">
-                              {/* Order Code */}
-                              <td className="px-4 py-3.5 align-middle">
-                                <span className="px-2 py-1 rounded-md font-mono font-bold text-amber-400 bg-zinc-900 border border-zinc-800 tracking-wider inline-block">
-                                  {order.order_code}
-                                </span>
-                              </td>
+                {/* Main Orders Table Card */}
+                <div className={`rounded-2xl border overflow-hidden transition-colors ${
+                  adminTheme === 'light' ? 'border-slate-200 bg-white shadow-xs' : 'border-zinc-800/80 bg-zinc-950'
+                }`}>
+                  {/* Toolbar Filter, Search, & Actions */}
+                  <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                    adminTheme === 'light' ? 'border-slate-200 bg-slate-50/70' : 'border-zinc-800 bg-zinc-900/40'
+                  }`}>
+                    {/* Status Tabs Filter */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setOrderFilter('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          orderFilter === 'all'
+                            ? adminTheme === 'light'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white text-zinc-950 font-bold shadow-xs'
+                            : adminTheme === 'light'
+                            ? 'text-slate-600 hover:bg-slate-200/70'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+                        }`}
+                      >
+                        Semua ({totalOrdersCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderFilter('pending')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          orderFilter === 'pending'
+                            ? adminTheme === 'light'
+                              ? 'bg-amber-500 text-white shadow-xs font-bold'
+                              : 'bg-amber-500 text-zinc-950 shadow-xs font-bold'
+                            : adminTheme === 'light'
+                            ? 'text-amber-700 hover:bg-amber-100/70'
+                            : 'text-amber-400 hover:bg-amber-500/10'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${pendingOrdersCount > 0 ? 'bg-amber-400 animate-pulse' : 'bg-amber-400/40'}`} />
+                        <span>Pending ({pendingOrdersCount})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderFilter('approved')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          orderFilter === 'approved'
+                            ? adminTheme === 'light'
+                              ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                              : 'bg-emerald-500 text-zinc-950 shadow-xs font-bold'
+                            : adminTheme === 'light'
+                            ? 'text-emerald-700 hover:bg-emerald-100/70'
+                            : 'text-emerald-400 hover:bg-emerald-500/10'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span>Disetujui ({approvedOrdersCount})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderFilter('rejected')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          orderFilter === 'rejected'
+                            ? adminTheme === 'light'
+                              ? 'bg-rose-600 text-white shadow-xs font-bold'
+                              : 'bg-rose-500 text-white shadow-xs font-bold'
+                            : adminTheme === 'light'
+                            ? 'text-rose-700 hover:bg-rose-100/70'
+                            : 'text-rose-400 hover:bg-rose-500/10'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        <span>Ditolak ({rejectedOrdersCount})</span>
+                      </button>
+                    </div>
 
-                              {/* User Info */}
-                              <td className="px-4 py-3.5 align-middle">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-7 h-7 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-[10px] font-bold text-amber-400 shrink-0 select-none">
-                                    {(order.user_name || order.user_email || 'U').charAt(0).toUpperCase()}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="font-semibold text-white truncate max-w-[180px]" title={order.user_name || 'User'}>
-                                      {order.user_name || 'User'}
-                                    </div>
-                                    <div className="text-[11px] text-zinc-400 font-mono truncate max-w-[180px]" title={order.user_email}>
-                                      {order.user_email}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
+                    {/* Right Toolbar: Search & Action Buttons */}
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 md:w-56">
+                        <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 ${
+                          adminTheme === 'light' ? 'text-slate-400' : 'text-zinc-500'
+                        }`} />
+                        <input
+                          type="text"
+                          value={orderSearchQuery}
+                          onChange={(e) => setOrderSearchQuery(e.target.value)}
+                          placeholder="Cari order / email..."
+                          className={`w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border transition-all ${
+                            adminTheme === 'light'
+                              ? 'bg-white border-slate-300 text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:border-amber-500'
+                          }`}
+                        />
+                      </div>
 
-                              {/* Amount & Tier */}
-                              <td className="px-4 py-3.5 align-middle">
-                                <div className="font-semibold text-white text-xs">
-                                  {order.amount_formatted || 'Rp 49.000'}
-                                </div>
-                                <span
-                                  className={`text-[9px] font-bold uppercase font-mono px-1.5 py-0.2 rounded inline-block mt-0.5 ${
-                                    isPlus
-                                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                  }`}
-                                >
-                                  {isPlus ? 'Paket PLUS' : 'Paket PRO'}
-                                </span>
-                              </td>
-
-                              {/* Status */}
-                              <td className="px-4 py-3.5 align-middle">
-                                <span
-                                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 ${
-                                    order.status === 'approved'
-                                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                      : order.status === 'rejected'
-                                      ? 'bg-red-500/15 text-red-400 border border-red-500/30'
-                                      : 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse'
-                                  }`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full ${
-                                      order.status === 'approved'
-                                        ? 'bg-emerald-400'
-                                        : order.status === 'rejected'
-                                        ? 'bg-red-400'
-                                        : 'bg-amber-400'
-                                    }`}
-                                  />
-                                  <span>{order.status}</span>
-                                </span>
-                              </td>
-
-                              {/* Date */}
-                              <td className="px-4 py-3.5 align-middle text-zinc-400 font-mono text-[11px]">
-                                {order.created_at ? new Date(order.created_at).toLocaleString('id-ID', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                }) : '-'}
-                              </td>
-
-                              {/* Actions */}
-                              <td className="px-4 py-3.5 align-middle text-right">
-                                {order.status === 'pending' ? (
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleApproveOrder(order.id, order.user_id)}
-                                      className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs transition-all shadow-xs active:scale-95 cursor-pointer"
-                                    >
-                                      Terima
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRejectOrder(order.id)}
-                                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 font-medium text-xs border border-zinc-800 hover:border-red-500/30 transition-all cursor-pointer"
-                                    >
-                                      Tolak
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-[11px] text-zinc-500 font-medium italic">
-                                    {order.status === 'approved' ? 'Telah Disetujui' : 'Ditolak'}
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
+                      {/* Tombol Bersihkan Ditolak */}
+                      {rejectedOrdersCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearRejectedOrders}
+                          disabled={clearingRejectedOrders}
+                          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                            adminTheme === 'light'
+                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 active:scale-95'
+                              : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30 active:scale-95'
+                          }`}
+                          title="Hapus semua transaksi berstatus ditolak"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                          <span className="hidden sm:inline">Bersihkan Ditolak</span>
+                        </button>
                       )}
-                    </tbody>
-                  </table>
+
+                      {/* Tombol Refresh */}
+                      <button
+                        type="button"
+                        onClick={fetchOrders}
+                        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                          adminTheme === 'light'
+                            ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 active:scale-95'
+                            : 'text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border-zinc-800 active:scale-95'
+                        }`}
+                        title="Perbarui daftar transaksi"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${loadingData ? 'animate-spin' : ''}`} />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Responsive Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className={`uppercase text-[10px] tracking-wider border-b ${
+                        adminTheme === 'light'
+                          ? 'bg-slate-100/90 text-slate-600 border-slate-200'
+                          : 'bg-zinc-900/60 text-zinc-400 border-zinc-800'
+                      }`}>
+                        <tr>
+                          <th className="px-4 py-3 font-semibold w-[18%] min-w-[130px]">
+                            Kode Order
+                          </th>
+                          <th className="px-4 py-3 font-semibold w-[26%] min-w-[190px]">
+                            Pelanggan
+                          </th>
+                          <th className="px-4 py-3 font-semibold w-[18%] min-w-[140px]">
+                            Paket & Nominal
+                          </th>
+                          <th className="px-4 py-3 font-semibold w-[12%] min-w-[100px]">
+                            Status
+                          </th>
+                          <th className="px-4 py-3 font-semibold w-[12%] min-w-[110px]">
+                            Waktu
+                          </th>
+                          <th className="px-4 py-3 font-semibold text-right w-[14%] min-w-[130px]">
+                            Aksi
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y text-xs ${
+                        adminTheme === 'light' ? 'divide-slate-200 text-slate-800' : 'divide-zinc-800/60 text-zinc-300'
+                      }`}>
+                        {filteredOrders.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className={`px-4 py-12 text-center font-medium ${
+                              adminTheme === 'light' ? 'text-slate-400' : 'text-zinc-500'
+                            }`}>
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                <CreditCard className="h-7 w-7 opacity-40 mb-1" />
+                                <div>
+                                  {orderSearchQuery || orderFilter !== 'all'
+                                    ? 'Tidak ada transaksi yang cocok dengan filter atau pencarian saat ini.'
+                                    : 'Belum ada data transaksi QRIS yang tersimpan di sistem.'}
+                                </div>
+                                {(orderSearchQuery || orderFilter !== 'all') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOrderFilter('all');
+                                      setOrderSearchQuery('');
+                                    }}
+                                    className={`mt-1 text-xs font-semibold underline underline-offset-4 ${
+                                      adminTheme === 'light' ? 'text-blue-600' : 'text-amber-400'
+                                    }`}
+                                  >
+                                    Reset filter dan pencarian
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredOrders.map((order) => {
+                            const isPlus = order.amount <= 30000 || (order.admin_notes && order.admin_notes.toLowerCase().includes('plus'));
+                            const isDeleting = deletingOrderId === order.id;
+
+                            return (
+                              <tr
+                                key={order.id}
+                                className={`transition-colors ${
+                                  adminTheme === 'light' ? 'hover:bg-blue-50/40' : 'hover:bg-zinc-900/40'
+                                }`}
+                              >
+                                {/* Order Code */}
+                                <td className="px-4 py-3.5 align-middle">
+                                  <span className={`px-2.5 py-1 rounded-md font-mono font-bold tracking-wider inline-block text-[11px] ${
+                                    adminTheme === 'light'
+                                      ? 'text-blue-700 bg-blue-50 border border-blue-200'
+                                      : 'text-amber-400 bg-zinc-900 border border-zinc-800'
+                                  }`}>
+                                    {order.order_code}
+                                  </span>
+                                </td>
+
+                                {/* User Info */}
+                                <td className="px-4 py-3.5 align-middle">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 select-none ${
+                                      adminTheme === 'light'
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                        : 'bg-zinc-800/80 border border-zinc-700/50 text-amber-400'
+                                    }`}>
+                                      {(order.user_name || order.user_email || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className={`font-semibold truncate max-w-[180px] ${
+                                        adminTheme === 'light' ? 'text-slate-900' : 'text-white'
+                                      }`} title={order.user_name || 'User'}>
+                                        {order.user_name || 'User'}
+                                      </div>
+                                      <div className={`text-[11px] font-mono truncate max-w-[180px] ${
+                                        adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                                      }`} title={order.user_email}>
+                                        {order.user_email}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Amount & Tier */}
+                                <td className="px-4 py-3.5 align-middle">
+                                  <div className={`font-semibold text-xs font-mono ${
+                                    adminTheme === 'light' ? 'text-slate-900' : 'text-white'
+                                  }`}>
+                                    {order.amount_formatted || `Rp ${(order.amount || 0).toLocaleString('id-ID')}`}
+                                  </div>
+                                  <span
+                                    className={`text-[9px] font-bold uppercase font-mono px-1.5 py-0.5 rounded inline-block mt-0.5 ${
+                                      isPlus
+                                        ? adminTheme === 'light'
+                                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                          : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                        : adminTheme === 'light'
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                    }`}
+                                  >
+                                    {isPlus ? 'Paket PLUS' : 'Paket PRO'}
+                                  </span>
+                                </td>
+
+                                {/* Status */}
+                                <td className="px-4 py-3.5 align-middle">
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                                      order.status === 'approved'
+                                        ? adminTheme === 'light'
+                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                          : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                        : order.status === 'rejected'
+                                        ? adminTheme === 'light'
+                                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                          : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                                        : adminTheme === 'light'
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse'
+                                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        order.status === 'approved'
+                                          ? 'bg-emerald-500'
+                                          : order.status === 'rejected'
+                                          ? 'bg-rose-500'
+                                          : 'bg-amber-500'
+                                      }`}
+                                    />
+                                    <span>{order.status}</span>
+                                  </span>
+                                </td>
+
+                                {/* Date */}
+                                <td className={`px-4 py-3.5 align-middle font-mono text-[11px] ${
+                                  adminTheme === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                                }`}>
+                                  {order.created_at ? new Date(order.created_at).toLocaleString('id-ID', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  }) : '-'}
+                                </td>
+
+                                {/* Actions */}
+                                <td className="px-4 py-3.5 align-middle text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {order.status === 'pending' && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleApproveOrder(order.id, order.user_id)}
+                                          className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs transition-all shadow-xs active:scale-95 cursor-pointer"
+                                          title="Setujui order dan aktifkan akun PRO 30 hari"
+                                        >
+                                          Terima
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRejectOrder(order.id)}
+                                          className={`px-2 py-1 rounded-lg font-medium text-xs border transition-all cursor-pointer ${
+                                            adminTheme === 'light'
+                                              ? 'bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border-slate-300 hover:border-rose-300'
+                                              : 'bg-zinc-900 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 border-zinc-800 hover:border-rose-500/30'
+                                          }`}
+                                          title="Tolak order"
+                                        >
+                                          Tolak
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {/* Tombol Hapus Pesanan */}
+                                    <button
+                                      type="button"
+                                      disabled={isDeleting}
+                                      onClick={() => handleDeleteOrder(order.id, order.order_code)}
+                                      className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                        adminTheme === 'light'
+                                          ? 'bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border-slate-200 hover:border-rose-300 active:scale-95'
+                                          : 'bg-zinc-900 hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 border-zinc-800 hover:border-rose-500/30 active:scale-95'
+                                      } ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                      title="Hapus transaksi pesanan ini"
+                                    >
+                                      <Trash2 className={`h-3.5 w-3.5 ${isDeleting ? 'animate-spin' : ''}`} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 5: USER MANAGEMENT */}
           {activeTab === 'users' && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
+              <div className={`rounded-2xl border overflow-hidden transition-colors ${
+                adminTheme === 'light' ? 'border-slate-200 bg-white shadow-xs' : 'border-zinc-800/80 bg-zinc-950'
+              }`}>
                 {/* Status Filter Header */}
-                <div className="p-4 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+                <div className={`p-4 border-b flex flex-wrap items-center justify-between gap-3 ${
+                  adminTheme === 'light' ? 'border-slate-200 bg-slate-50' : 'border-zinc-800'
+                }`}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 mr-1">
+                    <span className={`text-xs font-bold uppercase tracking-wider mr-1 ${
+                      adminTheme === 'light' ? 'text-slate-600' : 'text-zinc-400'
+                    }`}>
                       Filter:
                     </span>
                     {[
@@ -2672,7 +3389,11 @@ export default function AdminDashboard() {
                         onClick={() => setUserFilter(f.id as any)}
                         className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                           userFilter === f.id
-                            ? 'bg-amber-500 text-zinc-950 font-bold'
+                            ? adminTheme === 'light'
+                              ? 'bg-blue-600 text-white font-bold'
+                              : 'bg-amber-500 text-zinc-950 font-bold'
+                            : adminTheme === 'light'
+                            ? 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
                             : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
                         }`}
                       >
@@ -2684,7 +3405,11 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     onClick={fetchUsers}
-                    className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 transition-colors cursor-pointer"
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                      adminTheme === 'light'
+                        ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                        : 'text-zinc-400 hover:text-white bg-zinc-900 border-zinc-800'
+                    }`}
                   >
                     <RefreshCw className={`h-3 w-3 ${loadingData ? 'animate-spin' : ''}`} />
                     <span>Refresh</span>
@@ -2693,9 +3418,13 @@ export default function AdminDashboard() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px]">
-                      <tr className="border-b border-zinc-800">
-                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[28%] min-w-[220px]">
+                    <thead className={`uppercase text-[10px] tracking-wider border-b ${
+                      adminTheme === 'light'
+                        ? 'bg-slate-100/90 text-slate-600 border-slate-200'
+                        : 'bg-zinc-900/60 text-zinc-400 border-zinc-800'
+                    }`}>
+                      <tr>
+                        <th className="px-4 py-3 font-semibold uppercase text-[10px] tracking-wider w-[28%] min-w-[220px]">
                           Pengguna
                         </th>
                         <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
@@ -2942,816 +3671,703 @@ export default function AdminDashboard() {
 
           {/* TAB 6: QRIS & PRICING */}
           {activeTab === 'pricing' && (
-            <div className="space-y-6">
-              {/* Card 0: Dynamic Multi-Tier Configurator as a Data Table */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
-                <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Sliders className="h-4 w-4 text-amber-400" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                        Tabel Konfigurasi Hak Akses & Batas Harian (Free, PLUS, PRO)
-                      </h3>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        DYNAMIC GATING
-                      </span>
+            <div className="space-y-5">
+              {/* Section 1: Konfigurasi 3 Paket Akses & Dynamic Gating */}
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                      <Sliders className="h-4 w-4" />
                     </div>
-                    <p className="text-[11px] text-zinc-400 mt-1">
-                      Atur kuota harian dan buka/kunci 4 fitur pilar untuk masing-masing tier (Free, PLUS, PRO) secara bebas tanpa edit kode.
-                    </p>
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        <span>Konfigurasi Paket & Harga Langganan</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                          DYNAMIC GATING
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Kelola nominal harga, batas kuota harian, serta dynamic gating 4 fitur pilar untuk setiap tier.
+                      </p>
+                    </div>
                   </div>
+
+                  <span className="text-[10px] font-mono text-zinc-400 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 self-start sm:self-auto">
+                    Total: 3 Paket (Free, PLUS, PRO)
+                  </span>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px] border-b border-zinc-800">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[15%] min-w-[130px]">
-                          Paket & Status
-                        </th>
-                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[17%] min-w-[150px]">
-                          Harga & Format
-                        </th>
-                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[15%] min-w-[120px]">
-                          Batas Harian (PRD/Hari)
-                        </th>
-                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
-                          Badge & Deskripsi
-                        </th>
-                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[35%] min-w-[280px]">
-                          Hak Akses Fitur Utama (Dynamic Gating)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
-                      {(() => {
-                        const raw = settings.pricing_tiers && settings.pricing_tiers.length > 0
-                          ? [...settings.pricing_tiers]
-                          : [...DEFAULT_PRICING_TIERS];
-                        if (!raw.some((t) => t.id === 'free')) {
-                          raw.unshift(DEFAULT_PRICING_TIERS[0]);
+                {/* 3-Column Tier Cards Deck (Padet & Rapih) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+                  {(() => {
+                    const raw = settings.pricing_tiers && settings.pricing_tiers.length > 0
+                      ? [...settings.pricing_tiers]
+                      : [...DEFAULT_PRICING_TIERS];
+                    if (!raw.some((t) => t.id === 'free')) {
+                      raw.unshift(DEFAULT_PRICING_TIERS[0]);
+                    }
+                    const normalizedList = raw.map((t) => {
+                      const def = DEFAULT_PRICING_TIERS.find((d) => d.id === t.id);
+                      return {
+                        ...t,
+                        feature_flags: t.feature_flags || def?.feature_flags || {
+                          advanced_templates: t.id !== 'free',
+                          custom_stack: t.id !== 'free',
+                          export_zip: t.id !== 'free',
+                          architecture_diagrams: t.id !== 'free',
+                        },
+                      };
+                    });
+
+                    return normalizedList.map((tier, tIdx) => {
+                      const isPro = tier.id === 'pro';
+                      const isFree = tier.id === 'free';
+                      const isPlus = tier.id === 'plus';
+
+                      const updateTierAt = (updates: Partial<PricingTierConfig>) => {
+                        const updated = [...normalizedList];
+                        updated[tIdx] = { ...updated[tIdx], ...updates };
+                        const proMatch = updated.find((t) => t.id === 'pro');
+                        const extra: any = { pricing_tiers: updated };
+                        if (proMatch) {
+                          extra.pro_price_rp = proMatch.price_rp;
+                          extra.pro_price_formatted = proMatch.price_formatted;
                         }
-                        const normalizedList = raw.map((t) => {
-                          const def = DEFAULT_PRICING_TIERS.find((d) => d.id === t.id);
-                          return {
-                            ...t,
-                            feature_flags: t.feature_flags || def?.feature_flags || {
-                              advanced_templates: t.id !== 'free',
-                              custom_stack: t.id !== 'free',
-                              export_zip: t.id !== 'free',
-                              architecture_diagrams: t.id !== 'free',
-                            },
-                          };
-                        });
+                        setSettings((prev) => ({ ...prev, ...extra }));
+                      };
 
-                        return normalizedList.map((tier, tIdx) => {
-                          const isPro = tier.id === 'pro';
-                          const isFree = tier.id === 'free';
-                          const isPlus = tier.id === 'plus';
+                      const flags = tier.feature_flags || {
+                        advanced_templates: !isFree,
+                        custom_stack: !isFree,
+                        export_zip: !isFree,
+                        architecture_diagrams: !isFree,
+                      };
 
-                          const updateTierAt = (updates: Partial<PricingTierConfig>) => {
-                            const updated = [...normalizedList];
-                            updated[tIdx] = { ...updated[tIdx], ...updates };
-                            const proMatch = updated.find((t) => t.id === 'pro');
-                            const extra: any = { pricing_tiers: updated };
-                            if (proMatch) {
-                              extra.pro_price_rp = proMatch.price_rp;
-                              extra.pro_price_formatted = proMatch.price_formatted;
-                            }
-                            setSettings((prev) => ({ ...prev, ...extra }));
-                          };
+                      return (
+                        <div
+                          key={tier.id}
+                          className={`rounded-xl border p-4 flex flex-col justify-between space-y-3.5 transition-all ${
+                            isPro
+                              ? 'border-amber-500/40 bg-zinc-900/60 shadow-lg shadow-amber-950/10'
+                              : isPlus
+                              ? 'border-blue-500/40 bg-zinc-900/40 shadow-lg shadow-blue-950/10'
+                              : 'border-zinc-800 bg-zinc-900/30'
+                          }`}
+                        >
+                          {/* Top Row: Badge, ID & Active Toggle */}
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-black uppercase font-mono ${
+                                    isPro
+                                      ? 'bg-amber-500 text-zinc-950'
+                                      : isPlus
+                                      ? 'bg-blue-500 text-white'
+                                      : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                  }`}
+                                >
+                                  {isFree ? 'FREE TIER' : tier.name.toUpperCase()}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-mono">ID: {tier.id}</span>
+                              </div>
 
-                          const flags = tier.feature_flags || {
-                            advanced_templates: !isFree,
-                            custom_stack: !isFree,
-                            export_zip: !isFree,
-                            architecture_diagrams: !isFree,
-                          };
-
-                          return (
-                            <tr key={tier.id} className="hover:bg-zinc-900/30 transition-colors align-top">
-                              {/* Kolom 1: Paket & Status */}
-                              <td className="px-4 py-4 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[11px] font-black uppercase font-mono ${
-                                      isPro
-                                        ? 'bg-amber-500 text-zinc-950'
-                                        : isPlus
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-                                    }`}
-                                  >
-                                    {isFree ? 'FREE TIER' : `PAKET ${tier.name.replace('Paket ', '')}`}
-                                  </span>
-                                  <span className="text-[10px] text-zinc-400 font-mono">ID: {tier.id}</span>
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-zinc-400 font-medium block">Nama Paket:</label>
+                              {!isFree ? (
+                                <label className="flex items-center gap-1.5 cursor-pointer text-[10px]">
                                   <input
-                                    type="text"
-                                    value={tier.name}
-                                    onChange={(e) => updateTierAt({ name: e.target.value })}
-                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white font-semibold focus:border-amber-500 focus:outline-hidden"
+                                    type="checkbox"
+                                    checked={tier.isActive !== false}
+                                    onChange={(e) => updateTierAt({ isActive: e.target.checked })}
+                                    className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3 w-3"
                                   />
-                                </div>
-                                {!isFree ? (
-                                  <label className="flex items-center gap-2 cursor-pointer pt-1 text-[11px]">
-                                    <input
-                                      type="checkbox"
-                                      checked={tier.isActive !== false}
-                                      onChange={(e) => updateTierAt({ isActive: e.target.checked })}
-                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
-                                    />
-                                    <span className={`font-semibold ${tier.isActive !== false ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                                      {tier.isActive !== false ? 'Status Aktif' : 'Nonaktif'}
-                                    </span>
-                                  </label>
-                                ) : (
-                                  <span className="text-[10px] text-zinc-400 font-mono block pt-1">
-                                    Paket Bawaan Sistem
+                                  <span className={`font-semibold ${tier.isActive !== false ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                    {tier.isActive !== false ? 'Aktif' : 'Nonaktif'}
                                   </span>
-                                )}
-                              </td>
+                                </label>
+                              ) : (
+                                <span className="text-[9px] text-zinc-500 font-mono">Default</span>
+                              )}
+                            </div>
 
-                              {/* Kolom 2: Harga & Format */}
-                              <td className="px-4 py-4 space-y-2">
+                            {/* Name & Badge Inputs */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] text-zinc-400 font-medium block mb-0.5">Nama Paket:</label>
+                                <input
+                                  type="text"
+                                  value={tier.name}
+                                  onChange={(e) => updateTierAt({ name: e.target.value })}
+                                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-white font-bold focus:border-amber-500 focus:outline-hidden"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-zinc-400 font-medium block mb-0.5">Badge Tag:</label>
+                                <input
+                                  type="text"
+                                  value={tier.badge || ''}
+                                  onChange={(e) => updateTierAt({ badge: e.target.value })}
+                                  placeholder="FREE / POPULER"
+                                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-amber-400 font-mono uppercase focus:border-amber-500 focus:outline-hidden"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Description Input */}
+                            <div>
+                              <label className="text-[10px] text-zinc-400 font-medium block mb-0.5">Deskripsi Singkat:</label>
+                              <input
+                                type="text"
+                                value={tier.description || ''}
+                                onChange={(e) => updateTierAt({ description: e.target.value })}
+                                placeholder="Deskripsi untuk kartu paket..."
+                                className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-300 focus:border-amber-500 focus:outline-hidden truncate"
+                              />
+                            </div>
+
+                            {/* Price & Quota Row */}
+                            <div className="rounded-lg bg-zinc-950/80 border border-zinc-800/80 p-2.5 space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Nominal (Rupiah):</label>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-0.5">Harga (IDR):</label>
                                   {isFree ? (
-                                    <div className="px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 text-xs font-mono font-bold text-zinc-400">
+                                    <div className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900/60 text-xs font-mono font-bold text-zinc-400">
                                       Rp 0 (Gratis)
                                     </div>
                                   ) : (
                                     <div className="relative">
-                                      <span className="absolute left-2.5 top-1.5 text-zinc-500 font-mono text-[11px]">Rp</span>
+                                      <span className="absolute left-2 top-1 text-zinc-500 font-mono text-[11px]">Rp</span>
                                       <input
                                         type="number"
                                         value={tier.price_rp}
                                         onChange={(e) => updateTierAt({ price_rp: parseInt(e.target.value) || 0 })}
-                                        className="w-full rounded-lg border border-zinc-800 bg-zinc-900 pl-8 pr-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-amber-500 focus:outline-hidden"
+                                        className="w-full rounded border border-zinc-800 bg-zinc-900 pl-7 pr-2 py-1 text-xs text-white font-mono font-bold focus:border-amber-500 focus:outline-hidden"
                                       />
                                     </div>
                                   )}
                                 </div>
                                 <div>
-                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Label Tampilan:</label>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-0.5">Label Harga:</label>
                                   <input
                                     type="text"
                                     value={tier.price_formatted}
                                     onChange={(e) => updateTierAt({ price_formatted: e.target.value })}
-                                    placeholder={isFree ? 'Gratis' : 'Rp 25.000 / 30 Hari'}
-                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-hidden"
+                                    placeholder={isFree ? 'Gratis' : 'Rp 49.000 / 30 Hari'}
+                                    className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 focus:border-amber-500 focus:outline-hidden truncate"
                                   />
                                 </div>
-                              </td>
+                              </div>
 
-                              {/* Kolom 3: Batas Harian */}
-                              <td className="px-4 py-4 space-y-2">
-                                <div>
-                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Batas Generate:</label>
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      value={tier.daily_limit}
-                                      onChange={(e) => updateTierAt({ daily_limit: parseInt(e.target.value) || 0 })}
-                                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-amber-500 focus:outline-hidden"
-                                    />
-                                  </div>
-                                  <span className="text-[10px] text-zinc-400 font-mono mt-1 block">
-                                    PRD / hari (Reset 00:00 WIB)
-                                  </span>
-                                </div>
-                                <div className="pt-1">
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 inline-block font-mono">
-                                    Fair Usage Active
-                                  </span>
-                                </div>
-                              </td>
-
-                              {/* Kolom 4: Badge & Deskripsi */}
-                              <td className="px-4 py-4 space-y-2">
-                                <div>
-                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Badge Highlight:</label>
+                              <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60 text-xs">
+                                <span className="text-[10px] text-zinc-400">Batas Harian:</span>
+                                <div className="flex items-center gap-1.5">
                                   <input
-                                    type="text"
-                                    value={tier.badge || ''}
-                                    onChange={(e) => updateTierAt({ badge: e.target.value })}
-                                    placeholder="FREE / HEMAT / POPULER"
-                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-hidden font-mono uppercase"
+                                    type="number"
+                                    value={tier.daily_limit}
+                                    onChange={(e) => updateTierAt({ daily_limit: parseInt(e.target.value) || 0 })}
+                                    className="w-16 rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-xs text-white font-mono font-bold text-right focus:border-amber-500 focus:outline-hidden"
                                   />
+                                  <span className="text-[10px] text-amber-400 font-mono font-semibold">PRD/hari</span>
                                 </div>
-                                <div>
-                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Subtitle / Deskripsi:</label>
+                              </div>
+                            </div>
+
+                            {/* Dynamic Gating Checklist (4 Pilar Fitur) */}
+                            <div className="space-y-1.5 pt-1">
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                Fitur Pilar (Dynamic Gating):
+                              </span>
+                              <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                                {/* Feature 1 */}
+                                <label className={`flex items-center gap-1.5 p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                  flags.advanced_templates
+                                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                                    : 'bg-zinc-950 border-zinc-800/80 text-zinc-500'
+                                }`}>
                                   <input
-                                    type="text"
-                                    value={tier.description || ''}
-                                    onChange={(e) => updateTierAt({ description: e.target.value })}
-                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 focus:border-amber-500 focus:outline-hidden"
+                                    type="checkbox"
+                                    checked={Boolean(flags.advanced_templates)}
+                                    onChange={(e) =>
+                                      updateTierAt({
+                                        feature_flags: { ...flags, advanced_templates: e.target.checked },
+                                      })
+                                    }
+                                    className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3 w-3 shrink-0"
                                   />
-                                </div>
-                              </td>
+                                  <span className="truncate">Template Mobile & AI</span>
+                                </label>
 
-                              {/* Kolom 5: Hak Akses Fitur Utama (Dynamic Gating) */}
-                              <td className="px-4 py-4 space-y-2">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                  {/* Flag 1: Template Lanjutan */}
-                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(flags.advanced_templates)}
-                                      onChange={(e) =>
-                                        updateTierAt({
-                                          feature_flags: { ...flags, advanced_templates: e.target.checked },
-                                        })
-                                      }
-                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
-                                    />
-                                    <span className={flags.advanced_templates ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
-                                      Template Lanjutan (Mobile & AI)
-                                    </span>
-                                  </label>
+                                {/* Feature 2 */}
+                                <label className={`flex items-center gap-1.5 p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                  flags.custom_stack
+                                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                                    : 'bg-zinc-950 border-zinc-800/80 text-zinc-500'
+                                }`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(flags.custom_stack)}
+                                    onChange={(e) =>
+                                      updateTierAt({
+                                        feature_flags: { ...flags, custom_stack: e.target.checked },
+                                      })
+                                    }
+                                    className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3 w-3 shrink-0"
+                                  />
+                                  <span className="truncate">Racik Custom Stack</span>
+                                </label>
 
-                                  {/* Flag 2: Racik Custom Stack */}
-                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(flags.custom_stack)}
-                                      onChange={(e) =>
-                                        updateTierAt({
-                                          feature_flags: { ...flags, custom_stack: e.target.checked },
-                                        })
-                                      }
-                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
-                                    />
-                                    <span className={flags.custom_stack ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
-                                      Racik Custom Tech Stack
-                                    </span>
-                                  </label>
+                                {/* Feature 3 */}
+                                <label className={`flex items-center gap-1.5 p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                  flags.export_zip
+                                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                                    : 'bg-zinc-950 border-zinc-800/80 text-zinc-500'
+                                }`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(flags.export_zip)}
+                                    onChange={(e) =>
+                                      updateTierAt({
+                                        feature_flags: { ...flags, export_zip: e.target.checked },
+                                      })
+                                    }
+                                    className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3 w-3 shrink-0"
+                                  />
+                                  <span className="truncate">Unduh Starter ZIP</span>
+                                </label>
 
-                                  {/* Flag 3: Unduh Starter ZIP */}
-                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(flags.export_zip)}
-                                      onChange={(e) =>
-                                        updateTierAt({
-                                          feature_flags: { ...flags, export_zip: e.target.checked },
-                                        })
-                                      }
-                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
-                                    />
-                                    <span className={flags.export_zip ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
-                                      Unduh Starter Kit (.ZIP)
-                                    </span>
-                                  </label>
+                                {/* Feature 4 */}
+                                <label className={`flex items-center gap-1.5 p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                  flags.architecture_diagrams
+                                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                                    : 'bg-zinc-950 border-zinc-800/80 text-zinc-500'
+                                }`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(flags.architecture_diagrams)}
+                                    onChange={(e) =>
+                                      updateTierAt({
+                                        feature_flags: { ...flags, architecture_diagrams: e.target.checked },
+                                      })
+                                    }
+                                    className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3 w-3 shrink-0"
+                                  />
+                                  <span className="truncate">8 Diagram Arsitektur</span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
 
-                                  {/* Flag 4: Diagram Arsitektur & ERD */}
-                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(flags.architecture_diagrams)}
-                                      onChange={(e) =>
-                                        updateTierAt({
-                                          feature_flags: { ...flags, architecture_diagrams: e.target.checked },
-                                        })
-                                      }
-                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
-                                    />
-                                    <span className={flags.architecture_diagrams ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
-                                      Diagram Arsitektur & ERD
-                                    </span>
-                                  </label>
-                                </div>
-
-                                {/* Collapsible for marketing bullet lines */}
-                                <details className="pt-1 text-[10px]">
-                                  <summary className="text-zinc-500 hover:text-amber-400 cursor-pointer font-mono select-none">
-                                    &rsaquo; Edit Teks Marketing Bullets ({tier.features.length} baris)
-                                  </summary>
-                                  <div className="mt-1.5">
-                                    <textarea
-                                      rows={2}
-                                      value={tier.features.join('\n')}
-                                      onChange={(e) => updateTierAt({ features: e.target.value.split('\n') })}
-                                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-white font-mono text-[10px] focus:border-amber-500 focus:outline-hidden leading-snug"
-                                      placeholder="Poin fitur 1&#10;Poin fitur 2"
-                                    />
-                                  </div>
-                                </details>
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()}
-                    </tbody>
-                  </table>
+                          {/* Collapsible Marketing Bullets */}
+                          <details className="pt-2 border-t border-zinc-800/80 text-[10px]">
+                            <summary className="text-zinc-500 hover:text-amber-400 cursor-pointer font-mono select-none flex items-center justify-between">
+                              <span>Poin Marketing Bullets ({tier.features.length})</span>
+                              <span className="text-[9px] text-zinc-600">Buka</span>
+                            </summary>
+                            <div className="mt-2">
+                              <textarea
+                                rows={2}
+                                value={tier.features.join('\n')}
+                                onChange={(e) => updateTierAt({ features: e.target.value.split('\n') })}
+                                className="w-full rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-white font-mono text-[10px] focus:border-amber-500 focus:outline-hidden leading-snug"
+                                placeholder="Poin 1&#10;Poin 2"
+                              />
+                            </div>
+                          </details>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
-              {/* Card 1: Mandiri Private Gateway (MPG) & Payment Engine */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
-                <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-zinc-950 via-zinc-900/40 to-zinc-950">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-emerald-400" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                        Payment Gateway Engine (Mandiri Private Gateway & GoBiz QRIS)
-                      </h3>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        0% BIAYA ADMIN
-                      </span>
+              {/* Section 2: Payment Gateway Engine & 3 Pilihan Jalur Checkout */}
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
+                      <Zap className="h-4 w-4" />
                     </div>
-                    <p className="text-[11px] text-zinc-400 mt-1">
-                      Pilih mekanisme pembayaran saat pengguna checkout paket PLUS / PRO. Gateway otomatis mendukung dynamic QRIS headless tanpa perantara pihak ketiga.
-                    </p>
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        <span>Payment Gateway Engine (MPG & GoBiz QRIS)</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                          0% MDR
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Dukungan 3 pilihan checkout: Headless In-Modal, Hosted MPG Redirect, atau Transfer Manual GoBiz.
+                      </p>
+                    </div>
                   </div>
 
-                  <span className="self-start sm:self-auto text-[11px] font-mono px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">
-                    Mode Aktif: <strong className="text-emerald-400 font-bold uppercase">{settings.payment_gateway_mode === 'mpg_automatic' ? 'MPG Otomatis' : 'Manual GoBiz'}</strong>
+                  <span className="text-[10px] font-mono text-zinc-300 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 self-start sm:self-auto">
+                    Mode Default: <strong className="text-emerald-400 font-bold uppercase">
+                      {settings.payment_gateway_mode === 'mpg_hosted'
+                        ? 'Opsi A: Hosted Redirect'
+                        : settings.payment_gateway_mode === 'manual_qris'
+                          ? 'Opsi C: Manual GoBiz'
+                          : 'Opsi B: Headless Pop-up'}
+                    </strong>
                   </span>
                 </div>
 
-                <div className="p-5 space-y-5">
-                  {/* Mode Selector Cards */}
-                  <div>
-                    <label className="text-zinc-400 block mb-2 font-medium text-xs">
-                      Pilih Mode Gateway Pembayaran:
-                    </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                      {/* Option 1: MPG Otomatis */}
-                      <div
-                        onClick={() => setSettings({ ...settings, payment_gateway_mode: 'mpg_automatic' })}
-                        className={`relative rounded-xl p-4 border cursor-pointer transition-all ${
-                          settings.payment_gateway_mode === 'mpg_automatic'
-                            ? 'border-emerald-500 bg-emerald-950/20 shadow-lg shadow-emerald-950/30'
-                            : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
-                              settings.payment_gateway_mode === 'mpg_automatic'
-                                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                            }`}>
-                              <Zap className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                Mandiri Private Gateway (MPG)
-                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                                  REKOMENDASI
-                                </span>
-                              </h4>
-                              <p className="text-[11px] text-zinc-400 mt-0.5">
-                                Headless Dynamic QRIS ASPI + 3-digit kode unik + auto-konfirmasi webhook
-                              </p>
-                            </div>
-                          </div>
-                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
-                            settings.payment_gateway_mode === 'mpg_automatic'
-                              ? 'border-emerald-500 bg-emerald-500 text-zinc-950'
-                              : 'border-zinc-700 bg-zinc-900'
-                          }`}>
-                            {settings.payment_gateway_mode === 'mpg_automatic' && <Check className="h-3 w-3 stroke-[3]" />}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-[10px] text-zinc-400">
-                          <div className="flex items-center gap-1 text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>0% Potongan</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>Instant Aktif</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>Tanpa Redirect</span>
-                          </div>
+                {/* 3 Checkout Mode Selector Cards (Compact & Dense) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Option B: Headless Pop-up */}
+                  <div
+                    onClick={() => setSettings({ ...settings, payment_gateway_mode: 'mpg_headless' })}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                      settings.payment_gateway_mode === 'mpg_headless' || settings.payment_gateway_mode === 'mpg_automatic' || !settings.payment_gateway_mode
+                        ? 'border-emerald-500 bg-emerald-950/20 shadow-md shadow-emerald-950/30 ring-1 ring-emerald-500/40'
+                        : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          OPSI B (REKOMENDASI)
+                        </span>
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          settings.payment_gateway_mode === 'mpg_headless' || settings.payment_gateway_mode === 'mpg_automatic' || !settings.payment_gateway_mode
+                            ? 'border-emerald-500 bg-emerald-500 text-zinc-950'
+                            : 'border-zinc-700 bg-zinc-900'
+                        }`}>
+                          {(settings.payment_gateway_mode === 'mpg_headless' || settings.payment_gateway_mode === 'mpg_automatic' || !settings.payment_gateway_mode) && <Check className="h-2.5 w-2.5 stroke-[3]" />}
                         </div>
                       </div>
+                      <h4 className="text-xs font-bold text-white">Headless Modal Pop-up</h4>
+                      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+                        QRIS Dinamis tampil di pop-up modal website ini tanpa pindah halaman.
+                      </p>
+                    </div>
 
-                      {/* Option 2: GoBiz Manual */}
-                      <div
-                        onClick={() => setSettings({ ...settings, payment_gateway_mode: 'manual_qris' })}
-                        className={`relative rounded-xl p-4 border cursor-pointer transition-all ${
-                          settings.payment_gateway_mode === 'manual_qris'
-                            ? 'border-amber-500 bg-amber-950/20 shadow-lg shadow-amber-950/30'
-                            : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
-                              settings.payment_gateway_mode === 'manual_qris'
-                                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                            }`}>
-                              <QrCode className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                Manual (GoBiz QRIS Statis)
-                              </h4>
-                              <p className="text-[11px] text-zinc-400 mt-0.5">
-                                Barcode QRIS statis + pembeli upload bukti bayar/konfirmasi ke WhatsApp admin
-                              </p>
-                            </div>
-                          </div>
-                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
-                            settings.payment_gateway_mode === 'manual_qris'
-                              ? 'border-amber-500 bg-amber-500 text-zinc-950'
-                              : 'border-zinc-700 bg-zinc-900'
-                          }`}>
-                            {settings.payment_gateway_mode === 'manual_qris' && <Check className="h-3 w-3 stroke-[3]" />}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-[10px] text-zinc-400">
-                          <div className="flex items-center gap-1 text-zinc-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>GoPay / BCA</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-zinc-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>Verifikasi WA</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-zinc-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>Approval Manual</span>
-                          </div>
-                        </div>
-                      </div>
+                    <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-emerald-400 font-mono">
+                      <span>In-Modal</span>
+                      <span>Kode Unik 3 Digit</span>
+                      <span>Auto-Verify</span>
                     </div>
                   </div>
 
-                  {/* MPG Parameters & Connectivity Box */}
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
-                      <div>
-                        <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                          <Server className="h-3.5 w-3.5 text-emerald-400" />
-                          <span>Kredensial & Endpoint Mandiri Private Gateway</span>
-                        </h4>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
-                          Atur alamat server gateway MPG, API Key Bearer, dan Secret Signature Webhook HMAC-SHA256.
-                        </p>
+                  {/* Option A: Hosted Checkout Redirect */}
+                  <div
+                    onClick={() => setSettings({ ...settings, payment_gateway_mode: 'mpg_hosted' })}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                      settings.payment_gateway_mode === 'mpg_hosted'
+                        ? 'border-blue-500 bg-blue-950/20 shadow-md shadow-blue-950/30 ring-1 ring-blue-500/40'
+                        : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                          OPSI A
+                        </span>
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          settings.payment_gateway_mode === 'mpg_hosted'
+                            ? 'border-blue-500 bg-blue-500 text-zinc-950'
+                            : 'border-zinc-700 bg-zinc-900'
+                        }`}>
+                          {settings.payment_gateway_mode === 'mpg_hosted' && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                        </div>
+                      </div>
+                      <h4 className="text-xs font-bold text-white">Hosted Checkout MPG</h4>
+                      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+                        Arahkan pembeli ke halaman checkout resmi Mandiri Private Gateway.
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-blue-400 font-mono">
+                      <span>Redirect URL</span>
+                      <span>SSE Listener</span>
+                      <span>Halaman MPG</span>
+                    </div>
+                  </div>
+
+                  {/* Option C: Manual GoBiz */}
+                  <div
+                    onClick={() => setSettings({ ...settings, payment_gateway_mode: 'manual_qris' })}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                      settings.payment_gateway_mode === 'manual_qris'
+                        ? 'border-amber-500 bg-amber-950/20 shadow-md shadow-amber-950/30 ring-1 ring-amber-500/40'
+                        : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                          OPSI C
+                        </span>
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          settings.payment_gateway_mode === 'manual_qris'
+                            ? 'border-amber-500 bg-amber-500 text-zinc-950'
+                            : 'border-zinc-700 bg-zinc-900'
+                        }`}>
+                          {settings.payment_gateway_mode === 'manual_qris' && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                        </div>
+                      </div>
+                      <h4 className="text-xs font-bold text-white">Manual GoBiz / WA</h4>
+                      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+                        Scan QRIS statis atau transfer GoPay, konfirmasi bukti via WhatsApp admin.
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+                      <span>GoPay Manual</span>
+                      <span>Bukti Bayar</span>
+                      <span>Chat WA Admin</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Unified 2-Column Controls: Kredensial Gateway (Kiri) & Merchant QRIS (Kanan) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start pt-1">
+                  {/* Kolom Kiri (7 cols): Server & Kredensial MPG */}
+                  <div className="lg:col-span-7 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Server className="h-3.5 w-3.5 text-emerald-400" />
+                        <h4 className="text-xs font-bold text-white">Kredensial Mandiri Private Gateway</h4>
                       </div>
 
                       <button
                         type="button"
                         onClick={handleTestMpg}
                         disabled={testingMpg}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer self-start sm:self-auto"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shrink-0"
                       >
-                        {testingMpg ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Activity className="h-3.5 w-3.5" />
-                        )}
-                        <span>{testingMpg ? 'Menguji Gateway...' : 'Uji Koneksi Gateway MPG'}</span>
+                        {testingMpg ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
+                        <span>{testingMpg ? 'Menguji...' : 'Uji Koneksi Gateway'}</span>
                       </button>
                     </div>
 
                     {/* Test Result Alert */}
                     {testMpgResult && (
-                      <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                      <div className={`p-2.5 rounded-lg border text-xs flex items-center gap-2 ${
                         testMpgResult.success
-                          ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-                          : 'bg-red-950/30 border-red-500/40 text-red-200'
+                          ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                          : 'bg-red-950/40 border-red-500/40 text-red-200'
                       }`}>
                         {testMpgResult.success ? (
-                          <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
                         ) : (
-                          <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                          <XCircle className="h-4 w-4 text-red-400 shrink-0" />
                         )}
-                        <div className="space-y-1">
-                          <p className="font-semibold">{testMpgResult.message}</p>
+                        <div className="leading-tight text-[11px]">
+                          <span>{testMpgResult.message}</span>
                           {testMpgResult.devicesCount !== undefined && (
-                            <p className="text-[11px] text-zinc-400">
-                              Status Listener Android: <strong>{testMpgResult.onlineDeviceCount ?? 0} dari {testMpgResult.devicesCount}</strong> HP Android aktif memantau notifikasi bank.
-                            </p>
+                            <span className="text-zinc-400 block mt-0.5">
+                              Listener Kasir: <strong>{testMpgResult.onlineDeviceCount ?? 0} dari {testMpgResult.devicesCount} HP Android online</strong>.
+                            </span>
                           )}
                         </div>
                       </div>
                     )}
 
-                    {/* Input Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Inputs */}
+                    <div className="space-y-2.5 text-xs">
                       {/* Gateway URL */}
                       <div>
-                        <label className="text-zinc-400 block mb-1 font-medium text-[11px]">
-                          Base Gateway URL:
-                        </label>
+                        <label className="text-[11px] text-zinc-400 font-medium block mb-1">Gateway Endpoint URL:</label>
                         <input
                           type="text"
                           value={settings.mpg_gateway_url || ''}
                           onChange={(e) => setSettings({ ...settings, mpg_gateway_url: e.target.value })}
-                          placeholder="http://localhost:3000"
-                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden"
+                          placeholder="https://pyamentgateway.daeroom.my.id"
+                          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden"
                         />
-                        <span className="text-[10px] text-zinc-500 block mt-1">
-                          Default: http://localhost:3000 atau URL Cloudflare Tunnel / VPS
-                        </span>
                       </div>
 
-                      {/* API Key */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-zinc-400 font-medium text-[11px]">
-                            API Secret Key (Bearer Token):
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setShowMpgKey(!showMpgKey)}
-                            className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
-                          >
-                            {showMpgKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                            <span>{showMpgKey ? 'Sembunyikan' : 'Tampilkan'}</span>
-                          </button>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type={showMpgKey ? 'text' : 'password'}
-                            value={settings.mpg_api_key || ''}
-                            onChange={(e) => setSettings({ ...settings, mpg_api_key: e.target.value })}
-                            placeholder="mpg_live_..."
-                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden pr-8"
-                          />
-                          <Key className="h-3.5 w-3.5 text-zinc-600 absolute right-2.5 top-2.5" />
-                        </div>
-                        <span className="text-[10px] text-zinc-500 block mt-1">
-                          Diberikan oleh MPG untuk membuat dynamic invoice
-                        </span>
-                      </div>
-
-                      {/* Webhook Secret HMAC */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-zinc-400 font-medium text-[11px]">
-                            Secret Webhook HMAC-SHA256:
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setShowMpgSecret(!showMpgSecret)}
-                            className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
-                          >
-                            {showMpgSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                            <span>{showMpgSecret ? 'Sembunyikan' : 'Tampilkan'}</span>
-                          </button>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type={showMpgSecret ? 'text' : 'password'}
-                            value={settings.mpg_webhook_secret || ''}
-                            onChange={(e) => setSettings({ ...settings, mpg_webhook_secret: e.target.value })}
-                            placeholder="mandiri-private-gateway-secret-key..."
-                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden pr-8"
-                          />
-                          <Lock className="h-3.5 w-3.5 text-zinc-600 absolute right-2.5 top-2.5" />
-                        </div>
-                        <span className="text-[10px] text-zinc-500 block mt-1">
-                          Kunci rahasia untuk memverifikasi header X-Signature
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Webhook URL Endpoint Display Box */}
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                          Endpoint Outgoing Webhook Website Ini (Daftarkan ke Gateway MPG):
-                        </span>
-                        <div className="font-mono text-xs text-emerald-400 bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800/80 inline-block break-all">
-                          {typeof window !== 'undefined'
-                            ? `${window.location.origin}/api/webhook/payment-success`
-                            : 'https://ngodingpakeprd.buatin.biz.id/api/webhook/payment-success'}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const url = typeof window !== 'undefined'
-                            ? `${window.location.origin}/api/webhook/payment-success`
-                            : 'https://ngodingpakeprd.buatin.biz.id/api/webhook/payment-success';
-                          navigator.clipboard.writeText(url);
-                          setWebhookCopied(true);
-                          setTimeout(() => setWebhookCopied(false), 2000);
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start md:self-auto shrink-0"
-                      >
-                        {webhookCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                        <span>{webhookCopied ? 'Tersalin!' : 'Salin Webhook URL'}</span>
-                      </button>
-                    </div>
-
-                    {/* Fail-safe & Workflow Info Callout */}
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-3 text-[11px] text-zinc-300 space-y-1">
-                      <span className="font-semibold text-emerald-400 block">
-                        Alur Transaksi & Sistem Fail-Safe Otomatis:
-                      </span>
-                      <p className="leading-relaxed text-zinc-400 text-[10px]">
-                        1. Saat pembeli memilih paket di pricing modal, sistem membuat invoice di MPG dengan kode unik 3 digit (misal Rp 50.000 menjadi Rp 50.143) dan menampilkan QRIS ASPI dinamis di dalam modal tanpa redirect.
-                        <br />
-                        2. Ketika dana masuk, HP Android Kasir menangkap notifikasi dan gateway menembak webhook HMAC-SHA256 ke endpoint website ini.
-                        <br />
-                        3. Akun pembeli otomatis diaktifkan +30 hari secara real-time. Jika server MPG sedang offline atau gangguan, sistem secara aman otomatis beralih ke mode transfer manual GoBiz/WhatsApp tanpa menggagalkan transaksi.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: 2-Column Grid for Merchant Info & QRIS Barcode */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Kolom Kiri (5 cols): Info Merchant GoBiz & GoPay */}
-                <div className="lg:col-span-5 rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                      <Wallet className="h-4 w-4" />
-                      <span>Info Merchant & Rekening GoPay</span>
-                    </h3>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
-                      GATEWAY
-                    </span>
-                  </div>
-
-                  <div className="space-y-3.5 text-xs">
-                    <div>
-                      <label className="text-zinc-400 block mb-1 font-medium text-[11px]">
-                        Nama Merchant GoBiz (Tampil di QRIS):
-                      </label>
-                      <input
-                        type="text"
-                        value={settings.qris_merchant_name || ''}
-                        onChange={(e) => setSettings({ ...settings, qris_merchant_name: e.target.value })}
-                        placeholder="NGODINGPAKEPRD OFFICIAL"
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-white focus:border-amber-500 focus:outline-hidden font-medium"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-zinc-400 block mb-1 font-medium text-[11px]">
-                        Nomor Akun GoPay Merchant (Untuk Transfer Manual):
-                      </label>
-                      <input
-                        type="text"
-                        value={settings.qris_gopay_number || ''}
-                        onChange={(e) => setSettings({ ...settings, qris_gopay_number: e.target.value })}
-                        placeholder="0851-2360-7711"
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-white font-mono focus:border-amber-500 focus:outline-hidden"
-                      />
-                    </div>
-
-                    {/* Ringkasan Harga Paket yang Berjalan */}
-                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-3.5 space-y-2">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                        Ringkasan Paket Aktif (Sinkron Otomatis)
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(settings.pricing_tiers || DEFAULT_PRICING_TIERS).map((t) => (
-                          <div key={t.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
-                            <span className="text-[10px] text-zinc-400 block uppercase font-mono">{t.name}</span>
-                            <span className="text-xs font-bold text-amber-400 font-mono">
-                              Rp {t.price_rp.toLocaleString('id-ID')}
-                            </span>
-                            <span className="text-[9px] text-zinc-500 block">{t.daily_limit} PRD/hari</span>
+                      {/* API Key & Webhook Secret in 2 cols */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {/* API Key */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] text-zinc-400 font-medium">API Bearer Key:</label>
+                            <button
+                              type="button"
+                              onClick={() => setShowMpgKey(!showMpgKey)}
+                              className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
+                            >
+                              {showMpgKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              <span>{showMpgKey ? 'Tutup' : 'Lihat'}</span>
+                            </button>
                           </div>
-                        ))}
+                          <div className="relative">
+                            <input
+                              type={showMpgKey ? 'text' : 'password'}
+                              value={settings.mpg_api_key || ''}
+                              onChange={(e) => setSettings({ ...settings, mpg_api_key: e.target.value })}
+                              placeholder="mpg_live_..."
+                              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden pr-8"
+                            />
+                            <Key className="h-3.5 w-3.5 text-zinc-600 absolute right-2.5 top-2" />
+                          </div>
+                        </div>
+
+                        {/* Webhook Secret */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] text-zinc-400 font-medium">Webhook Secret HMAC:</label>
+                            <button
+                              type="button"
+                              onClick={() => setShowMpgSecret(!showMpgSecret)}
+                              className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
+                            >
+                              {showMpgSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              <span>{showMpgSecret ? 'Tutup' : 'Lihat'}</span>
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type={showMpgSecret ? 'text' : 'password'}
+                              value={settings.mpg_webhook_secret || ''}
+                              onChange={(e) => setSettings({ ...settings, mpg_webhook_secret: e.target.value })}
+                              placeholder="mandiri-private-..."
+                              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden pr-8"
+                            />
+                            <Lock className="h-3.5 w-3.5 text-zinc-600 absolute right-2.5 top-2" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Outgoing Webhook URL Box */}
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-bold text-zinc-400 block uppercase tracking-wider">
+                            URL Webhook Website (Daftarkan ke MPG):
+                          </span>
+                          <span className="font-mono text-[11px] text-emerald-400 truncate block">
+                            {typeof window !== 'undefined'
+                              ? `${window.location.origin}/api/webhook/payment-success`
+                              : 'https://ngodingpakeprd.buatin.biz.id/api/webhook/payment-success'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = typeof window !== 'undefined'
+                              ? `${window.location.origin}/api/webhook/payment-success`
+                              : 'https://ngodingpakeprd.buatin.biz.id/api/webhook/payment-success';
+                            navigator.clipboard.writeText(url);
+                            setWebhookCopied(true);
+                            setTimeout(() => setWebhookCopied(false), 2000);
+                          }}
+                          className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                        >
+                          {webhookCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                          <span>{webhookCopied ? 'Tersalin' : 'Salin URL'}</span>
+                        </button>
                       </div>
                     </div>
-
-                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-3 text-[11px] text-zinc-400 space-y-1">
-                      <span className="font-semibold text-zinc-300 block">Catatan Verifikasi GoBiz:</span>
-                      <p className="leading-relaxed text-zinc-400 text-[10px]">
-                        Saat pembeli menyelesaikan transaksi QRIS, order masuk ke tab <strong>GoBiz QRIS Orders</strong>. Buka aplikasi GoBiz untuk konfirmasi penerimaan dana.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Kolom Kanan (7 cols): Barcode QRIS & File Upload */}
-                <div className="lg:col-span-7 rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                      <QrCode className="h-4 w-4" />
-                      <span>Barcode QRIS & Upload Gambar</span>
-                    </h3>
-                    {settings.qris_image_url && settings.qris_image_url !== '/qris-gopay-placeholder.png' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSettings({ ...settings, qris_image_url: '/qris-gopay-placeholder.png' });
-                          showToast('success', 'Gambar QRIS direset ke placeholder default');
-                        }}
-                        className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        <span>Reset Gambar</span>
-                      </button>
-                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
-                    {/* Live Preview Barcode QRIS Box */}
-                    <div className="sm:col-span-5 flex flex-col items-center justify-center p-3.5 bg-zinc-900/70 rounded-xl border border-zinc-800 text-center">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                        Live Preview QRIS
-                      </span>
-                      <div className="w-36 h-36 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-lg border border-zinc-300 overflow-hidden">
-                        {settings.qris_image_url ? (
-                          <img
-                            src={settings.qris_image_url}
-                            alt="QRIS Preview"
-                            className="w-full h-full object-contain"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="text-zinc-800 text-center text-xs font-bold flex flex-col items-center justify-center">
-                            <QrCode className="h-12 w-12 mx-auto text-zinc-800 mb-1" />
-                            <span className="text-[10px]">Belum Ada Gambar</span>
-                          </div>
-                        )}
+                  {/* Kolom Kanan (5 cols): Merchant Info & QRIS Manual */}
+                  <div className="lg:col-span-5 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="h-3.5 w-3.5 text-amber-400" />
+                        <h4 className="text-xs font-bold text-white">Merchant GoBiz & QRIS Statis</h4>
                       </div>
 
                       {settings.qris_image_url && settings.qris_image_url !== '/qris-gopay-placeholder.png' && (
                         <button
                           type="button"
                           onClick={() => {
-                            setRawUploadedImage(settings.qris_image_url || null);
-                            setCropScale(1);
-                            setCropOffsetX(0);
-                            setCropOffsetY(0);
-                            setIsCroppingOpen(true);
+                            setSettings({ ...settings, qris_image_url: '/qris-gopay-placeholder.png' });
+                            showToast('success', 'Gambar QRIS direset ke placeholder default');
                           }}
-                          className="mt-2 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-[10px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer transition-colors"
                         >
-                          <Scissors className="h-3 w-3" />
-                          <span>Pangkas (Crop)</span>
+                          <Trash2 className="h-3 w-3" />
+                          <span>Reset</span>
                         </button>
                       )}
-
-                      <span className="text-[11px] font-bold text-white mt-1.5 truncate max-w-full">
-                        {settings.qris_merchant_name || 'NGODINGPAKEPRD OFFICIAL'}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        GoPay: {settings.qris_gopay_number || '0851-2360-7711'}
-                      </span>
                     </div>
 
-                    {/* Upload Controls Box */}
-                    <div className="sm:col-span-7 space-y-3">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/png, image/jpeg, image/jpg, image/webp"
-                        onChange={handleQRISFileUpload}
-                        className="hidden"
-                      />
-
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-zinc-700 hover:border-amber-500 bg-zinc-900/40 hover:bg-zinc-900/80 p-4 rounded-xl text-center cursor-pointer transition-all group"
-                      >
-                        <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform">
-                          <Upload className="h-4 w-4" />
-                        </div>
-                        <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">
-                          Pilih File Gambar QRIS
-                        </p>
-                        <p className="text-[10px] text-zinc-400 mt-0.5">
-                          PNG, JPG, WEBP (Maksimal 6MB)
-                        </p>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fileInputRef.current?.click();
-                          }}
-                          className="mt-2 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-sm cursor-pointer"
-                        >
-                          <Upload className="h-3 w-3" />
-                          <span>Upload File</span>
-                        </button>
+                    <div className="space-y-2.5 text-xs">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 font-medium block mb-1">Nama Merchant GoBiz:</label>
+                        <input
+                          type="text"
+                          value={settings.qris_merchant_name || ''}
+                          onChange={(e) => setSettings({ ...settings, qris_merchant_name: e.target.value })}
+                          placeholder="NGODINGPAKEPRD OFFICIAL"
+                          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-white text-xs font-medium focus:border-amber-500 focus:outline-hidden"
+                        />
                       </div>
 
                       <div>
-                        <label className="text-zinc-400 text-[10px] font-medium block mb-1">
-                          Atau masukkan Link / URL CDN Gambar:
-                        </label>
+                        <label className="text-[11px] text-zinc-400 font-medium block mb-1">Nomor GoPay Merchant:</label>
                         <input
                           type="text"
-                          value={settings.qris_image_url || ''}
-                          onChange={(e) => setSettings({ ...settings, qris_image_url: e.target.value })}
-                          placeholder="https://... atau /qris.png"
-                          className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-white font-mono truncate focus:border-amber-500 focus:outline-hidden"
+                          value={settings.qris_gopay_number || ''}
+                          onChange={(e) => setSettings({ ...settings, qris_gopay_number: e.target.value })}
+                          placeholder="0851-2360-7711"
+                          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-white font-mono text-xs focus:border-amber-500 focus:outline-hidden"
                         />
+                      </div>
+
+                      {/* Live Preview Box with Inline Controls */}
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5 flex items-center gap-3">
+                        <div className="w-20 h-20 bg-white rounded-lg p-1 shrink-0 flex items-center justify-center border border-zinc-300 overflow-hidden shadow-inner">
+                          {settings.qris_image_url ? (
+                            <img
+                              src={settings.qris_image_url}
+                              alt="QRIS Preview"
+                              className="w-full h-full object-contain"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <QrCode className="h-10 w-10 text-zinc-800" />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/png, image/jpeg, image/jpg, image/webp"
+                            onChange={handleQRISFileUpload}
+                            className="hidden"
+                          />
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-[10px] inline-flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                            >
+                              <Upload className="h-3 w-3" />
+                              <span>Unggah</span>
+                            </button>
+
+                            {settings.qris_image_url && settings.qris_image_url !== '/qris-gopay-placeholder.png' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRawUploadedImage(settings.qris_image_url || null);
+                                  setCropScale(1);
+                                  setCropOffsetX(0);
+                                  setCropOffsetY(0);
+                                  setIsCroppingOpen(true);
+                                }}
+                                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Scissors className="h-3 w-3" />
+                                <span>Pangkas</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <input
+                            type="text"
+                            value={settings.qris_image_url || ''}
+                            onChange={(e) => setSettings({ ...settings, qris_image_url: e.target.value })}
+                            placeholder="URL CDN Gambar..."
+                            className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 font-mono truncate focus:border-amber-500 focus:outline-hidden"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3775,7 +4391,7 @@ export default function AdminDashboard() {
                   onClick={() => setIsCroppingOpen(false)}
                   className="text-zinc-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 cursor-pointer"
                 >
-                  Tutup (✕)
+                  Tutup (X)
                 </button>
               </div>
 

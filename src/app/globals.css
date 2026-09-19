@@ -138,3 +138,208 @@ body {
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Admin Dashboard: Mode Terang (Light Mode - Elegant Blue & White Palette)
+   ========================================================================== */
+.admin-light {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.admin-light aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+.admin-light header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+}
+
+.admin-light h1,
+.admin-light h2,
+.admin-light h3,
+.admin-light h4,
+.admin-light h5,
+.admin-light h6 {
+  color: #0f172a !important;
+}
+
+/* Containers, Panels & Cards in Light Mode */
+.admin-light .bg-zinc-950,
+.admin-light .bg-\[\#0d0d10\],
+.admin-light .bg-\[\#09090b\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.admin-light .bg-zinc-900\/50,
+.admin-light .bg-zinc-900\/60,
+.admin-light .bg-zinc-900\/80,
+.admin-light .bg-zinc-900\/40,
+.admin-light .bg-zinc-900 {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.admin-light .border-zinc-800,
+.admin-light .border-zinc-800\/80,
+.admin-light .border-zinc-800\/60,
+.admin-light .border-zinc-700,
+.admin-light .border-zinc-700\/50 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Text Colors in Light Mode */
+.admin-light .text-white {
+  color: #0f172a !important;
+}
+
+.admin-light .text-zinc-100 {
+  color: #0f172a !important;
+}
+
+.admin-light .text-zinc-200 {
+  color: #1e293b !important;
+}
+
+.admin-light .text-zinc-300 {
+  color: #334155 !important;
+}
+
+.admin-light .text-zinc-400 {
+  color: #64748b !important;
+}
+
+.admin-light .text-zinc-500 {
+  color: #94a3b8 !important;
+}
+
+/* Blue & White Accent Overrides */
+.admin-light .bg-amber-500 {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.admin-light .hover\:bg-amber-400:hover {
+  background-color: #1d4ed8 !important;
+}
+
+.admin-light .text-amber-400,
+.admin-light .text-amber-500 {
+  color: #2563eb !important;
+}
+
+.admin-light .text-amber-300\/90 {
+  color: #1d4ed8 !important;
+}
+
+.admin-light .bg-amber-500\/15,
+.admin-light .bg-amber-500\/20,
+.admin-light .bg-amber-500\/10,
+.admin-light .bg-amber-500\/5 {
+  background-color: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1e40af !important;
+}
+
+/* Sidebar Active & Inactive Links in Light Mode */
+.admin-light nav button.bg-amber-500\/15 {
+  background-color: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+
+.admin-light nav button.bg-amber-500\/15 svg {
+  color: #2563eb !important;
+}
+
+.admin-light nav button:not(.bg-amber-500\/15):hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* ALL TABLES IN LIGHT MODE (Overview, Orders, Users, Pricing) */
+.admin-light table {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.admin-light thead {
+  background-color: #f1f5f9 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.admin-light thead tr {
+  border-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+}
+
+.admin-light thead th {
+  color: #475569 !important;
+  font-weight: 700 !important;
+  background-color: #f1f5f9 !important;
+}
+
+.admin-light tbody {
+  background-color: #ffffff !important;
+}
+
+.admin-light tbody tr {
+  border-color: #e2e8f0 !important;
+  transition: background-color 0.15s ease;
+}
+
+.admin-light tbody tr:hover,
+.admin-light .hover\:bg-zinc-900\/40:hover {
+  background-color: #eff6ff !important;
+}
+
+.admin-light td {
+  color: #1e293b !important;
+  border-color: #e2e8f0 !important;
+}
+
+.admin-light .divide-zinc-800\/60 > * + *,
+.admin-light .divide-zinc-800 > * + * {
+  border-color: #e2e8f0 !important;
+}
+
+/* Inputs, Textareas, Selects & Checkboxes in Light Mode */
+.admin-light input:not([type="checkbox"]):not([type="radio"]),
+.admin-light select,
+.admin-light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.admin-light input::placeholder,
+.admin-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.admin-light input:focus,
+.admin-light select:focus,
+.admin-light textarea:focus {
+  border-color: #2563eb !important;
+  outline: 2px solid rgba(37, 99, 235, 0.2) !important;
+}
+
+/* Badges & Pills */
+.admin-light .bg-zinc-800\/80,
+.admin-light .bg-zinc-800\/90,
+.admin-light .bg-zinc-800 {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Mobile top tab bar */
+.admin-light .md\:hidden.bg-zinc-950 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}

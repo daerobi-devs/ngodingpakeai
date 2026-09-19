@@ -187,7 +187,7 @@ export interface SystemSettings {
   qris_image_url?: string;
   qris_merchant_name?: string;
   qris_gopay_number?: string;
-  payment_gateway_mode?: 'manual_qris' | 'mpg_automatic';
+  payment_gateway_mode?: 'manual_qris' | 'mpg_automatic' | 'mpg_headless' | 'mpg_hosted';
   mpg_gateway_url?: string;
   mpg_api_key?: string;
   mpg_webhook_secret?: string;

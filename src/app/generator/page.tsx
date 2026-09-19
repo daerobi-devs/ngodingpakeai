@@ -18,6 +18,7 @@ import { WizardHeroInput, TechStackConfig, DEFAULT_TECH_STACK } from '@/componen
 import { WizardDiscoveryStep } from '@/components/wizard/WizardDiscoveryStep';
 import { ClarificationQuestion } from '@/types/prd';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import confetti from 'canvas-confetti';
 import {
   AlertCircle,
   Zap,
@@ -156,6 +157,22 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const isLight = theme === 'light';
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
   const isStrictLogin = systemSettings?.auth_mode === 'strict_login';
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+
+  // Handle redirect return from Mandiri Private Gateway (payment=success)
+  useEffect(() => {
+    const paymentStatus = searchParams?.get('payment');
+    if (paymentStatus === 'success') {
+      setShowPaymentSuccess(true);
+      try {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      } catch {}
+      refreshProfile();
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, [searchParams, refreshProfile]);
 
   // Responsive sidebar initial check
   useEffect(() => {
@@ -507,6 +524,26 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top Announcement Banner */}
         <AnnouncementBanner />
+
+        {/* Payment Success Notification Banner */}
+        {showPaymentSuccess && (
+          <div className="bg-emerald-950/80 border-b border-emerald-500/40 px-4 py-2.5 flex items-center justify-between text-xs text-emerald-200 z-20 animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>
+                <strong className="text-white">Pembayaran Berhasil Dikonfirmasi!</strong> Paket langganan Anda telah aktif dan kuota harian telah diperbarui.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPaymentSuccess(false)}
+              className="p-1 rounded text-emerald-400 hover:text-white transition-colors cursor-pointer"
+              title="Tutup Notifikasi"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* Top Workspace Header */}
         <header className="h-14 shrink-0 border-b border-zinc-800/80 bg-[#09090b]/90 backdrop-blur-md px-4 flex items-center justify-between z-20">

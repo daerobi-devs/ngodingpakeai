@@ -150,6 +150,9 @@ export const geminiPRDResponseSchema = {
         database_erd: { type: "string" },
         api_integration_matrix: { type: "string" },
         sequence_diagram: { type: "string" },
+        infrastructure_topology: { type: "string" },
+        rbac_permission_matrix: { type: "string" },
+        data_pipeline_flow: { type: "string" },
       },
     },
   },
@@ -248,7 +251,7 @@ export const PRDOutputZodSchema = z.object({
         status: z.string().optional().default("Direncanakan"),
         description: z.string().optional(),
         icon: z.string().optional(),
-        sub_features: z.array(z.string()).default([]),
+        sub_features: z.array(z.union([z.string(), z.any()])).default([]),
       })
     )
     .optional(),
@@ -259,6 +262,9 @@ export const PRDOutputZodSchema = z.object({
       database_erd: z.string().optional(),
       api_integration_matrix: z.string().optional(),
       sequence_diagram: z.string().optional(),
+      infrastructure_topology: z.string().optional(),
+      rbac_permission_matrix: z.string().optional(),
+      data_pipeline_flow: z.string().optional(),
     })
     .optional(),
 });
@@ -284,11 +290,17 @@ export const clarificationResponseSchema = {
                 id: { type: "string" },
                 label: { type: "string" },
                 description: { type: "string" },
+                isRecommended: { type: "boolean" },
+                recommendationReason: { type: "string" },
               },
               required: ["id", "label"],
             },
           },
           recommendedOptionId: { type: "string" },
+          recommendedOptionIds: {
+            type: "array",
+            items: { type: "string" },
+          },
         },
         required: ["id", "category", "question", "options", "recommendedOptionId"],
       },
@@ -310,9 +322,13 @@ export const ClarificationOutputZodSchema = z.object({
           id: z.string(),
           label: z.string(),
           description: z.string().optional(),
+          isRecommended: z.boolean().optional(),
+          recommendationReason: z.string().optional(),
+          badge: z.string().optional(),
         })
       ),
       recommendedOptionId: z.string(),
+      recommendedOptionIds: z.array(z.string()).optional(),
     })
   ),
 });
@@ -525,37 +541,69 @@ export function normalizeAndSanitizeClarifications(raw: any): ClarificationQuest
       }));
     }
 
+    let recommendedOptionId = typeof q.recommendedOptionId === "string" && q.recommendedOptionId.trim()
+      ? q.recommendedOptionId.trim()
+      : "";
+
+    const rawRecIds = Array.isArray(q.recommendedOptionIds) ? q.recommendedOptionIds : [];
+    const recommendedOptionIdsSet = new Set<string>(rawRecIds.filter((id: any) => typeof id === "string" && id.trim()));
+    if (recommendedOptionId) {
+      recommendedOptionIdsSet.add(recommendedOptionId);
+    }
+
     const options = rawOptions.map((opt: any, oIdx: number) => {
       if (typeof opt === "string") {
+        const fallbackId = `opt_${idx + 1}_${oIdx + 1}`;
+        const isRec = oIdx === 0 || recommendedOptionIdsSet.has(fallbackId);
         return {
-          id: `opt_${idx + 1}_${oIdx + 1}`,
+          id: fallbackId,
           label: opt.trim(),
           description: undefined,
+          isRecommended: isRec,
+          recommendationReason: isRec ? "Standar Industri" : undefined,
+          badge: isRec ? "Rekomendasi" : undefined,
         };
       }
+      const optId = typeof opt?.id === "string" && opt.id.trim() ? opt.id.trim() : `opt_${idx + 1}_${oIdx + 1}`;
+      const isRec = Boolean(opt?.isRecommended) || recommendedOptionIdsSet.has(optId) || (recommendedOptionId === optId);
+      const recReason = typeof opt?.recommendationReason === "string" && opt.recommendationReason.trim()
+        ? opt.recommendationReason.trim()
+        : isRec ? "Rekomendasi Utama" : undefined;
+      const badge = typeof opt?.badge === "string" && opt.badge.trim()
+        ? opt.badge.trim()
+        : isRec ? (recReason || "Rekomendasi") : undefined;
+
       return {
-        id: typeof opt?.id === "string" && opt.id.trim() ? opt.id.trim() : `opt_${idx + 1}_${oIdx + 1}`,
+        id: optId,
         label: typeof opt?.label === "string" && opt.label.trim() ? opt.label.trim() : `Opsi ${oIdx + 1}`,
         description: typeof opt?.description === "string" && opt.description.trim() ? opt.description.trim() : undefined,
+        isRecommended: isRec,
+        recommendationReason: recReason,
+        badge,
       };
     });
 
     // Ensure at least 2 options exist
     if (options.length === 0) {
       options.push(
-        { id: `opt_${idx + 1}_1`, label: "Opsi Rekomendasi Utama", description: "Pilihan standar industri terbaik" },
-        { id: `opt_${idx + 1}_2`, label: "Opsi Alternatif Fleksibel", description: "Disesuaikan kebutuhan khusus" }
+        { id: `opt_${idx + 1}_1`, label: "Opsi Rekomendasi Utama", description: "Pilihan standar industri terbaik", isRecommended: true, recommendationReason: "Standar Industri", badge: "Rekomendasi" },
+        { id: `opt_${idx + 1}_2`, label: "Opsi Alternatif Fleksibel", description: "Disesuaikan kebutuhan khusus", isRecommended: false }
       );
     }
 
-    let recommendedOptionId = typeof q.recommendedOptionId === "string" && q.recommendedOptionId.trim()
-      ? q.recommendedOptionId.trim()
-      : options[0].id;
-
-    // Check if recommendedOptionId exists in options
-    if (!options.some((o: any) => o.id === recommendedOptionId)) {
-      recommendedOptionId = options[0].id;
+    // Set first option as recommended if none is marked
+    if (!options.some((o: any) => o.isRecommended)) {
+      options[0].isRecommended = true;
+      options[0].recommendationReason = "Rekomendasi Utama";
+      options[0].badge = "Rekomendasi";
     }
+
+    if (!recommendedOptionId || !options.some((o: any) => o.id === recommendedOptionId)) {
+      const firstRec = options.find((o: any) => o.isRecommended) || options[0];
+      recommendedOptionId = firstRec.id;
+    }
+
+    const finalRecIds = options.filter((o: any) => o.isRecommended).map((o: any) => o.id);
 
     return {
       id,
@@ -565,6 +613,7 @@ export function normalizeAndSanitizeClarifications(raw: any): ClarificationQuest
       inputType,
       options,
       recommendedOptionId,
+      recommendedOptionIds: finalRecIds,
     };
   });
 

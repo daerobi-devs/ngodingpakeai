@@ -108,8 +108,9 @@ export async function POST(req: NextRequest) {
   }
 
   // 6. Idempotency Check: Don't re-activate if already processed
-  if (order.status === 'approved') {
+  if (order.status === 'approved' || order.status === 'paid') {
     return NextResponse.json({
+      success: true,
       status: 'ok',
       message: `Pesanan ${order_id} sudah diproses sebelumnya (Idempotent). Tidak ada perubahan ganda.`,
     });
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
   const now = Date.now();
   const paidTimestamp = paid_at ? new Date(paid_at).toISOString() : new Date().toISOString();
 
-  // 8. Update Order Status to 'approved'
+  // 8. Update Order Status to 'approved' (and track detected bank / method)
   const updateOrderPayload: Record<string, any> = {
     status: 'approved',
     detected_bank: detected_bank || payment_method || 'QRIS_NOTIFICATION',
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
   if (updateOrderErr) {
     console.error('[MPG Webhook] Failed to update order status:', updateOrderErr);
     return NextResponse.json(
-      { status: 'error', error: 'DATABASE_ERROR', message: updateOrderErr.message },
+      { success: false, status: 'error', error: 'DATABASE_ERROR', message: updateOrderErr.message },
       { status: 500 }
     );
   }
@@ -179,15 +180,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 10. Return standard 200 OK
+  // 10. Return standard 200 OK with success: true
   return NextResponse.json({
+    success: true,
     status: 'ok',
     message: `Pembayaran ${order_id} sebesar Rp ${amount || order.amount} berhasil diverifikasi. Akun ${grantedTier.toUpperCase()} telah aktif!`,
     data: {
       order_id,
       tier: grantedTier,
       duration_days: durationDays,
-      status: 'approved',
+      status: 'PAID',
     },
   });
 }

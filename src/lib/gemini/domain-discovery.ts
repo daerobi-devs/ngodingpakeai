@@ -5,7 +5,40 @@ import { ClarificationQuestion } from "@/types/prd";
  * Provides rich, domain-tailored interactive questions with chip options in < 5ms.
  * Designed with Principal Product Architect standards to eliminate generic template questions.
  */
+function enrichQuestionsWithRecommendations(questions: ClarificationQuestion[]): ClarificationQuestion[] {
+  return questions.map((q) => {
+    const recommendedIds = new Set<string>();
+    if (q.recommendedOptionId) recommendedIds.add(q.recommendedOptionId);
+    if (Array.isArray(q.recommendedOptionIds)) {
+      q.recommendedOptionIds.forEach((id) => recommendedIds.add(id));
+    }
+
+    const options = q.options.map((opt, idx) => {
+      const isRec = Boolean(opt.isRecommended) || recommendedIds.has(opt.id) || idx === 0;
+      const recReason = opt.recommendationReason || (isRec ? (idx === 0 ? "Rekomendasi Utama" : "Best Practice") : undefined);
+      return {
+        ...opt,
+        isRecommended: isRec,
+        recommendationReason: recReason,
+        badge: opt.badge || (isRec ? recReason || "Rekomendasi" : undefined),
+      };
+    });
+
+    const finalRecIds = options.filter((o) => o.isRecommended).map((o) => o.id);
+    return {
+      ...q,
+      options,
+      recommendedOptionId: q.recommendedOptionId || options[0]?.id,
+      recommendedOptionIds: finalRecIds,
+    };
+  });
+}
+
 export function getDomainDiscoveryQuestions(userIdea: string): ClarificationQuestion[] {
+  return enrichQuestionsWithRecommendations(resolveRawDomainQuestions(userIdea));
+}
+
+function resolveRawDomainQuestions(userIdea: string): ClarificationQuestion[] {
   const text = userIdea.toLowerCase();
 
   // 1. Rental & Booking Domain (Camping, Kamera, Mobil, Alat, Tenda, Lapangan, Futsal, dsb)

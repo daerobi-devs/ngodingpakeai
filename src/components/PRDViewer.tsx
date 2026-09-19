@@ -37,6 +37,8 @@ import {
   Sparkles,
   SlidersHorizontal,
   Lock,
+  X,
+  ListOrdered,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { hasTierFeature } from "@/lib/supabase/types";
@@ -96,6 +98,60 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
     navigator.clipboard.writeText(promptText);
     setCopiedFeatureId(featId);
     setTimeout(() => setCopiedFeatureId(null), 2000);
+  };
+
+  const [isRevisionDrawerOpen, setIsRevisionDrawerOpen] = useState(false);
+  const [revisionMessages, setRevisionMessages] = useState<
+    Array<{ id: string; role: "user" | "assistant"; text: string }>
+  >([]);
+  const [revisionInput, setRevisionInput] = useState("");
+  const [isSubmittingRevision, setIsSubmittingRevision] = useState(false);
+
+  const handleSendRevision = async (textToSend?: string) => {
+    const text = (textToSend || revisionInput).trim();
+    if (!text || isSubmittingRevision) return;
+
+    const userMsg = {
+      id: Date.now().toString(),
+      role: "user" as const,
+      text,
+    };
+    setRevisionMessages((prev) => [...prev, userMsg]);
+    setRevisionInput("");
+    setIsSubmittingRevision(true);
+
+    try {
+      const res = await fetch("/api/revise-prd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: text,
+          prdTitle: prd.title,
+          userId: profile?.id,
+        }),
+      });
+      const data = await res.json();
+      const aiReply = data.message || "Instruksi revisi diterima.";
+      setRevisionMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant" as const,
+          text: aiReply,
+        },
+      ]);
+    } catch {
+      setRevisionMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant" as const,
+          text: "Gagal terhubung ke AI. Silakan coba lagi.",
+        },
+      ]);
+    } finally {
+      setIsSubmittingRevision(false);
+    }
   };
 
   const toggleTask = (index: number) => {
@@ -209,16 +265,71 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
     API2["POST /api/validate (Auth & Zod Check)"]
     API3["GET /api/status (Realtime Polling)"]
   end
-  subgraph Integrations [Third-party & Storage]
-    AI["AI Model Service"]
-    DB[(Database Storage)]
-  end
   Client --> API1 & API2 & API3
   API1 --> AI
   API2 --> DB
   API3 --> DB`
     );
   }, [prd.architecture_diagrams?.api_integration_matrix]);
+
+  const defaultInfraTopology = useMemo(() => {
+    return (
+      prd.architecture_diagrams?.infrastructure_topology ||
+      `flowchart LR
+  CDN["CDN / Cloudflare\\n(SSL + DDoS Protection)"]
+  Nginx["Nginx Reverse Proxy\\n(Port 80/443)"]
+  App["App Server\\n(Next.js Docker Container)"]
+  DB[(PostgreSQL Database)]
+  Redis[(Redis Cache & Queue)]
+  Storage["Object Storage\\n(Assets & Media)"]
+
+  CDN --> Nginx
+  Nginx --> App
+  App --> DB
+  App --> Redis
+  App --> Storage`
+    );
+  }, [prd.architecture_diagrams?.infrastructure_topology]);
+
+  const defaultRBAC = useMemo(() => {
+    return (
+      prd.architecture_diagrams?.rbac_permission_matrix ||
+      `flowchart TD
+  Root["Peran & Hak Akses (RBAC)"]
+  Root --> SA["Super Admin\\n(Akses Penuh Sistem)"]
+  Root --> Admin["Manager / Operator\\n(Kelola Operasional)"]
+  Root --> User["User Reguler\\n(Akses Layanan Utama)"]
+  Root --> Guest["Guest / Tamu\\n(Katalog & Login)"]
+
+  SA --> P1["Konfigurasi Global & API Keys"]
+  SA --> P2["Audit Log & Manajemen Pengguna"]
+  Admin --> P3["Verifikasi & Proses Transaksi"]
+  Admin --> P4["Lihat Laporan & Ringkasan"]
+  User --> P5["Buat Transaksi & Input Data"]
+  User --> P6["Kelola Profil & Notifikasi"]
+  Guest --> P7["Lihat Landing Page & Detail"]`
+    );
+  }, [prd.architecture_diagrams?.rbac_permission_matrix]);
+
+  const defaultDataPipeline = useMemo(() => {
+    return (
+      prd.architecture_diagrams?.data_pipeline_flow ||
+      `flowchart LR
+  Trigger["Trigger Input\\n(User Action / Webhook)"]
+  Validate["Validasi & Sanitasi\\n(Zod Schema Guard)"]
+  Queue["Message Queue\\n(Asynchronous Job)"]
+  Worker["Worker Engine\\n(AI / Data Processing)"]
+  Storage["Penyimpanan Data\\n(PostgreSQL + Audit Log)"]
+  Output["Notifikasi Output\\n(WA / Email / Realtime Event)"]
+
+  Trigger --> Validate
+  Validate --> Queue
+  Queue --> Worker
+  Worker --> Storage
+  Storage --> Output`
+    );
+  }, [prd.architecture_diagrams?.data_pipeline_flow]);
+
 
   const handleDownloadBundleZip = async () => {
     if (!canExportZip) {
@@ -254,13 +365,13 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
 
 Paket instruksi koding lengkap untuk AI Coding Agents (Cursor, Claude Code, Windsurf, Antigravity).
 
-## 📂 Struktur File:
+## Struktur File:
 - \`.cursorrules\` : Pagar pembatas koding ketat, kontrak GOOD vs REJECT, dan task breakdown.
 - \`CLAUDE.md\` : Instruksi untuk Claude Code CLI.
-- \`docs/PRD.md\` : Spesifikasi produk 7 kategori lengkap + 5 diagram Mermaid.
+- \`docs/PRD.md\` : Spesifikasi produk 7 kategori lengkap + 8 diagram Mermaid.
 - \`docs/DESIGN.md\` : Standar desain frontend anti-AI slop (Dark Zinc 950, 8pt grid, micro-interactions).
 
-## 🚀 Cara Pakai:
+## Cara Pakai:
 1. Buka folder ini di Cursor / VS Code / Antigravity.
 2. Di chat AI, ketik:
    > *"Baca docs/PRD.md, patuhi .cursorrules, dan terapkan standar visual di docs/DESIGN.md. Mulai dari Step 1."*
@@ -549,43 +660,44 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
   return (
     <div className="space-y-6 pb-20">
       {/* Top Bar with metadata and action buttons */}
-      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-2xl border p-4 sm:p-5 transition-colors ${
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-3 sm:px-4 sm:py-2.5 transition-colors ${
         isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
       }`}>
         {/* Left Title & Return button */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
             onClick={onBackToEdit}
-            className={`shrink-0 flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+            className={`shrink-0 flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
               isLight
                 ? "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900"
                 : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 hover:text-white"
             }`}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Kembali Edit</span>
+            <span className="hidden sm:inline">Kembali Edit</span>
           </button>
-          <div className="min-w-0">
-            <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5" /> PRD MENDALAM SIAP IMPLEMENTASI
-            </span>
-            <h1 className={`text-base sm:text-lg font-bold truncate mt-0.5 ${
+
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className={`text-xs sm:text-sm font-bold truncate ${
               isLight ? "text-slate-900" : "text-white"
             }`}>
               {prd.title}
             </h1>
+            <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+              <CheckCircle2 className="h-2.5 w-2.5" /> SIAP IMPLEMENTASI
+            </span>
           </div>
         </div>
 
         {/* Action Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
           {/* 1. Primary CTA: Unduh Starter Kit */}
           <button
             type="button"
             onClick={handleDownloadBundleZip}
             disabled={downloadingZip}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-md ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs ${
               !canExportZip
                 ? "bg-zinc-900 border border-amber-500/40 text-zinc-200 hover:border-amber-400 hover:text-white"
                 : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20"
@@ -599,7 +711,7 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
             ) : (
               <Package className="h-3.5 w-3.5" />
             )}
-            <span>{downloadingZip ? "Membuat ZIP..." : "Unduh Starter Kit (.ZIP)"}</span>
+            <span>{downloadingZip ? "Membuat ZIP..." : "Starter Kit (.ZIP)"}</span>
             {!canExportZip && (
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                 PRO
@@ -607,105 +719,76 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
             )}
           </button>
 
-          {/* 2. Copy .cursorrules */}
-          <button
-            type="button"
-            onClick={handleCopyCursorRules}
-            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
-              copiedCursorRules
-                ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
-                : isLight
-                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
-            }`}
-            title="Salin snippet .cursorrules / CLAUDE.md"
-          >
-            {copiedCursorRules ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-amber-400 font-bold">Rules Tersalin!</span>
-              </>
-            ) : (
-              <>
-                <Zap className="h-3.5 w-3.5 text-amber-400" />
-                <span>Copy .cursorrules</span>
-              </>
-            )}
-          </button>
-
-          {/* 3. Copy DESIGN.md */}
-          <button
-            type="button"
-            onClick={handleCopyDesignDoc}
-            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
-              copiedDesign
-                ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
-                : isLight
-                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
-            }`}
-            title="Salin Standar Desain Frontend (DESIGN.md)"
-          >
-            {copiedDesign ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-400" />
-                <span className="text-emerald-400 font-bold">DESIGN.md Tersalin!</span>
-              </>
-            ) : (
-              <>
-                <Palette className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Copy DESIGN.md</span>
-              </>
-            )}
-          </button>
-
-          {/* 4. Salin PRD Markdown */}
+          {/* 3. Salin PRD Markdown */}
           <button
             type="button"
             onClick={handleCopyMarkdown}
-            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
               copiedMarkdown
                 ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
                 : isLight
                 ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
+                : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
             }`}
             title="Salin seluruh isi dokumen PRD dalam format Markdown"
           >
             {copiedMarkdown ? (
               <>
                 <Check className="h-3.5 w-3.5 text-emerald-400" />
-                <span className="text-emerald-400 font-bold">PRD Tersalin!</span>
+                <span className="text-emerald-400 font-bold">Tersalin!</span>
               </>
             ) : (
               <>
                 <Copy className="h-3.5 w-3.5 text-zinc-400" />
-                <span>Salin PRD</span>
+                <span className="hidden sm:inline">Salin PRD</span>
               </>
             )}
           </button>
 
-          {/* 5. Ekspor Menu Dropdown */}
+          {/* 4. Ekspor & Rules Dropdown */}
           <div className="relative" ref={exportMenuRef}>
             <button
               type="button"
               onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
                 isExportMenuOpen
                   ? "border-zinc-600 bg-zinc-800 text-white"
                   : isLight
                   ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
+                  : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
               }`}
-              title="Opsi Ekspor File"
+              title="Opsi Ekspor & Salin Rules"
             >
               <Download className="h-3.5 w-3.5 text-zinc-400" />
-              <span>Ekspor File</span>
+              <span className="hidden sm:inline">Ekspor & Rules</span>
               <ChevronDown className={`h-3 w-3 opacity-60 transition-transform ${isExportMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             {isExportMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-1.5 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-1.5 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCopyCursorRules();
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Zap className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Copy .cursorrules</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCopyDesignDoc();
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Palette className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Copy DESIGN.md</span>
+                </button>
+                <div className="h-px bg-zinc-800 my-1" />
                 <button
                   type="button"
                   onClick={() => {
@@ -882,549 +965,448 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
 
       {/* TAB 1: Formatted Document */}
       {activeTab === "doc" && (
-        <div className="space-y-6">
-          {/* Executive Summary Card */}
-          <div className={`rounded-xl border p-6 space-y-4 ${
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
+          {/* Left Sticky TOC Navigation (Desktop) */}
+          <div className={`hidden lg:block w-52 shrink-0 sticky top-6 rounded-2xl border p-4 space-y-1.5 ${
             isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
           }`}>
-            <div className="flex items-center gap-2">
-              <BookmarkCheck className="h-4 w-4 text-amber-500" />
-              <h2 className={`text-xs font-bold uppercase tracking-widest ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
-                Executive Architecture Overview
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`font-semibold text-[11px] uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  🎯 Inisiatif Utama
+            <span className={`text-[10px] font-bold uppercase tracking-widest block mb-2 px-1 ${
+              isLight ? "text-slate-400" : "text-zinc-500"
+            }`}>
+              Daftar Isi PRD
+            </span>
+            {[
+              { id: "sec-overview", label: "1. Overview & Inisiatif" },
+              { id: "sec-opportunity", label: "2. Opportunity Framing" },
+              { id: "sec-boundaries", label: "3. Scope & Non-Goals" },
+              { id: "sec-features", label: "4. Rincian Fitur Inti" },
+              { id: "sec-success", label: "5. Ukuran Keberhasilan" },
+              { id: "sec-rollout", label: "6. Rencana Rollout" },
+              { id: "sec-risk", label: "7. Manajemen Risiko" },
+              { id: "sec-ai", label: "8. Kontrak Koding AI" },
+            ].map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className={`block text-xs py-1.5 px-2.5 rounded-lg transition-colors font-medium ${
+                  isLight
+                    ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
+                }`}
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+
+          {/* Main Clean Document Flow (Notion / Stripe Docs Style) */}
+          <div className={`flex-1 min-w-0 rounded-2xl border p-6 sm:p-10 space-y-10 ${
+            isLight ? "bg-white border-slate-200 text-slate-900 shadow-xs" : "bg-[#0f1117] border-zinc-800 text-zinc-100 shadow-xl"
+          }`}>
+            {/* Header Document */}
+            <div id="sec-overview" className="space-y-4 pb-8 border-b border-zinc-800/80">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-amber-500 font-bold uppercase tracking-widest text-[11px]">
+                  PRD Spesifikasi Teknis
                 </span>
-                <p className={`font-bold text-sm ${isLight ? "text-slate-900" : "text-white"}`}>{prd.title}</p>
                 {prd.archetype_detection && (
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                      🏛️ {prd.archetype_detection.archetype}
-                    </span>
-                    <span className="text-[11px] text-zinc-400">
-                      Target: <strong className={isLight ? "text-slate-700" : "text-zinc-200"}>{prd.archetype_detection.target_audience}</strong>
-                    </span>
-                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    Arketipe: {prd.archetype_detection.archetype}
+                  </span>
                 )}
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`font-semibold text-[11px] uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  👤 Primary Owner & Review Cadence
-                </span>
-                <p className={`font-medium ${isLight ? "text-slate-800" : "text-white"}`}>
-                  {renderTextWithAssumption(prd.ownership_action.primary_owner)} (
-                  {renderTextWithAssumption(prd.ownership_action.decision_points)})
-                </p>
                 {prd.archetype_detection?.ui_personality && (
-                  <div className="mt-2 text-[11px] text-zinc-400">
-                    <span className="font-semibold text-zinc-500">Design Mood: </span>
-                    <span className="italic">{prd.archetype_detection.ui_personality}</span>
-                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md font-mono text-[10px] text-zinc-400 bg-zinc-800/60 border border-zinc-700/60">
+                    Aesthetic: {prd.archetype_detection.ui_personality}
+                  </span>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* 1. Opportunity Framing */}
-          <div className={`rounded-xl border p-6 ${isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"}`}>
-            <div className="mb-4 flex items-center gap-2">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold border ${
-                isLight ? "bg-slate-100 text-slate-800 border-slate-300" : "bg-zinc-800 text-zinc-300 border-zinc-700"
-              }`}>
-                1
-              </span>
-              <h3 className={`font-bold text-sm uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
-                Opportunity Framing
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Core Problem
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.opportunity_framing.core_problem)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Working Hypothesis
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.opportunity_framing.working_hypothesis)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Strategy Fit
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.opportunity_framing.strategy_fit)}
-                </p>
-              </div>
-            </div>
-          </div>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+                {prd.title}
+              </h1>
 
-          {/* 2. Boundaries & Deep Feature Architecture */}
-          <div className={`rounded-xl border p-6 space-y-6 ${isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 border-zinc-800/40">
-              <div className="flex items-center gap-2">
-                <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold border ${
-                  isLight ? "bg-slate-100 text-slate-800 border-slate-300" : "bg-zinc-800 text-zinc-300 border-zinc-700"
-                }`}>
-                  2
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 text-xs">
                 <div>
-                  <h3 className={`font-bold text-sm uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
-                    Boundaries & Deep Feature Architecture
-                  </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Spesifikasi fitur MVP dibedah tuntas: Alur Happy Path, Aturan Bisnis, Edge Cases, dan Prompt Cursor.
+                  <span className="text-zinc-500 block text-[11px] font-semibold uppercase tracking-wider mb-0.5">Primary Owner</span>
+                  <p className="font-semibold text-zinc-200">{renderTextWithAssumption(prd.ownership_action.primary_owner)}</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[11px] font-semibold uppercase tracking-wider mb-0.5">Decision Points</span>
+                  <p className="text-zinc-300">{renderTextWithAssumption(prd.ownership_action.decision_points)}</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[11px] font-semibold uppercase tracking-wider mb-0.5">Target Audience</span>
+                  <p className="text-zinc-300">{prd.archetype_detection?.target_audience || "Pengembang & Pengguna Akhir"}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 1. Opportunity Framing */}
+            <section id="sec-opportunity" className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800/60">
+                <span className="text-xs font-mono font-bold text-amber-400">01</span>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  Opportunity Framing
+                </h2>
+              </div>
+              <div className="space-y-4 text-xs leading-relaxed">
+                <div>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                    Masalah Utama (Core Problem)
+                  </h4>
+                  <p className={`text-xs ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                    {renderTextWithAssumption(prd.opportunity_framing.core_problem)}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                    Hipotesis Kerja (Working Hypothesis)
+                  </h4>
+                  <p className={`text-xs ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                    {renderTextWithAssumption(prd.opportunity_framing.working_hypothesis)}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                    Kesesuaian Strategis (Strategy Fit)
+                  </h4>
+                  <p className={`text-xs ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                    {renderTextWithAssumption(prd.opportunity_framing.strategy_fit)}
                   </p>
                 </div>
               </div>
-              {prd.feature_breakdown && prd.feature_breakdown.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    {prd.feature_breakdown.filter((f) => f.priority === "P0").length} Fitur P0 (Core MVP)
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    {prd.feature_breakdown.filter((f) => f.priority === "P1").length} Fitur P1
-                  </span>
-                </div>
-              )}
-            </div>
+            </section>
 
-            {/* Deep Feature Cards / Accordion */}
-            {prd.feature_breakdown && prd.feature_breakdown.length > 0 ? (
-              <div className="space-y-4">
-                {prd.feature_breakdown.map((feat, idx) => {
-                  const isExpanded = expandedFeatureId === feat.id;
-                  const isP0 = feat.priority === "P0";
-
-                  return (
-                    <div
-                      key={feat.id || idx}
-                      className={`rounded-xl border transition-all ${
-                        isLight
-                          ? isExpanded
-                            ? "bg-slate-50/80 border-slate-300 shadow-sm"
-                            : "bg-white border-slate-200 hover:border-slate-300"
-                          : isExpanded
-                          ? "bg-zinc-900/90 border-zinc-700 shadow-lg"
-                          : "bg-zinc-950/60 border-zinc-800 hover:border-zinc-700"
-                      }`}
-                    >
-                      {/* Feature Card Header */}
-                      <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div
-                          className="flex items-start gap-3 cursor-pointer flex-1"
-                          onClick={() => setExpandedFeatureId(isExpanded ? null : feat.id)}
-                        >
-                          <span
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider border shrink-0 mt-0.5 ${
-                              isP0
-                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                                : "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                            }`}
-                          >
-                            {feat.priority}
-                          </span>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className={`text-sm font-bold tracking-tight ${isLight ? "text-slate-900" : "text-white"}`}>
-                                #{idx + 1}. {feat.name}
-                              </h4>
-                            </div>
-                            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1 italic">
-                              "{feat.user_story}"
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Actions: Copy Prompt & Expand */}
-                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyFeaturePrompt(feat.id, feat.agent_prompt || feat.name);
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                              copiedFeatureId === feat.id
-                                ? "bg-emerald-500 text-white border-emerald-500"
-                                : isLight
-                                ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300"
-                                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700"
-                            }`}
-                            title="Salin prompt spesifik untuk di-paste langsung ke Cursor / Claude Code"
-                          >
-                            {copiedFeatureId === feat.id ? (
-                              <>
-                                <Check className="h-3.5 w-3.5" />
-                                <span>Prompt Tersalin!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Terminal className="h-3.5 w-3.5 text-amber-400" />
-                                <span>Salin Prompt AI</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setExpandedFeatureId(isExpanded ? null : feat.id)}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
-                          >
-                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Expanded Feature Details */}
-                      {isExpanded && (
-                        <div className={`p-4 pt-0 border-t space-y-4 text-xs ${isLight ? "border-slate-200" : "border-zinc-800/80"}`}>
-                          {/* User Story */}
-                          <div className={`p-3 rounded-lg border mt-3 ${isLight ? "bg-white border-slate-200" : "bg-zinc-950/80 border-zinc-800"}`}>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 block mb-1">
-                              🎯 User Story
-                            </span>
-                            <p className={`leading-relaxed ${isLight ? "text-slate-800" : "text-zinc-200"}`}>
-                              {feat.user_story}
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {/* Happy Path */}
-                            <div className={`p-3 rounded-lg border ${isLight ? "bg-white border-slate-200" : "bg-zinc-950/80 border-zinc-800"}`}>
-                              <div className="flex items-center gap-1.5 mb-2 font-bold text-emerald-500">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                <span className="uppercase tracking-wider text-[10px]">Alur Kerja (Happy Path)</span>
-                              </div>
-                              <ol className="space-y-1.5 list-decimal list-inside text-zinc-300">
-                                {(feat.happy_path || []).map((step, sIdx) => (
-                                  <li key={sIdx} className="leading-relaxed">
-                                    <span className={isLight ? "text-slate-700" : "text-zinc-300"}>{step}</span>
-                                  </li>
-                                ))}
-                              </ol>
-                            </div>
-
-                            {/* Business Rules */}
-                            <div className={`p-3 rounded-lg border ${isLight ? "bg-white border-slate-200" : "bg-zinc-950/80 border-zinc-800"}`}>
-                              <div className="flex items-center gap-1.5 mb-2 font-bold text-amber-500">
-                                <Zap className="h-3.5 w-3.5" />
-                                <span className="uppercase tracking-wider text-[10px]">Aturan Bisnis & Validasi</span>
-                              </div>
-                              <ul className="space-y-1.5 text-zinc-300">
-                                {(feat.business_rules || []).map((rule, rIdx) => (
-                                  <li key={rIdx} className="flex items-start gap-1.5 leading-relaxed">
-                                    <span className="text-amber-500 font-bold">•</span>
-                                    <span className={isLight ? "text-slate-700" : "text-zinc-300"}>{rule}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {/* Edge Cases */}
-                            <div className={`p-3 rounded-lg border ${isLight ? "bg-white border-slate-200" : "bg-zinc-950/80 border-zinc-800"}`}>
-                              <div className="flex items-center gap-1.5 mb-2 font-bold text-rose-400">
-                                <ShieldAlert className="h-3.5 w-3.5" />
-                                <span className="uppercase tracking-wider text-[10px]">Kondisi Gagal & Error Handling</span>
-                              </div>
-                              <ul className="space-y-1.5 text-zinc-300">
-                                {(feat.edge_cases || []).map((edge, eIdx) => (
-                                  <li key={eIdx} className="flex items-start gap-1.5 leading-relaxed">
-                                    <span className="text-rose-500 font-bold">•</span>
-                                    <span className={isLight ? "text-slate-700" : "text-zinc-300"}>{edge}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-
-                            {/* Tech & Data Mapping */}
-                            <div className={`p-3 rounded-lg border ${isLight ? "bg-white border-slate-200" : "bg-zinc-950/80 border-zinc-800"}`}>
-                              <div className="flex items-center gap-1.5 mb-2 font-bold text-blue-400">
-                                <Layers className="h-3.5 w-3.5" />
-                                <span className="uppercase tracking-wider text-[10px]">Komponen & Data Mapping</span>
-                              </div>
-                              <div className="space-y-1.5 text-[11px]">
-                                <div>
-                                  <span className="text-zinc-500 font-semibold">Komponen UI: </span>
-                                  <span className="font-mono text-zinc-300">
-                                    {(feat.tech_mapping?.frontend_components || []).join(", ") || "Komponen React/Next"}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-zinc-500 font-semibold">API Endpoint: </span>
-                                  <span className="font-mono text-zinc-300">
-                                    {(feat.tech_mapping?.api_endpoints || []).join(", ") || "API Route Handler"}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-zinc-500 font-semibold">Tabel Database: </span>
-                                  <span className="font-mono text-zinc-300">
-                                    {(feat.tech_mapping?.db_tables || []).join(", ") || "Tabel Terkait"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Agent Prompt Block */}
-                          {feat.agent_prompt && (
-                            <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-[10px] font-mono text-zinc-400 flex items-center gap-1">
-                                  <Terminal className="h-3 w-3 text-amber-400" />
-                                  Prompt Siap Eksekusi (Cursor / Claude Code):
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyFeaturePrompt(feat.id, feat.agent_prompt)}
-                                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                  Salin
-                                </button>
-                              </div>
-                              <p className="font-mono text-[11px] text-zinc-300 leading-relaxed bg-black/40 p-2.5 rounded border border-zinc-800/80 whitespace-pre-wrap">
-                                {feat.agent_prompt}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {/* 2. Scope & Non-Goals */}
+            <section id="sec-boundaries" className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800/60">
+                <span className="text-xs font-mono font-bold text-amber-400">02</span>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  Scope & Non-Goals
+                </h2>
               </div>
-            ) : (
-              /* Fallback for legacy PRDs without feature_breakdown */
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`rounded-lg border p-4 ${
-                  isLight ? "bg-emerald-50/50 border-emerald-200" : "bg-emerald-950/10 border-emerald-900/40"
-                }`}>
-                  <div className="flex items-center gap-2 mb-2 text-emerald-500 font-bold text-xs">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Scope (Fitur yang Dikerjakan)</span>
-                  </div>
-                  <ul className={`space-y-2 text-xs ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Ruang Lingkup (Scope MVP)</span>
+                  </h4>
+                  <ul className="space-y-1.5">
                     {prd.boundaries.scope.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="text-emerald-500 font-bold">•</span>
+                      <li key={i} className={`flex items-start gap-2 ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                        <span className="text-emerald-400 font-bold">•</span>
+                        <span>{renderTextWithAssumption(item)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" />
+                    <span>Di Luar Cakupan (Non-Goals)</span>
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {prd.boundaries.non_goals.map((item, i) => (
+                      <li key={i} className={`flex items-start gap-2 ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                        <span className="text-rose-400 font-bold">•</span>
                         <span>{renderTextWithAssumption(item)}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               </div>
-            )}
+            </section>
 
-            {/* Non-Goals (Explicitly Out of Scope) */}
-            <div className={`rounded-lg border p-4 ${
-              isLight ? "bg-rose-50/50 border-rose-200" : "bg-rose-950/10 border-rose-900/40"
-            }`}>
-              <div className="flex items-center gap-2 mb-2 text-rose-500 font-bold text-xs">
-                <XCircle className="h-4 w-4" />
-                <span>Non-Goals (DILARANG / SENGAJA DITUNDA PADA MVP)</span>
-              </div>
-              <p className="text-[11px] text-zinc-400 mb-2">
-                Pagar pembatas mutlak agar tim dan coding agent tidak melakukan over-engineering atau scope creep.
-              </p>
-              <ul className={`space-y-2 text-xs ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                {prd.boundaries.non_goals.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="text-rose-500 font-bold">•</span>
-                    <span>{renderTextWithAssumption(item)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* 3. Success Measurement */}
-          <div className={`rounded-xl border p-6 ${isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"}`}>
-            <div className="mb-4 flex items-center gap-2">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold border ${
-                isLight ? "bg-slate-100 text-slate-800 border-slate-300" : "bg-zinc-800 text-zinc-300 border-zinc-700"
-              }`}>
-                3
-              </span>
-              <h3 className={`font-bold text-sm uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
-                Success Measurement
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Offline Golden Set
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.success_measurement.offline_golden_set)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Human Review
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.success_measurement.human_review)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Online Metrics
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.success_measurement.online_metrics)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Rollout Plan */}
-          <div className={`rounded-xl border p-6 ${isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"}`}>
-            <div className="mb-4 flex items-center gap-2">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold border ${
-                isLight ? "bg-slate-100 text-slate-800 border-slate-300" : "bg-zinc-800 text-zinc-300 border-zinc-700"
-              }`}>
-                4
-              </span>
-              <h3 className={`font-bold text-sm uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
-                Rollout Plan
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Exposure
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.rollout_plan.exposure)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Duration
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.rollout_plan.duration)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Segments & Gates
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.rollout_plan.segments_gates)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 5. Risk Management */}
-          <div className={`rounded-xl border p-6 ${isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"}`}>
-            <div className="mb-4 flex items-center gap-2">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold border ${
-                isLight ? "bg-slate-100 text-slate-800 border-slate-300" : "bg-zinc-800 text-zinc-300 border-zinc-700"
-              }`}>
-                5
-              </span>
-              <h3 className={`font-bold text-sm uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
-                Risk Management
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Detection Mechanism
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.risk_management.detection)}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider block mb-1 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Fallback & Kill Switch
-                </span>
-                <p className={`text-xs leading-relaxed ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {renderTextWithAssumption(prd.risk_management.fallback_kill_switch)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 6. AI-Specific Additions */}
-          <div className={`rounded-xl border p-6 space-y-4 ${
-            isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
-          }`}>
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-purple-500" />
-              <h3 className={`font-bold text-sm uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
-                Behavior Contract & Guardrails untuk AI Agent
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={`rounded-lg border p-4 ${
-                isLight ? "bg-emerald-50/50 border-emerald-200" : "bg-emerald-950/10 border-emerald-900/40"
-              }`}>
-                <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider block mb-2">
-                  [GOOD] Standar Implementasi Wajib
-                </span>
-                <ul className={`space-y-1.5 text-xs ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {prd.ai_specific.behavior_contract.good.map((g, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                      <span>{renderTextWithAssumption(g)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className={`rounded-lg border p-4 ${
-                isLight ? "bg-rose-50/50 border-rose-200" : "bg-rose-950/10 border-rose-900/40"
-              }`}>
-                <span className="text-[11px] font-bold text-rose-500 uppercase tracking-wider block mb-2">
-                  [REJECT] Pantangan & Larangan Keras
-                </span>
-                <ul className={`space-y-1.5 text-xs ${isLight ? "text-slate-700" : "text-zinc-200"}`}>
-                  {prd.ai_specific.behavior_contract.reject.map((r, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <XCircle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
-                      <span>{renderTextWithAssumption(r)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className={`rounded-lg border p-4 ${isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-950 border-zinc-800"}`}>
-              <span className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                Technical & Ethical Guardrails
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {prd.ai_specific.guardrails.map((gr, i) => (
-                  <span
-                    key={i}
-                    className={`rounded-md border px-2.5 py-1 text-xs ${
-                      isLight
-                        ? "border-slate-200 bg-white text-slate-700 shadow-2xs"
-                        : "border-zinc-800 bg-zinc-900 text-zinc-200"
-                    }`}
-                  >
-                    🛡️ {renderTextWithAssumption(gr)}
+            {/* 3. Deep Feature Architecture */}
+            <section id="sec-features" className="space-y-4">
+              <div className="flex items-center justify-between gap-3 pb-2 border-b border-zinc-800/60">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-mono font-bold text-amber-400">03</span>
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                    Rincian Fitur Inti (Feature Breakdown)
+                  </h2>
+                </div>
+                {prd.feature_breakdown && prd.feature_breakdown.length > 0 && (
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    {prd.feature_breakdown.length} modul terencana
                   </span>
-                ))}
+                )}
               </div>
-            </div>
+
+              {prd.feature_breakdown && prd.feature_breakdown.length > 0 ? (
+                <div className="space-y-3">
+                  {prd.feature_breakdown.map((feat, idx) => {
+                    const isExpanded = expandedFeatureId === feat.id;
+                    return (
+                      <div
+                        key={feat.id || idx}
+                        className={`rounded-xl border transition-all ${
+                          isLight
+                            ? "border-slate-200 bg-slate-50/50"
+                            : "border-zinc-800 bg-zinc-900/40"
+                        }`}
+                      >
+                        <div
+                          onClick={() => setExpandedFeatureId(isExpanded ? null : feat.id)}
+                          className="p-4 flex items-center justify-between gap-3 cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase ${
+                              feat.priority === "P0"
+                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            }`}>
+                              {feat.priority || "P0"}
+                            </span>
+                            <h4 className={`text-xs font-bold truncate ${isLight ? "text-slate-900" : "text-white"}`}>
+                              {feat.name}
+                            </h4>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-zinc-500 hover:text-white p-1"
+                          >
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className={`p-4 pt-0 border-t space-y-3 text-xs ${
+                            isLight ? "border-slate-200 text-slate-700" : "border-zinc-800/80 text-zinc-300"
+                          }`}>
+                            <p className="italic text-zinc-400 text-[11px] pt-3">
+                              "{feat.user_story}"
+                            </p>
+
+                            {feat.happy_path && feat.happy_path.length > 0 && (
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block mb-1">
+                                  Happy Path
+                                </span>
+                                <ul className="space-y-1 pl-3 border-l border-emerald-500/30">
+                                  {feat.happy_path.map((step, si) => (
+                                    <li key={si}>{renderTextWithAssumption(step)}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {feat.business_rules && feat.business_rules.length > 0 && (
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block mb-1">
+                                  Aturan Bisnis
+                                </span>
+                                <ul className="space-y-1 pl-3 border-l border-amber-500/30">
+                                  {feat.business_rules.map((rule, ri) => (
+                                    <li key={ri}>{renderTextWithAssumption(rule)}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {feat.agent_prompt && (
+                              <div className="pt-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
+                                    Prompt Coding Agent
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopyFeaturePrompt(feat.id, feat.agent_prompt || "");
+                                    }}
+                                    className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-white"
+                                  >
+                                    {copiedFeatureId === feat.id ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                    <span>{copiedFeatureId === feat.id ? "Tersalin!" : "Salin Prompt"}</span>
+                                  </button>
+                                </div>
+                                <pre className="p-2.5 rounded-lg bg-black/40 border border-zinc-800 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap">
+                                  {feat.agent_prompt}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <ul className="space-y-1.5 text-xs text-zinc-300">
+                  {prd.boundaries.scope.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-amber-400">•</span>
+                      <span>{renderTextWithAssumption(s)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* 4. Success Measurement */}
+            <section id="sec-success" className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800/60">
+                <span className="text-xs font-mono font-bold text-amber-400">04</span>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  Ukuran Keberhasilan (Success Measurement)
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Offline Golden Set
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.success_measurement.offline_golden_set)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Human Review
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.success_measurement.human_review)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Online Metrics
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.success_measurement.online_metrics)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* 5. Rollout Plan */}
+            <section id="sec-rollout" className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800/60">
+                <span className="text-xs font-mono font-bold text-amber-400">05</span>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  Rencana Rollout & Peluncuran
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Target Exposure
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.rollout_plan.exposure)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Durasi
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.rollout_plan.duration)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Segmentasi & Ramp Gates
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.rollout_plan.segments_gates)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* 6. Risk Management */}
+            <section id="sec-risk" className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800/60">
+                <span className="text-xs font-mono font-bold text-amber-400">06</span>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  Manajemen Risiko & Mitigasi
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Mekanisme Deteksi (Detection)
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.risk_management.detection)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Fallback & Kill Switch
+                  </span>
+                  <p className={isLight ? "text-slate-700" : "text-zinc-300"}>
+                    {renderTextWithAssumption(prd.risk_management.fallback_kill_switch)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* 7. AI Behavior Contract */}
+            <section id="sec-ai" className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800/60">
+                <span className="text-xs font-mono font-bold text-amber-400">07</span>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  Kontrak Perilaku AI Agent (Behavior Contract & Guardrails)
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Standar Wajib [GOOD]</span>
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {prd.ai_specific.behavior_contract.good.map((g, i) => (
+                      <li key={i} className={`flex items-start gap-2 ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                        <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <span>{renderTextWithAssumption(g)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" />
+                    <span>Larangan Keras [REJECT]</span>
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {prd.ai_specific.behavior_contract.reject.map((r, i) => (
+                      <li key={i} className={`flex items-start gap-2 ${isLight ? "text-slate-700" : "text-zinc-300"}`}>
+                        <XCircle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
+                        <span>{renderTextWithAssumption(r)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {prd.ai_specific.guardrails && prd.ai_specific.guardrails.length > 0 && (
+                <div className="pt-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-2">
+                    Technical Guardrails
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {prd.ai_specific.guardrails.map((gr, i) => (
+                      <span
+                        key={i}
+                        className={`text-xs px-2.5 py-1 rounded-lg border font-mono ${
+                          isLight
+                            ? "border-slate-300 bg-slate-100 text-slate-800"
+                            : "border-zinc-800 bg-zinc-900 text-zinc-300"
+                        }`}
+                      >
+                        {renderTextWithAssumption(gr)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       )}
@@ -1673,7 +1655,7 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
         </div>
       )}
 
-      {/* TAB 3: Diagram Arsitektur & ERD (5 Mermaid) */}
+      {/* TAB 3: Diagram Arsitektur & ERD (8 Mermaid) */}
       {activeTab === "diagrams" && (
         !canViewDiagrams ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-8 text-center max-w-lg mx-auto space-y-4 my-8 shadow-2xl">
@@ -1682,10 +1664,10 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
             </div>
             <div className="space-y-1.5">
               <h3 className="text-base font-bold text-white">
-                5 Blueprint Arsitektur & Database ERD Terkunci
+                8 Blueprint Arsitektur & Database ERD Terkunci
               </h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Akses visual diagram arsitektur interaktif (System Flowchart, User Journey, Database ERD, API Matrix, dan Sequence Flow) dikhususkan untuk paket yang memiliki izin akses.
+                Akses visual 8 diagram arsitektur interaktif (System Flowchart, User Journey, Database ERD, API Matrix, Sequence Flow, Topologi Infrastruktur, Matriks RBAC, dan Pipeline Data) dikhususkan untuk paket yang memiliki izin akses.
               </p>
             </div>
             {onRequireUpgrade && (
@@ -1709,15 +1691,15 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
                   isLight ? "text-slate-900" : "text-white"
                 }`}>
                   <Network className="h-4 w-4 text-amber-500" />
-                  <span>5 Blueprint Arsitektur Sistem & Interaksi (Mermaid.js)</span>
+                  <span>8 Blueprint Arsitektur Sistem & Interaksi (Mermaid.js)</span>
                 </h3>
                 <p className={`text-xs mt-0.5 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  Diagram interaktif alur sistem, user journey sitemap, skema database, matriks API, dan sequence diagram siap pakai untuk AI & engineer.
+                  Diagram interaktif alur sistem, user journey sitemap, skema database, matriks API, sequence flow, topologi cloud infra, matriks izin akses RBAC, dan data pipeline siap pakai.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-500">
-                  <CheckCircle2 className="h-3 w-3" /> Live Render SVG (Tanpa Kedip)
+                  <CheckCircle2 className="h-3 w-3" /> Live Render SVG (8 Blueprint)
                 </span>
               </div>
             </div>
@@ -1764,6 +1746,33 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
                 <MermaidRenderer
                   chart={defaultSequence}
                   title="5. Alur Sekuensial Interaksi Transaksi (Core Sequence Flow)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 6: Infrastructure & Cloud Topology */}
+              <div>
+                <MermaidRenderer
+                  chart={defaultInfraTopology}
+                  title="6. Topologi Infrastruktur & Deployment (Cloud & Server Topology)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 7: RBAC Permission Matrix */}
+              <div>
+                <MermaidRenderer
+                  chart={defaultRBAC}
+                  title="7. Matriks Peran & Hak Akses (Role-Based Access Control)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 8: Data Pipeline & Processing Flow */}
+              <div className="lg:col-span-2">
+                <MermaidRenderer
+                  chart={defaultDataPipeline}
+                  title="8. Pipeline Pemrosesan Data & Event (Data Processing Pipeline)"
                   theme={theme}
                 />
               </div>
@@ -1970,7 +1979,6 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
           <pre className="p-2">{JSON.stringify(prd, null, 2)}</pre>
         </div>
       )}
-
       {/* Custom Palette Modal */}
       <CustomPaletteModal
         isOpen={isCustomColorModalOpen}

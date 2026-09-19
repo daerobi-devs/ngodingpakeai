@@ -190,11 +190,22 @@ Berikut saya lampirkan foto bukti transfer pembayarannya. Mohon bantuannya untuk
     onClose();
   };
 
-  const handleCreatePaymentOrder = async () => {
+  const defaultModePref: 'headless' | 'hosted' | 'manual' =
+    systemSettings?.payment_gateway_mode === 'mpg_hosted'
+      ? 'hosted'
+      : systemSettings?.payment_gateway_mode === 'manual_qris'
+        ? 'manual'
+        : 'headless';
+
+  const [checkoutMode, setCheckoutMode] = useState<'headless' | 'hosted' | 'manual'>(defaultModePref);
+
+  const handleCreatePaymentOrder = async (overrideMode?: 'headless' | 'hosted' | 'manual') => {
     if (!user) {
       if (onOpenAuth) onOpenAuth();
       return;
     }
+
+    const effectiveMode = overrideMode || checkoutMode;
 
     try {
       setLoadingOrder(true);
@@ -208,12 +219,24 @@ Berikut saya lampirkan foto bukti transfer pembayarannya. Mohon bantuannya untuk
           amount: selectedTier.price_rp,
           amountFormatted: selectedTier.price_formatted,
           tierId: selectedTier.id,
-          paymentMethod: 'QRIS Dinamis Mandiri',
+          paymentMethod: effectiveMode === 'manual' ? 'Manual GoPay / WhatsApp' : 'QRIS Dinamis Mandiri',
+          checkoutMode: effectiveMode,
         }),
       });
 
       const data = await res.json();
       if (data.success && data.order) {
+        // OPSI A: Hosted Checkout Redirect jika pengguna memilih mode hosted
+        if (effectiveMode === 'hosted') {
+          const redirectCheckoutUrl = data.checkoutUrl || data.checkout_url || data.order?.checkout_url;
+          if (redirectCheckoutUrl) {
+            window.location.href = redirectCheckoutUrl;
+            return;
+          }
+        }
+
+        // OPSI B (Headless Modal Pop-up) & OPSI C (Manual):
+        // Tetap di website ini tanpa berpindah halaman
         setCreatedOrderData(data.order);
         setModalStep('payment');
         await refreshPendingOrder();
@@ -391,6 +414,16 @@ Berikut saya lampirkan foto bukti transfer pembayarannya. Mohon bantuannya untuk
                 </p>
               )}
             </div>
+
+            {activeOrder.checkout_url && (
+              <a
+                href={activeOrder.checkout_url}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-98"
+              >
+                <span>Buka Halaman Hosted Checkout MPG</span>
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
 
             {/* Dynamic QRIS Viewer (Headless) atau Fallback Manual */}
             {activeOrder.qr_string ? (
@@ -689,6 +722,89 @@ Berikut saya lampirkan foto bukti transfer pembayarannya. Mohon bantuannya untuk
               ))}
             </div>
 
+            {/* 3 Pilihan Mode Pembayaran */}
+            <div className="mb-4">
+              <label className="text-[11px] font-semibold text-zinc-400 block mb-2 uppercase tracking-wider">
+                Pilih Jalur Pembayaran (3 Pilihan):
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {/* Opsi B: Headless Modal Pop-up */}
+                <div
+                  onClick={() => setCheckoutMode('headless')}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    checkoutMode === 'headless'
+                      ? 'border-amber-500 bg-amber-500/10 text-white ring-1 ring-amber-500/40'
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      OPSI B
+                    </span>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                      checkoutMode === 'headless' ? 'border-amber-500 bg-amber-500 text-zinc-950' : 'border-zinc-700'
+                    }`}>
+                      {checkoutMode === 'headless' && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                    </div>
+                  </div>
+                  <div className="text-xs font-bold text-white">QRIS Pop-up Web</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
+                    Scan langsung di modal ini tanpa pindah halaman
+                  </div>
+                </div>
+
+                {/* Opsi A: Hosted Checkout Redirect */}
+                <div
+                  onClick={() => setCheckoutMode('hosted')}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    checkoutMode === 'hosted'
+                      ? 'border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/40'
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                      OPSI A
+                    </span>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                      checkoutMode === 'hosted' ? 'border-blue-500 bg-blue-500 text-zinc-950' : 'border-zinc-700'
+                    }`}>
+                      {checkoutMode === 'hosted' && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                    </div>
+                  </div>
+                  <div className="text-xs font-bold text-white">Halaman MPG</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
+                    Arahkan ke checkout resmi gateway MPG
+                  </div>
+                </div>
+
+                {/* Opsi C: Manual GoPay / WhatsApp */}
+                <div
+                  onClick={() => setCheckoutMode('manual')}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    checkoutMode === 'manual'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-white ring-1 ring-emerald-500/40'
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      OPSI C
+                    </span>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                      checkoutMode === 'manual' ? 'border-emerald-500 bg-emerald-500 text-zinc-950' : 'border-zinc-700'
+                    }`}>
+                      {checkoutMode === 'manual' && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                    </div>
+                  </div>
+                  <div className="text-xs font-bold text-white">Transfer Manual</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
+                    GoPay / QRIS statis & konfirmasi via WA
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Primary Action Button */}
             {!user ? (
               <button
@@ -705,7 +821,7 @@ Berikut saya lampirkan foto bukti transfer pembayarannya. Mohon bantuannya untuk
               <button
                 type="button"
                 disabled={loadingOrder}
-                onClick={handleCreatePaymentOrder}
+                onClick={() => handleCreatePaymentOrder(checkoutMode)}
                 className="group w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-extrabold py-3 px-4 transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-50"
               >
                 {loadingOrder ? (
@@ -713,9 +829,11 @@ Berikut saya lampirkan foto bukti transfer pembayarannya. Mohon bantuannya untuk
                 ) : (
                   <>
                     <span>
-                      {isCurrentlyPlus && selectedTier.id === 'pro'
-                        ? 'Lanjut Upgrade ke Paket PRO (QRIS)'
-                        : 'Lanjut ke Pembayaran QRIS Dinamis'}
+                      {checkoutMode === 'hosted'
+                        ? 'Lanjut ke Halaman Checkout MPG (Redirect)'
+                        : checkoutMode === 'manual'
+                          ? 'Lanjut Pembayaran Manual GoPay / WhatsApp'
+                          : 'Tampilkan QRIS Dinamis Pop-up (Headless)'}
                     </span>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </>

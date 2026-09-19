@@ -1,33 +1,12 @@
 import crypto from 'node:crypto';
 import { SystemSettings } from '@/lib/supabase/types';
 
-export interface MpgInvoiceParams {
-  orderId: string;
-  amount: number;
-  customerName?: string | null;
-  customerEmail?: string | null;
-  callbackUrl?: string;
-}
-
-export interface MpgInvoiceResult {
-  success: boolean;
-  data?: {
-    order_id: string;
-    base_amount: number;
-    unique_code: number;
-    final_amount: number;
-    qr_string: string;
-    checkout_url?: string;
-    expired_at?: string;
-  };
-  error?: string;
-}
 
 export function getMpgConfig(settings?: SystemSettings | null) {
   const gatewayUrl = (
     settings?.mpg_gateway_url ||
     process.env.MPG_GATEWAY_URL ||
-    'http://localhost:3000'
+    'https://pyamentgateway.daeroom.my.id'
   ).replace(/\/+$/, '');
 
   const apiKey = (
@@ -42,18 +21,47 @@ export function getMpgConfig(settings?: SystemSettings | null) {
     'mandiri-private-gateway-secret-key-change-in-prod'
   ).trim();
 
-  const mode = settings?.payment_gateway_mode || 'manual_qris';
+  const mode = settings?.payment_gateway_mode || process.env.PAYMENT_GATEWAY_MODE || 'mpg_headless';
 
   return {
     gatewayUrl,
     apiKey,
     webhookSecret,
-    isMpgActive: mode === 'mpg_automatic',
+    mode,
+    isMpgActive: mode !== 'manual_qris',
+    isHeadless: mode === 'mpg_headless' || mode === 'mpg_automatic',
+    isHosted: mode === 'mpg_hosted',
   };
 }
 
+export interface MpgInvoiceParams {
+  orderId: string;
+  amount: number;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  callbackUrl?: string;
+  redirectUrl?: string;
+  expiryMinutes?: number;
+  items?: Array<{ name: string; price: number; quantity: number }>;
+}
+
+export interface MpgInvoiceResult {
+  success: boolean;
+  data?: {
+    order_id: string;
+    base_amount: number;
+    unique_code: number;
+    final_amount: number;
+    qr_string: string;
+    checkout_url: string;
+    expired_at?: string;
+  };
+  error?: string;
+}
+
 /**
- * Creates a dynamic QRIS invoice via Mandiri Private Gateway
+ * Creates a dynamic QRIS invoice via Mandiri Private Gateway (MPG)
  */
 export async function createMpgInvoice(
   params: MpgInvoiceParams,
@@ -73,14 +81,26 @@ export async function createMpgInvoice(
     ).replace(/\/+$/, '');
 
     const callbackUrl = params.callbackUrl || `${appUrl}/api/webhook/payment-success`;
+    const redirectUrl = params.redirectUrl || `${appUrl}/generator?payment=success&order_id=${encodeURIComponent(params.orderId)}`;
 
     const payload = {
       order_id: params.orderId,
       amount: Math.round(params.amount),
       customer_name: params.customerName || 'Pelanggan ngodingpakeprd',
       customer_email: params.customerEmail || 'user@ngodingpakeprd.com',
+      customer_phone: params.customerPhone || '',
       auto_unique_code: true,
+      unique_code_digits: 3,
+      expiry_minutes: params.expiryMinutes || 15,
       callback_url: callbackUrl,
+      redirect_url: redirectUrl,
+      items: params.items || [
+        {
+          name: 'Langganan ngodingpakeprd',
+          price: Math.round(params.amount),
+          quantity: 1,
+        },
+      ],
     };
 
     const res = await fetch(invoiceEndpoint, {
@@ -118,6 +138,11 @@ export async function createMpgInvoice(
     const uniqueCode = Number(data.unique_code || (finalAmount - params.amount) || 0);
     const qrString = data.qr_string || data.qris_string || '';
 
+    let checkoutUrl = data.checkout_url || `${config.gatewayUrl}/checkout/${data.order_id || params.orderId}`;
+    if (checkoutUrl.startsWith('/')) {
+      checkoutUrl = `${config.gatewayUrl}${checkoutUrl}`;
+    }
+
     return {
       success: true,
       data: {
@@ -126,7 +151,7 @@ export async function createMpgInvoice(
         unique_code: uniqueCode,
         final_amount: finalAmount,
         qr_string: qrString,
-        checkout_url: data.checkout_url,
+        checkout_url: checkoutUrl,
         expired_at: data.expired_at,
       },
     };

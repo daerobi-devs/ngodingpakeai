@@ -570,6 +570,68 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === 'delete_generation') {
+      const { id } = payload;
+      if (!id || typeof id !== 'string') {
+        return NextResponse.json({ success: false, error: 'ID log generasi diperlukan' }, { status: 400 });
+      }
+
+      const { error } = await adminSupabase
+        .from('prd_history')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, message: 'Log riwayat generasi berhasil dihapus' });
+    }
+
+    if (action === 'clear_all_generations') {
+      const { error } = await adminSupabase
+        .from('prd_history')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, message: 'Seluruh log riwayat generasi berhasil dibersihkan' });
+    }
+
+    if (action === 'delete_order') {
+      const { orderId } = payload;
+      if (!orderId || typeof orderId !== 'string') {
+        return NextResponse.json({ success: false, error: 'ID pesanan diperlukan' }, { status: 400 });
+      }
+
+      const { error } = await adminSupabase
+        .from('payment_orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, message: 'Pesanan berhasil dihapus dari database' });
+    }
+
+    if (action === 'clear_rejected_orders') {
+      const { error } = await adminSupabase
+        .from('payment_orders')
+        .delete()
+        .eq('status', 'rejected');
+
+      if (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, message: 'Semua pesanan berstatus ditolak berhasil dibersihkan' });
+    }
+
     return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Admin action error';

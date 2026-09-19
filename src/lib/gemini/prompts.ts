@@ -7,7 +7,7 @@ DILARANG KERAS menghasilkan PRD yang dangkal, superfisial, atau hanya 1 kalimat 
 Setiap bagian harus berisi elaborasi teknis nyata, konteks domain bisnis, arsitektur data, dan langkah penanganan risiko konkret yang siap dieksekusi oleh tim engineer dan AI coding agent (Cursor, Claude Code, Windsurf).
 
 ══════════════════════════════════════════════════════════════════════════════
-🎯 1. ADAPTIVE DOMAIN INTELLIGENCE (WAJIB DIISI DI 'archetype_detection')
+1. ADAPTIVE DOMAIN INTELLIGENCE (WAJIB DIISI DI 'archetype_detection')
 ══════════════════════════════════════════════════════════════════════════════
 Sebelum menyusun PRD, identifikasi secara mendalam ARKETIPE PRODUK dari ide user:
 1. "Institusi / Profil Sekolah / Edukasi / Perusahaan":
@@ -47,7 +47,7 @@ Susun 5 hingga 8 FITUR INTI MVP pada array 'feature_breakdown'. Setiap fitur WAJ
 - 'agent_prompt': Prompt perintah kodingan lengkap, padat, dan presisi yang bisa langsung dicopy-paste ke Cursor / Claude Code untuk meng-generate fitur tersebut.
 
 ══════════════════════════════════════════════════════════════════════════════
-📋 3. STRUKTUR 7 KATEGORI PRD & MERMAID ARCHITECTURE
+3. STRUKTUR 7 KATEGORI PRD & MERMAID ARCHITECTURE
 ══════════════════════════════════════════════════════════════════════════════
 Tetap lengkapi 7 Kategori berikut secara mendalam:
 1. OPPORTUNITY FRAMING (Core Problem, Working Hypothesis, Strategy Fit)
@@ -57,21 +57,29 @@ Tetap lengkapi 7 Kategori berikut secara mendalam:
 5. RISK MANAGEMENT (Detection, Fallback & Kill Switch)
 6. OWNERSHIP & ACTION (Primary Owner, Decision Points)
 7. AI-SPECIFIC ADDITIONS (Behavior Contract: GOOD minimal 3 poin, REJECT minimal 3 poin; Guardrails)
-8. ACTIONABLE TASK BREAKDOWN (7-12 task atomic bertahap untuk AI coding agent)
-9. ARCHITECTURE DIAGRAMS (Mermaid.js murni tanpa backticks):
-   - 'system_flowchart': flowchart TD (alur dari user, frontend, backend, DB, service eksternal)
-   - 'user_journey_flow': flowchart LR atau stateDiagram-v2
-   - 'database_erd': erDiagram (relasi entitas tabel yang realistis untuk produk ini)
-   - 'api_integration_matrix': flowchart TD atau classDiagram (endpoint HTTP & integrasi)
-   - 'sequence_diagram': sequenceDiagram autonumber (transaksi inti)
+8. ACTIONABLE TASK BREAKDOWN (10-14 task atomic berurutan dengan format Phased Execution Contract):
+   - Wajib gunakan prefix fase:
+     - [FASE 1 - FRONTEND] 3-4 task pembuatan komponen UI, layout responsif, dan mock data
+     - [FASE 2 - BACKEND & DB] 3-4 task pembuatan skema tabel, RLS, validasi Zod, dan API routes
+     - [FASE 3 - INTEGRASI] 2-3 task menghubungkan frontend ke API backend, penanganan state & error
+     - [FASE 4 - DEPLOY & TEST] 2-3 task testing end-to-end, setup CI/CD, dan deployment
+9. ARCHITECTURE DIAGRAMS (Mermaid.js murni tanpa backticks — WAJIB 8 BLUEPRINT LENGKAP):
+   - 'system_flowchart': flowchart TD (alur lengkap dari user, frontend, API backend, DB, cache, service eksternal)
+   - 'user_journey_flow': flowchart LR atau stateDiagram-v2 (peta navigasi pengguna dari landing page hingga fitur inti)
+   - 'database_erd': erDiagram (relasi entitas tabel yang realistis, tipe data kolom, dan foreign key spesifik produk)
+   - 'api_integration_matrix': flowchart TD atau classDiagram (daftar rute API REST/tRPC, webhook, dan integrasi)
+   - 'sequence_diagram': sequenceDiagram autonumber (transaksi inti paling kritikal langkah demi langkah)
+   - 'infrastructure_topology': flowchart LR (topologi server: CDN/Cloudflare -> Nginx -> Docker App -> DB -> Redis)
+   - 'rbac_permission_matrix': flowchart TD (matriks peran hak akses: Super Admin, Operator/Admin, User Reguler, Guest)
+   - 'data_pipeline_flow': flowchart LR (alur pemrosesan data: Trigger -> Validasi -> Queue/Worker -> Storage -> Notifikasi)
 10. ROADMAP TREE (Visual Node Feature Tree berfase: FASE 1, FASE 2, FASE 3, FASE 4):
-   - Susun 5-8 node modul terencana.
+   - Susun 5-8 node modul terencana sesuai kebutuhan produk.
    - Setiap node memiliki:
      - 'id': string unik (contoh: 'node_katalog', 'node_booking', 'node_admin')
-     - 'title': Nama modul ringkas (contoh: 'Katalog Alat Camping', 'Jadwal & Tanggal', 'Dashboard Admin')
+     - 'title': Nama modul ringkas (contoh: 'Katalog Produk & Layanan', 'Sistem Booking & Jadwal')
      - 'phase': 'FASE 1' | 'FASE 2' | 'FASE 3' | 'FASE 4'
      - 'status': 'Direncanakan'
-     - 'sub_features': Array 3-5 sub-fitur spesifik (contoh: ['Daftar Alat Tersedia', 'Detail & Spesifikasi', 'Status Stok Realtime'])
+     - 'sub_features': Array 3-5 sub-fitur fungsional nyata (contoh: ['Formulir Pendaftaran Siswa', 'Unggah Dokumen Berkas', 'Verifikasi Data Otomatis', 'Notifikasi Status via Email/WA'])
 
 ATURAN OUTPUT:
 - 100% Valid JSON murni tanpa markdown wrapper (\`\`\`json).
@@ -178,10 +186,10 @@ PEDOMAN JUMLAH PERTANYAAN (DINAMIS 4 - 10 PERTANYAAN SESUAI KOMPLEKSITAS):
 
 ATURAN UTAMA & LARANGAN KERAS (ANTI-TEMPLATE GUARDRAILS):
 1. DILARANG KERAS menanyakan hal klise/generik yang tidak bernilai teknis, seperti:
-   - ❌ "Apakah aplikasi berbasis Web atau Mobile?"
-   - ❌ "Siapa target audiens Anda?" / "Ceritakan seseorang yang butuh..."
-   - ❌ "Mengapa Anda ingin membuat aplikasi ini?"
-   - ❌ "Fitur apa saja yang wajib ada di MVP?" dengan opsi umum membosankan seperti Login, Register, Profil, Lupa Password.
+   - [DILARANG] "Apakah aplikasi berbasis Web atau Mobile?"
+   - [DILARANG] "Siapa target audiens Anda?" / "Ceritakan seseorang yang butuh..."
+   - [DILARANG] "Mengapa Anda ingin membuat aplikasi ini?"
+   - [DILARANG] "Fitur apa saja yang wajib ada di MVP?" dengan opsi umum membosankan seperti Login, Register, Profil, Lupa Password.
 2. WAJIB LANGSUNG MASUK KE JANTUNG OPERASIONAL & ATURAN BISNIS PRODUK:
    - Setiap pertanyaan WAJIB menyebut kata benda atau proses khas dari ide produk tersebut (misal jika rental alat outdoor: sebut alat sewa, jaminan KTP, denda telat; jika sekolah: sebut PPDB, wali murid, verifikasi berkas; jika kasir/POS: sebut shift kasir, metode bayar QRIS, cetak struk; jika kursus: sebut materi video, kuis kelulusan, sertifikat).
 
@@ -208,12 +216,23 @@ Untuk SETIAP pertanyaan:
 - id: Berikan ID semantik unik (misal: "q_alur_transaksi", "q_mitigasi_konflik", "q_integrasi_kunci", "q_struktur_aktor", "q_modul_mvp").
 - category: Sesuai kategori pilar di atas.
 - question: Pertanyaan to-the-point, jelas, dan menggunakan istilah bisnis nyata yang elegan.
-- options: Array 3-5 objek { id: string, label: string, description?: string }.
-  * label: Ringkas (2-5 kata), sangat cocok untuk badge chips.
-  * description: 1 kalimat penjelasan teknis/operasional mengapa opsi ini dipilih.
-- recommendedOptionId: Tentukan 1 ID opsi terbaik yang merupakan standar industri / best practice (akan otomatis terpilih awal sebagai default rekomendasi).
+- options: Array 3-5 objek:
+  {
+    id: string,
+    label: string (ringkas 2-5 kata, sangat cocok untuk badge chips),
+    description?: string (1 kalimat penjelasan teknis/operasional mengapa opsi ini efektif),
+    isRecommended?: boolean (BERIKAN true pada 1 HINGGA MAKSIMAL 2 OPSI TERBAIK yang merupakan best practice arsitektur modern / efisiensi MVP),
+    recommendationReason?: string (Alasan singkat 2-4 kata untuk badge, contoh: "Standar Industri", "Cepat MVP", "Zero Maintenance", "Hemat Biaya", "Skalabilitas Tinggi")
+  }
+- recommendedOptionId: Tentukan 1 ID opsi utama terbaik yang paling direkomendasikan.
+- recommendedOptionIds: Array 1-2 string ID opsi yang ditandai isRecommended: true.
 - isMultiSelect: boolean (sesuai aturan fleksibel di atas).
 - inputType: "chips".
+
+PEDOMAN KECERDASAN REKOMENDASI (SMART RECOMMENDATION BADGES):
+- Setiap pertanyaan WAJIB memiliki minimal 1 opsi dengan isRecommended: true dan recommendationReason yang jelas.
+- Jika sebuah pertanyaan wajar mengadopsi 2 opsi sekaligus (misal pada pertanyaan multi-select integrasi: WhatsApp Gateway dan QRIS Dinamis sama-sama krusial), kedua opsi tersebut BOLEH ditandai isRecommended: true.
+- Rekomendasi harus realistis bagi developer/mahasiswa: prioritaskan solusi yang cepat diimplementasikan, minim biaya pemeliharaan server, dan standar arsitektur modern 2026.
 
 Kembalikan format JSON murni yang valid tanpa teks tambahan.`;
 }
