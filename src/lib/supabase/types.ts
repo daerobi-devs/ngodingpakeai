@@ -187,6 +187,10 @@ export interface SystemSettings {
   qris_image_url?: string;
   qris_merchant_name?: string;
   qris_gopay_number?: string;
+  payment_gateway_mode?: 'manual_qris' | 'mpg_automatic';
+  mpg_gateway_url?: string;
+  mpg_api_key?: string;
+  mpg_webhook_secret?: string;
   pro_price_rp: number;
   pro_price_formatted: string;
   admin_passcode?: string;
@@ -209,6 +213,9 @@ export interface Profile {
   assigned_gemini_slot?: string | null;
   is_banned?: boolean;
   daily_limit_override?: number | null;
+  today_generations_count?: number;
+  daily_limit?: number;
+  remaining_today?: number;
   total_server_tokens?: number;
   created_at?: string;
   updated_at?: string;
@@ -238,6 +245,14 @@ export interface PaymentOrder {
   payment_method: string;
   status: OrderStatus;
   admin_notes?: string;
+  gateway_order_id?: string;
+  final_amount?: number;
+  unique_code?: number;
+  qr_string?: string;
+  checkout_url?: string;
+  detected_bank?: string;
+  paid_at?: string;
+  expired_at?: string;
   created_at?: string;
   updated_at?: string;
 }

@@ -82,8 +82,8 @@ export async function GET(req: NextRequest) {
         profile.is_admin = true;
         profile.subscription_tier = 'unlimited';
       }
-    } else if (profile.subscription_tier === 'pro' && profile.pro_expires_at) {
-      // Auto-downgrade if PRO duration has expired
+    } else if ((profile.subscription_tier === 'pro' || profile.subscription_tier === 'plus') && profile.pro_expires_at) {
+      // Auto-downgrade if paid duration has expired
       const isExpired = new Date(profile.pro_expires_at).getTime() < Date.now();
       if (isExpired) {
         await adminSupabase
@@ -97,7 +97,55 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, profile });
+    // 3. Count today's PRD generations for accurate quota display
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const { count: todayCount } = await adminSupabase
+      .from('prd_history')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', startOfDay.toISOString());
+
+    // 4. Calculate effective daily limit based on tier
+    let dailyLimit = 1;
+    try {
+      const { data: settingsData } = await adminSupabase
+        .from('system_settings')
+        .select('pricing_tiers, trial_limit')
+        .eq('id', 'default')
+        .single();
+
+      const userTier = (profile.subscription_tier || 'free').toLowerCase();
+      if (userTier === 'unlimited' || profile.is_admin) {
+        dailyLimit = 999999;
+      } else if (profile.daily_limit_override !== undefined && profile.daily_limit_override !== null) {
+        dailyLimit = Number(profile.daily_limit_override);
+      } else {
+        const pricingTiers = settingsData?.pricing_tiers || [];
+        const matchingTier = pricingTiers.find((t: any) => t.id === userTier);
+        if (matchingTier && typeof matchingTier.daily_limit === 'number') {
+          dailyLimit = matchingTier.daily_limit;
+        } else {
+          dailyLimit = userTier === 'pro' ? 50 : userTier === 'plus' ? 10 : (settingsData?.trial_limit || 1);
+        }
+      }
+    } catch {
+      const userTier = (profile.subscription_tier || 'free').toLowerCase();
+      dailyLimit = userTier === 'pro' ? 50 : userTier === 'plus' ? 10 : 1;
+    }
+
+    const todayGenerations = todayCount || 0;
+    const remainingToday = dailyLimit >= 999999 ? 999999 : Math.max(0, dailyLimit - todayGenerations);
+
+    const enrichedProfile = {
+      ...profile,
+      today_generations_count: todayGenerations,
+      daily_limit: dailyLimit,
+      remaining_today: remainingToday,
+    };
+
+    return NextResponse.json({ success: true, profile: enrichedProfile });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Gagal memuat profil';
     return NextResponse.json({ success: false, error: msg }, { status: 500 });

@@ -128,6 +128,10 @@ export default function AdminDashboard() {
     qris_merchant_name: 'NGODINGPAKEPRD OFFICIAL',
     qris_gopay_number: '0851-2360-7711',
     qris_image_url: '/qris-gopay-placeholder.png',
+    payment_gateway_mode: 'manual_qris',
+    mpg_gateway_url: 'http://localhost:3000',
+    mpg_api_key: 'mpg_live_f89a3c10b7d24e6a8e5c3b1a9f0d7e2c',
+    mpg_webhook_secret: 'mandiri-private-gateway-secret-key-change-in-prod',
     pro_price_rp: 49000,
     pro_price_formatted: 'Rp 49.000 / Lifetime Access',
   });
@@ -141,6 +145,18 @@ export default function AdminDashboard() {
 
   const [testingAi, setTestingAi] = useState(false);
   const [testAiResult, setTestAiResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Mandiri Private Gateway (MPG) States
+  const [testingMpg, setTestingMpg] = useState(false);
+  const [testMpgResult, setTestMpgResult] = useState<{
+    success: boolean;
+    message: string;
+    devicesCount?: number;
+    onlineDeviceCount?: number;
+  } | null>(null);
+  const [showMpgKey, setShowMpgKey] = useState(false);
+  const [showMpgSecret, setShowMpgSecret] = useState(false);
+  const [webhookCopied, setWebhookCopied] = useState(false);
 
   // Gemini Multi-Key & 9Router States
   const [testingSlotId, setTestingSlotId] = useState<string | null>(null);
@@ -310,6 +326,10 @@ export default function AdminDashboard() {
             pro_model: data.settings.pro_model || 'deepseek-chat',
             free_ai_provider: data.settings.free_ai_provider || 'gemini_direct',
             free_model: data.settings.free_model || 'gemini-flash-latest',
+            payment_gateway_mode: data.settings.payment_gateway_mode || 'manual_qris',
+            mpg_gateway_url: data.settings.mpg_gateway_url || 'http://localhost:3000',
+            mpg_api_key: data.settings.mpg_api_key || 'mpg_live_f89a3c10b7d24e6a8e5c3b1a9f0d7e2c',
+            mpg_webhook_secret: data.settings.mpg_webhook_secret || 'mandiri-private-gateway-secret-key-change-in-prod',
           });
         }
       }
@@ -649,6 +669,45 @@ export default function AdminDashboard() {
       });
     } finally {
       setTestingAi(false);
+    }
+  };
+
+  const handleTestMpg = async () => {
+    try {
+      setTestingMpg(true);
+      setTestMpgResult(null);
+
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'test_mpg_connection',
+          gatewayUrl: settings.mpg_gateway_url,
+          apiKey: settings.mpg_api_key,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setTestMpgResult({
+          success: true,
+          message: data.message || `Koneksi Berhasil (${data.latencyMs ?? 0}ms)`,
+          devicesCount: data.devicesCount,
+          onlineDeviceCount: data.onlineDeviceCount,
+        });
+      } else {
+        setTestMpgResult({
+          success: false,
+          message: data.error || 'Gagal terhubung ke Gateway Mandiri Private',
+        });
+      }
+    } catch (e) {
+      setTestMpgResult({
+        success: false,
+        message: 'Koneksi Gagal: ' + (e instanceof Error ? e.message : String(e)),
+      });
+    } finally {
+      setTestingMpg(false);
     }
   };
 
@@ -3187,6 +3246,323 @@ export default function AdminDashboard() {
                       })()}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              {/* Card 1: Mandiri Private Gateway (MPG) & Payment Engine */}
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-zinc-950 via-zinc-900/40 to-zinc-950">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-400" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                        Payment Gateway Engine (Mandiri Private Gateway & GoBiz QRIS)
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        0% BIAYA ADMIN
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-1">
+                      Pilih mekanisme pembayaran saat pengguna checkout paket PLUS / PRO. Gateway otomatis mendukung dynamic QRIS headless tanpa perantara pihak ketiga.
+                    </p>
+                  </div>
+
+                  <span className="self-start sm:self-auto text-[11px] font-mono px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">
+                    Mode Aktif: <strong className="text-emerald-400 font-bold uppercase">{settings.payment_gateway_mode === 'mpg_automatic' ? 'MPG Otomatis' : 'Manual GoBiz'}</strong>
+                  </span>
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {/* Mode Selector Cards */}
+                  <div>
+                    <label className="text-zinc-400 block mb-2 font-medium text-xs">
+                      Pilih Mode Gateway Pembayaran:
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {/* Option 1: MPG Otomatis */}
+                      <div
+                        onClick={() => setSettings({ ...settings, payment_gateway_mode: 'mpg_automatic' })}
+                        className={`relative rounded-xl p-4 border cursor-pointer transition-all ${
+                          settings.payment_gateway_mode === 'mpg_automatic'
+                            ? 'border-emerald-500 bg-emerald-950/20 shadow-lg shadow-emerald-950/30'
+                            : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
+                              settings.payment_gateway_mode === 'mpg_automatic'
+                                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                            }`}>
+                              <Zap className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                Mandiri Private Gateway (MPG)
+                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                                  REKOMENDASI
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-zinc-400 mt-0.5">
+                                Headless Dynamic QRIS ASPI + 3-digit kode unik + auto-konfirmasi webhook
+                              </p>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                            settings.payment_gateway_mode === 'mpg_automatic'
+                              ? 'border-emerald-500 bg-emerald-500 text-zinc-950'
+                              : 'border-zinc-700 bg-zinc-900'
+                          }`}>
+                            {settings.payment_gateway_mode === 'mpg_automatic' && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-[10px] text-zinc-400">
+                          <div className="flex items-center gap-1 text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>0% Potongan</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>Instant Aktif</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>Tanpa Redirect</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Option 2: GoBiz Manual */}
+                      <div
+                        onClick={() => setSettings({ ...settings, payment_gateway_mode: 'manual_qris' })}
+                        className={`relative rounded-xl p-4 border cursor-pointer transition-all ${
+                          settings.payment_gateway_mode === 'manual_qris'
+                            ? 'border-amber-500 bg-amber-950/20 shadow-lg shadow-amber-950/30'
+                            : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/70'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
+                              settings.payment_gateway_mode === 'manual_qris'
+                                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                            }`}>
+                              <QrCode className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                Manual (GoBiz QRIS Statis)
+                              </h4>
+                              <p className="text-[11px] text-zinc-400 mt-0.5">
+                                Barcode QRIS statis + pembeli upload bukti bayar/konfirmasi ke WhatsApp admin
+                              </p>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                            settings.payment_gateway_mode === 'manual_qris'
+                              ? 'border-amber-500 bg-amber-500 text-zinc-950'
+                              : 'border-zinc-700 bg-zinc-900'
+                          }`}>
+                            {settings.payment_gateway_mode === 'manual_qris' && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-[10px] text-zinc-400">
+                          <div className="flex items-center gap-1 text-zinc-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>GoPay / BCA</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-zinc-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>Verifikasi WA</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-zinc-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>Approval Manual</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MPG Parameters & Connectivity Box */}
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                          <Server className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Kredensial & Endpoint Mandiri Private Gateway</span>
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          Atur alamat server gateway MPG, API Key Bearer, dan Secret Signature Webhook HMAC-SHA256.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTestMpg}
+                        disabled={testingMpg}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer self-start sm:self-auto"
+                      >
+                        {testingMpg ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Activity className="h-3.5 w-3.5" />
+                        )}
+                        <span>{testingMpg ? 'Menguji Gateway...' : 'Uji Koneksi Gateway MPG'}</span>
+                      </button>
+                    </div>
+
+                    {/* Test Result Alert */}
+                    {testMpgResult && (
+                      <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                        testMpgResult.success
+                          ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                          : 'bg-red-950/30 border-red-500/40 text-red-200'
+                      }`}>
+                        {testMpgResult.success ? (
+                          <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                        )}
+                        <div className="space-y-1">
+                          <p className="font-semibold">{testMpgResult.message}</p>
+                          {testMpgResult.devicesCount !== undefined && (
+                            <p className="text-[11px] text-zinc-400">
+                              Status Listener Android: <strong>{testMpgResult.onlineDeviceCount ?? 0} dari {testMpgResult.devicesCount}</strong> HP Android aktif memantau notifikasi bank.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Input Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                      {/* Gateway URL */}
+                      <div>
+                        <label className="text-zinc-400 block mb-1 font-medium text-[11px]">
+                          Base Gateway URL:
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.mpg_gateway_url || ''}
+                          onChange={(e) => setSettings({ ...settings, mpg_gateway_url: e.target.value })}
+                          placeholder="http://localhost:3000"
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden"
+                        />
+                        <span className="text-[10px] text-zinc-500 block mt-1">
+                          Default: http://localhost:3000 atau URL Cloudflare Tunnel / VPS
+                        </span>
+                      </div>
+
+                      {/* API Key */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-zinc-400 font-medium text-[11px]">
+                            API Secret Key (Bearer Token):
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowMpgKey(!showMpgKey)}
+                            className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
+                          >
+                            {showMpgKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                            <span>{showMpgKey ? 'Sembunyikan' : 'Tampilkan'}</span>
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showMpgKey ? 'text' : 'password'}
+                            value={settings.mpg_api_key || ''}
+                            onChange={(e) => setSettings({ ...settings, mpg_api_key: e.target.value })}
+                            placeholder="mpg_live_..."
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden pr-8"
+                          />
+                          <Key className="h-3.5 w-3.5 text-zinc-600 absolute right-2.5 top-2.5" />
+                        </div>
+                        <span className="text-[10px] text-zinc-500 block mt-1">
+                          Diberikan oleh MPG untuk membuat dynamic invoice
+                        </span>
+                      </div>
+
+                      {/* Webhook Secret HMAC */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-zinc-400 font-medium text-[11px]">
+                            Secret Webhook HMAC-SHA256:
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowMpgSecret(!showMpgSecret)}
+                            className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
+                          >
+                            {showMpgSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                            <span>{showMpgSecret ? 'Sembunyikan' : 'Tampilkan'}</span>
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showMpgSecret ? 'text' : 'password'}
+                            value={settings.mpg_webhook_secret || ''}
+                            onChange={(e) => setSettings({ ...settings, mpg_webhook_secret: e.target.value })}
+                            placeholder="mandiri-private-gateway-secret-key..."
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-hidden pr-8"
+                          />
+                          <Lock className="h-3.5 w-3.5 text-zinc-600 absolute right-2.5 top-2.5" />
+                        </div>
+                        <span className="text-[10px] text-zinc-500 block mt-1">
+                          Kunci rahasia untuk memverifikasi header X-Signature
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Webhook URL Endpoint Display Box */}
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                          Endpoint Outgoing Webhook Website Ini (Daftarkan ke Gateway MPG):
+                        </span>
+                        <div className="font-mono text-xs text-emerald-400 bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800/80 inline-block break-all">
+                          {typeof window !== 'undefined'
+                            ? `${window.location.origin}/api/webhook/payment-success`
+                            : 'https://ngodingpakeprd.buatin.biz.id/api/webhook/payment-success'}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = typeof window !== 'undefined'
+                            ? `${window.location.origin}/api/webhook/payment-success`
+                            : 'https://ngodingpakeprd.buatin.biz.id/api/webhook/payment-success';
+                          navigator.clipboard.writeText(url);
+                          setWebhookCopied(true);
+                          setTimeout(() => setWebhookCopied(false), 2000);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start md:self-auto shrink-0"
+                      >
+                        {webhookCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                        <span>{webhookCopied ? 'Tersalin!' : 'Salin Webhook URL'}</span>
+                      </button>
+                    </div>
+
+                    {/* Fail-safe & Workflow Info Callout */}
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-3 text-[11px] text-zinc-300 space-y-1">
+                      <span className="font-semibold text-emerald-400 block">
+                        Alur Transaksi & Sistem Fail-Safe Otomatis:
+                      </span>
+                      <p className="leading-relaxed text-zinc-400 text-[10px]">
+                        1. Saat pembeli memilih paket di pricing modal, sistem membuat invoice di MPG dengan kode unik 3 digit (misal Rp 50.000 menjadi Rp 50.143) dan menampilkan QRIS ASPI dinamis di dalam modal tanpa redirect.
+                        <br />
+                        2. Ketika dana masuk, HP Android Kasir menangkap notifikasi dan gateway menembak webhook HMAC-SHA256 ke endpoint website ini.
+                        <br />
+                        3. Akun pembeli otomatis diaktifkan +30 hari secara real-time. Jika server MPG sedang offline atau gangguan, sistem secara aman otomatis beralih ke mode transfer manual GoBiz/WhatsApp tanpa menggagalkan transaksi.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 

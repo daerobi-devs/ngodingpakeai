@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createMpgInvoice, getMpgConfig } from '@/lib/mpg/client';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,8 +15,18 @@ export async function POST(req: NextRequest) {
     }
 
     const adminSupabase = createAdminClient();
-    const randomCode = Math.floor(1000 + Math.random() * 9000);
-    const orderCode = 'PRD-' + randomCode;
+
+    // 1. Fetch system settings to check payment mode
+    const { data: settings } = await adminSupabase
+      .from('system_settings')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
+
+    const mpgConfig = getMpgConfig(settings);
+
+    let randomCode = Math.floor(1000 + Math.random() * 9000);
+    let orderCode = 'PRD-' + randomCode;
 
     const insertData: Record<string, any> = {
       user_id: userId,
@@ -31,17 +42,78 @@ export async function POST(req: NextRequest) {
       insertData.admin_notes = `Tier: ${tierId.toUpperCase()}`;
     }
 
-    const { data, error } = await adminSupabase
+    // 2. If Mandiri Private Gateway is active, request dynamic QRIS invoice
+    if (mpgConfig.isMpgActive) {
+      const generatedOrderId = `INV-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const mpgResult = await createMpgInvoice(
+        {
+          orderId: generatedOrderId,
+          amount: amount || 49000,
+          customerName: userName || userEmail.split('@')[0],
+          customerEmail: userEmail,
+        },
+        settings
+      );
+
+      if (mpgResult.success && mpgResult.data) {
+        insertData.order_code = mpgResult.data.order_id;
+        insertData.gateway_order_id = mpgResult.data.order_id;
+        insertData.amount = mpgResult.data.base_amount;
+        insertData.final_amount = mpgResult.data.final_amount;
+        insertData.unique_code = mpgResult.data.unique_code;
+        insertData.amount_formatted = `Rp ${mpgResult.data.final_amount.toLocaleString('id-ID')}`;
+        insertData.payment_method = 'QRIS Dinamis Mandiri';
+        insertData.qr_string = mpgResult.data.qr_string;
+        insertData.checkout_url = mpgResult.data.checkout_url;
+        insertData.expired_at = mpgResult.data.expired_at;
+        insertData.admin_notes = `Tier: ${(tierId || 'pro').toUpperCase()} (MPG Dinamis)`;
+      } else {
+        console.warn('[Orders API] MPG Invoice creation failed, falling back to manual QRIS:', mpgResult.error);
+      }
+    }
+
+    // 3. Insert order with resilient schema fallback if new columns don't exist yet
+    let res = await adminSupabase
       .from('payment_orders')
       .insert(insertData)
       .select()
       .single();
 
-    if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (res.error) {
+      // Fallback: omit new MPG columns if migration hasn't been applied yet
+      const fallbackData = {
+        user_id: insertData.user_id,
+        user_email: insertData.user_email,
+        user_name: insertData.user_name,
+        order_code: insertData.order_code,
+        amount: insertData.amount,
+        amount_formatted: insertData.amount_formatted,
+        payment_method: insertData.payment_method,
+        status: insertData.status,
+        admin_notes: insertData.admin_notes,
+      };
+
+      res = await adminSupabase
+        .from('payment_orders')
+        .insert(fallbackData)
+        .select()
+        .single();
     }
 
-    return NextResponse.json({ success: true, order: data });
+    if (res.error) {
+      return NextResponse.json({ success: false, error: res.error.message }, { status: 500 });
+    }
+
+    // Merge in-memory dynamic data in case database fallback omitted the columns
+    const finalOrder = {
+      ...res.data,
+      qr_string: insertData.qr_string || res.data?.qr_string,
+      final_amount: insertData.final_amount || res.data?.final_amount,
+      unique_code: insertData.unique_code || res.data?.unique_code,
+      expired_at: insertData.expired_at || res.data?.expired_at,
+    };
+
+    return NextResponse.json({ success: true, order: finalOrder });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Gagal membuat pesanan';
     return NextResponse.json({ success: false, error: err }, { status: 500 });

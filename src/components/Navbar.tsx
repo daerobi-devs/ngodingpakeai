@@ -15,6 +15,7 @@ import {
   Crown,
   Settings,
   Users,
+  Zap,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -58,7 +59,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   isLandingPage = false,
 }) => {
   const router = useRouter();
-  const { user, profile, isPro, isAdmin, remainingTrials, logout, systemSettings } = useAuth();
+  const {
+    user,
+    profile,
+    isPro,
+    isPlus,
+    isPaid,
+    isAdmin,
+    tier,
+    dailyLimit,
+    todayGenerations,
+    remainingToday,
+    remainingTrials,
+    logout,
+    systemSettings,
+  } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [stats, setStats] = useState<{ users: number; prds: number }>({ users: 0, prds: 0 });
 
@@ -149,31 +164,52 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Trial Status indicator (non-landing page only) */}
-          {!isLandingPage && !isPro && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/90 px-2.5 py-1 text-xs text-zinc-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              <span>Trial: <strong className="text-zinc-200 font-mono font-bold">{user ? `${remainingTrials}x` : `${systemSettings?.trial_limit ?? 1}x`}</strong></span>
-            </div>
-          )}
-
-          {/* PRO Badge / Clean Upgrade Button (non-landing page only) */}
+          {/* Trial / Tier Status indicator (non-landing page only) */}
           {!isLandingPage && (
             isPro ? (
               <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400">
                 <Crown className="h-3.5 w-3.5 text-amber-400" />
                 <span>PRO</span>
+                <span className="text-[10px] text-zinc-400 font-mono font-normal pl-1 border-l border-amber-500/20">
+                  {dailyLimit >= 999999 ? 'Unlimited' : `${remainingToday}/${dailyLimit}`}
+                </span>
+              </div>
+            ) : isPlus ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-2.5 py-1 text-xs font-bold text-emerald-400">
+                  <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>PLUS</span>
+                  <span className="text-[10px] text-emerald-300/80 font-mono font-normal pl-1 border-l border-emerald-500/30">
+                    {remainingToday}/{dailyLimit} hari ini
+                  </span>
+                </div>
+                {onOpenPricing && (
+                  <button
+                    type="button"
+                    onClick={onOpenPricing}
+                    className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 transition-colors cursor-pointer"
+                  >
+                    <Crown className="h-3 w-3" />
+                    <span>Upgrade PRO</span>
+                  </button>
+                )}
               </div>
             ) : (
-              onOpenPricing && (
-                <button
-                  type="button"
-                  onClick={onOpenPricing}
-                  className="inline-flex items-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 transition-colors"
-                >
-                  Upgrade PRO
-                </button>
-              )
+              <>
+                <div className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/90 px-2.5 py-1 text-xs text-zinc-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  <span>Trial: <strong className="text-zinc-200 font-mono font-bold">{user ? `${remainingTrials}x` : `${systemSettings?.trial_limit ?? 1}x`}</strong></span>
+                </div>
+                {onOpenPricing && (
+                  <button
+                    type="button"
+                    onClick={onOpenPricing}
+                    className="inline-flex items-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 transition-colors cursor-pointer"
+                  >
+                    Upgrade Paket
+                  </button>
+                )}
+              </>
             )
           )}
 
@@ -223,6 +259,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <div className="px-3 py-2 border-b border-zinc-800/80 mb-1 space-y-1">
                         <div className="font-semibold text-white truncate">{displayName}</div>
                         <div className="text-[11px] text-zinc-500 truncate">{user.email}</div>
+                        <div className="pt-1 flex items-center justify-between">
+                          <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
+                            isPro
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                              : isPlus
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-zinc-800 text-zinc-400'
+                          }`}>
+                            {isPro ? 'Paket PRO' : isPlus ? 'Paket PLUS' : 'Paket Free'}
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-400">
+                            {isPro ? 'Unlimited' : isPlus ? `${remainingToday}/${dailyLimit} PRD` : `${remainingTrials}x trial`}
+                          </span>
+                        </div>
                       </div>
 
                       <Link
@@ -233,6 +283,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <FileText className="h-3.5 w-3.5" />
                         <span>Buka Studio Generator</span>
                       </Link>
+
+                      {isPlus && onOpenPricing && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            onOpenPricing();
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-amber-400 hover:bg-zinc-900 transition-colors font-semibold text-left cursor-pointer"
+                        >
+                          <Crown className="h-3.5 w-3.5" />
+                          <span>Upgrade ke Paket PRO</span>
+                        </button>
+                      )}
 
                       {isAdmin && (
                         <Link

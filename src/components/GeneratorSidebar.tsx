@@ -71,7 +71,18 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
   creationMode,
   onSetCreationMode,
 }) => {
-  const { isPro, remainingTrials, systemSettings, pendingOrder } = useAuth();
+  const {
+    isPro,
+    isPlus,
+    isPaid,
+    tier,
+    remainingTrials,
+    dailyLimit,
+    todayGenerations,
+    remainingToday,
+    systemSettings,
+    pendingOrder,
+  } = useAuth();
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -347,30 +358,61 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
         )}
 
         {/* User Tier & Quota Card */}
-        <div className="flex items-center justify-between px-1 py-1 text-xs">
-          <div className="flex items-center gap-1.5">
-            {isPro ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
-                <Crown className="h-3.5 w-3.5 text-amber-400" />
-                <span>PRO Unlimited</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400">
-                <Zap className="h-3 w-3 text-amber-400" />
-                <span>Trial: {remainingTrials}x tersisa</span>
-              </span>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {isPro ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                  <Crown className="h-3.5 w-3.5 text-amber-400" />
+                  <span>PRO Unlimited</span>
+                </span>
+              ) : isPlus ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                  <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>PLUS Member</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded-md border border-zinc-700/50">
+                  <Zap className="h-3 w-3 text-zinc-400" />
+                  <span>Paket Free</span>
+                </span>
+              )}
+            </div>
+
+            {/* Upgrade action button */}
+            {!pendingOrder && (
+              isPlus ? (
+                <button
+                  type="button"
+                  onClick={onOpenPricing}
+                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <Crown className="h-2.5 w-2.5" />
+                  <span>Upgrade PRO</span>
+                </button>
+              ) : !isPro ? (
+                <button
+                  type="button"
+                  onClick={onOpenPricing}
+                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
+                >
+                  Pilih Paket
+                </button>
+              ) : null
             )}
           </div>
 
-          {!isPro && !pendingOrder && (
-            <button
-              type="button"
-              onClick={onOpenPricing}
-              className="text-[10px] font-bold text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
-            >
-              Upgrade PRO
-            </button>
-          )}
+          {/* Daily Quota Counter */}
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/60">
+            <span>Kuota PRD Hari Ini:</span>
+            <span className="font-mono font-bold text-zinc-200">
+              {isPro
+                ? (dailyLimit >= 999999 ? 'Unlimited' : `${remainingToday}/${dailyLimit}`)
+                : isPlus
+                ? `${remainingToday}/${dailyLimit} tersisa`
+                : `${remainingTrials}x trial`}
+            </span>
+          </div>
         </div>
       </div>
     </aside>

@@ -22,6 +22,10 @@ const DEFAULT_SETTINGS: SystemSettings = {
   qris_merchant_name: 'NGODINGPAKEPRD OFFICIAL',
   qris_gopay_number: '0851-2360-7711',
   qris_image_url: '/qris-gopay-placeholder.png',
+  payment_gateway_mode: 'manual_qris',
+  mpg_gateway_url: 'http://localhost:3000',
+  mpg_api_key: 'mpg_live_f89a3c10b7d24e6a8e5c3b1a9f0d7e2c',
+  mpg_webhook_secret: 'mandiri-private-gateway-secret-key-change-in-prod',
   pro_price_rp: 49000,
   pro_price_formatted: 'Rp 49.000 / Lifetime Access',
   admin_passcode: 'prdadmin99',
@@ -58,6 +62,8 @@ export async function GET() {
       nine_router_key: data.nine_router_key ? '●●●●●●●●' : undefined,
       gemini_master_keys: data.gemini_master_keys ? '●●●●●●●●' : undefined,
       openrouter_key: data.openrouter_key ? '●●●●●●●●' : undefined,
+      mpg_api_key: data.mpg_api_key ? '●●●●●●●●' : undefined,
+      mpg_webhook_secret: data.mpg_webhook_secret ? '●●●●●●●●' : undefined,
       admin_passcode: undefined,
     };
 
@@ -89,6 +95,8 @@ export async function PUT(req: NextRequest) {
     if (updates.nine_router_key === '●●●●●●●●') delete updates.nine_router_key;
     if (updates.gemini_master_keys === '●●●●●●●●') delete updates.gemini_master_keys;
     if (updates.openrouter_key === '●●●●●●●●') delete updates.openrouter_key;
+    if (updates.mpg_api_key === '●●●●●●●●') delete updates.mpg_api_key;
+    if (updates.mpg_webhook_secret === '●●●●●●●●') delete updates.mpg_webhook_secret;
 
     updates.updated_at = new Date().toISOString();
 
@@ -109,6 +117,10 @@ export async function PUT(req: NextRequest) {
       delete coreUpdates.pro_model;
       delete coreUpdates.free_ai_provider;
       delete coreUpdates.free_model;
+      delete coreUpdates.payment_gateway_mode;
+      delete coreUpdates.mpg_gateway_url;
+      delete coreUpdates.mpg_api_key;
+      delete coreUpdates.mpg_webhook_secret;
 
       const retry = await adminSupabase
         .from('system_settings')

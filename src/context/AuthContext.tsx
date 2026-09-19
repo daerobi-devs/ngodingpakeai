@@ -12,7 +12,13 @@ interface AuthContextType {
   systemSettings: SystemSettings | null;
   isLoading: boolean;
   isPro: boolean;
+  isPlus: boolean;
+  isPaid: boolean;
   isAdmin: boolean;
+  tier: 'free' | 'plus' | 'pro' | 'unlimited';
+  dailyLimit: number;
+  todayGenerations: number;
+  remainingToday: number;
   remainingTrials: number;
   pendingOrder: PaymentOrder | null;
   loginWithGoogle: (redirectTo?: string) => Promise<void>;
@@ -248,17 +254,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     'buatintech@gmail.com',
   ];
   const isAdmin = Boolean(profile?.is_admin) || adminEmails.includes(userEmail);
-  const tier = (profile?.subscription_tier || '').toLowerCase().trim();
-  const isProExpired = Boolean(
-    tier === 'pro' &&
+  const rawTier = (profile?.subscription_tier || 'free').toLowerCase().trim();
+  const isPaidExpired = Boolean(
+    (rawTier === 'pro' || rawTier === 'plus') &&
     !isAdmin &&
     profile?.pro_expires_at &&
     new Date(profile.pro_expires_at).getTime() < Date.now()
   );
-  const isPro = (tier === 'pro' || tier === 'unlimited' || isAdmin) && !isProExpired;
+  const activeTier: 'free' | 'plus' | 'pro' | 'unlimited' = isPaidExpired
+    ? 'free'
+    : isAdmin
+    ? 'unlimited'
+    : rawTier === 'plus'
+    ? 'plus'
+    : rawTier === 'pro' || rawTier === 'unlimited'
+    ? (rawTier as any)
+    : 'free';
+
+  const isPro = activeTier === 'pro' || activeTier === 'unlimited' || isAdmin;
+  const isPlus = activeTier === 'plus';
+  const isPaid = isPro || isPlus;
+
   const trialLimit = systemSettings?.trial_limit ?? 1;
   const trialUsed = profile?.trial_count ?? 0;
-  const remainingTrials = isPro ? 999999 : Math.max(0, trialLimit - trialUsed);
+  const remainingTrials = isPaid ? 999999 : Math.max(0, trialLimit - trialUsed);
+
+  // Daily Quota Tracking (Today's count and remaining limit)
+  const dailyLimit = profile?.daily_limit ?? (isPro ? 50 : isPlus ? 10 : trialLimit);
+  const todayGenerations = profile?.today_generations_count ?? 0;
+  const remainingToday = profile?.remaining_today ?? (dailyLimit >= 999999 ? 999999 : Math.max(0, dailyLimit - todayGenerations));
 
   return (
     <AuthContext.Provider
@@ -269,7 +293,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         systemSettings,
         isLoading,
         isPro,
+        isPlus,
+        isPaid,
         isAdmin,
+        tier: activeTier,
+        dailyLimit,
+        todayGenerations,
+        remainingToday,
         remainingTrials,
         pendingOrder,
         loginWithGoogle,

@@ -472,6 +472,104 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === 'test_mpg_connection') {
+      const { gatewayUrl, apiKey } = payload;
+      const cleanUrl = (gatewayUrl || '').trim().replace(/\/+$/, '');
+      const cleanKey = (apiKey || '').trim();
+
+      if (!cleanUrl) {
+        return NextResponse.json({ success: false, error: 'URL Gateway tidak boleh kosong' }, { status: 400 });
+      }
+
+      const startTime = Date.now();
+      let serverReachable = false;
+      let activeDevices: any[] = [];
+      let keyValid = false;
+      let keyMessage = '';
+
+      try {
+        const hbRes = await fetch(`${cleanUrl}/api/device/heartbeat`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000),
+        });
+        if (hbRes.ok) {
+          serverReachable = true;
+          const hbData = await hbRes.json().catch(() => null);
+          activeDevices = hbData?.devices || [];
+        } else {
+          serverReachable = true;
+        }
+      } catch {
+        // Continue to API key check
+      }
+
+      if (cleanKey) {
+        try {
+          const invRes = await fetch(`${cleanUrl}/api/v1/invoice`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${cleanKey}`,
+            },
+            body: JSON.stringify({}),
+            signal: AbortSignal.timeout(5000),
+          });
+
+          serverReachable = true;
+          const invData = await invRes.json().catch(() => null);
+
+          if (invRes.status === 401) {
+            keyValid = false;
+            keyMessage = invData?.message || 'API Key tidak valid atau dinonaktifkan di MPG';
+          } else if (invRes.status === 400) {
+            keyValid = true;
+            keyMessage = 'API Key valid dan terverifikasi';
+          } else if (invRes.ok) {
+            keyValid = true;
+            keyMessage = 'API Key valid';
+          } else {
+            keyMessage = invData?.message || `HTTP ${invRes.status}`;
+          }
+        } catch (err: unknown) {
+          if (!serverReachable) {
+            const latencyMs = Date.now() - startTime;
+            const msg = err instanceof Error ? err.message : 'Koneksi timeout atau gagal';
+            return NextResponse.json({
+              success: false,
+              latencyMs,
+              error: `Gagal terhubung ke Mandiri Private Gateway (${cleanUrl}): ${msg}. Pastikan server MPG aktif.`,
+            });
+          }
+        }
+      }
+
+      const latencyMs = Date.now() - startTime;
+
+      if (!serverReachable) {
+        return NextResponse.json({
+          success: false,
+          latencyMs,
+          error: `Server Mandiri Private Gateway di ${cleanUrl} tidak merespons (Offline / Refused). Pastikan server berjalan.`,
+        });
+      }
+
+      const onlineDeviceCount = activeDevices.filter((d: any) => d.is_online !== false).length;
+
+      return NextResponse.json({
+        success: true,
+        latencyMs,
+        gatewayUrl: cleanUrl,
+        keyValid,
+        keyMessage,
+        devicesCount: activeDevices.length,
+        onlineDeviceCount,
+        devices: activeDevices,
+        message: keyValid
+          ? `Koneksi ke MPG sukses (${latencyMs}ms). API Key valid. ${onlineDeviceCount} HP Android Listener aktif.`
+          : `Gateway terhubung (${latencyMs}ms). Catatan: ${keyMessage || 'API Key belum diverifikasi'}.`,
+      });
+    }
+
     return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Admin action error';

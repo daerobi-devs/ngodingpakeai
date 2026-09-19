@@ -80,7 +80,22 @@ const INITIAL_FORM_DATA: PRDFormData = {
 function GeneratorContent() {
   const searchParams = useSearchParams();
   const urlTemplate = searchParams?.get('template') || undefined;
-  const { user, profile, isPro, isAdmin, remainingTrials, systemSettings, isLoading: authLoading, logout, refreshProfile } = useAuth();
+  const {
+    user,
+    profile,
+    isPro,
+    isPlus,
+    isPaid,
+    tier,
+    dailyLimit,
+    remainingToday,
+    isAdmin,
+    remainingTrials,
+    systemSettings,
+    isLoading: authLoading,
+    logout,
+    refreshProfile,
+  } = useAuth();
   const [keys, setKeys] = useState<string[]>([]);
   const [preferredModel, setPreferredModel] = useState<string>('gemini-3.8-flash');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -111,8 +126,7 @@ function GeneratorContent() {
   const initialLetter = displayName.charAt(0).toUpperCase();
 
   const userTier = (profile?.subscription_tier || '').toLowerCase().trim();
-  const isPlus = userTier === 'plus';
-  const isPaidMember = isPro || isPlus || isAdmin;
+  const isPaidMember = isPaid || isAdmin;
   const tierLabel = isPro || isAdmin ? 'Paket PRO (Lengkap)' : isPlus ? 'Paket PLUS (Hemat)' : 'Paket Free';
   const adminWaNumber = '6285123607711';
   const helpMessage = `Halo Admin ngodingpakeprd,
@@ -375,7 +389,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       return;
     }
 
-    if (isServerManaged && !isPro && user && remainingTrials <= 0) {
+    if (isServerManaged && !isPaid && user && remainingTrials <= 0) {
       setIsPricingModalOpen(true);
       return;
     }
@@ -408,7 +422,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       const json = await res.json();
 
       if (!res.ok || !json.success) {
-        if (json.trialExpired) {
+        if (json.trialExpired || json.dailyLimitReached) {
           setIsPricingModalOpen(true);
         }
         throw new Error(json.error || 'Gagal membuat PRD');
