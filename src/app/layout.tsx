@@ -13,16 +13,28 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
 });
 
-const APP_URL = 'https://ngodingpakeprd.daeroom.my.id';
+const getAppUrl = () => {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  return 'https://ngodingpakeprd.buatin.biz.id';
+};
+
+const APP_URL = getAppUrl();
 
 export const metadata: Metadata = {
   title: 'ngodingpakeprd — Generator PRD Standar Industri untuk AI Coding',
   description: 'Ubah ide mentah menjadi PRD & arsitektur teknis terstruktur dengan AI Engine, siap dieksekusi oleh Cursor, Claude Code, dan Roo Code.',
   metadataBase: new URL(APP_URL),
   icons: {
-    icon: '/favicon.jpg',
-    shortcut: '/favicon.jpg',
-    apple: '/favicon.jpg',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon.jpg', type: 'image/jpeg' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: [
+      { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
   openGraph: {
     type: 'website',
