@@ -114,6 +114,9 @@ export interface PRDOutput {
     generatedAt: string;
     retries?: number;
     fallbackCount?: number;
+    tokensUsed?: number;
+    isServerKey?: boolean;
+    geminiSlotUsed?: string;
   };
 }
 

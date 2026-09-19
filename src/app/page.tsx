@@ -4,9 +4,11 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { BeginnerRoadmap } from "@/components/BeginnerRoadmap";
 import { InteractiveBlueprintStudio } from "@/components/landing/InteractiveBlueprintStudio";
 import { VisualWorkflowPipeline } from "@/components/landing/VisualWorkflowPipeline";
+import { LandingTemplateShowcase } from "@/components/landing/LandingTemplateShowcase";
 import { AuthModal } from "@/components/AuthModal";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -109,6 +111,9 @@ export default function LandingPage() {
         ? "bg-[#f8fafc] text-slate-900 selection:bg-amber-500/20 selection:text-amber-800"
         : "bg-[#09090b] text-zinc-100 selection:bg-amber-500/20 selection:text-amber-200"
     }`}>
+      {/* Top Announcement Banner */}
+      <AnnouncementBanner />
+
       {/* Navbar — Always Black bg-[#09090b] as required */}
       <Navbar
         theme={theme}
@@ -166,132 +171,12 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-
-            {/* Quick Value Proof Pill Row */}
-            <div className="flex flex-wrap items-center justify-center gap-6 pt-4 text-xs font-semibold">
-              <div className="flex items-center gap-1.5 text-emerald-500">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Quick 3-Question Clarifier</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-amber-500">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>5 Blueprint Mermaid (Zero Kedip)</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-blue-500">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>DESIGN.md Anti-AI Slop</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-purple-500">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>1-Click Starter Kit (.ZIP)</span>
-              </div>
-            </div>
           </div>
         </section>
 
-        {/* ================= HIGH-FIDELITY PRODUCT PREVIEW MOCKUP ================= */}
+        {/* ================= PRESET ARCHITECTURE TEMPLATES SHOWCASE ================= */}
         <section className="mx-auto max-w-6xl px-4 sm:px-6 pb-24">
-          <div className={`rounded-2xl border shadow-2xl overflow-hidden transition-all ${
-            isLight
-              ? "border-slate-300 bg-white shadow-slate-300/50"
-              : "border-zinc-800 bg-[#121215] shadow-black/80"
-          }`}>
-            {/* Window Top Bar (macOS style) */}
-            <div className={`flex items-center justify-between border-b px-4 py-3 ${
-              isLight ? "border-slate-200 bg-slate-100/70" : "border-zinc-800 bg-zinc-950/80"
-            }`}>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-red-500/80"></div>
-                <div className="h-3 w-3 rounded-full bg-yellow-500/80"></div>
-                <div className="h-3 w-3 rounded-full bg-green-500/80"></div>
-                <span className={`ml-3 text-[11px] font-mono font-medium ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                  workspace / PRD-Sewa-Lapangan-Futsal-Starter-Kit.zip
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
-                  EXPORT READY (.ZIP)
-                </span>
-              </div>
-            </div>
-
-            {/* Mockup Body Preview */}
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Fake Top Navigation Tabs */}
-              <div className={`flex flex-wrap gap-2 border-b pb-4 ${
-                isLight ? "border-slate-200" : "border-zinc-800"
-              }`}>
-                <span className="rounded-lg bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5" /> Dokumen PRD Lengkap
-                </span>
-                <span className={`rounded-lg border px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${
-                  isLight ? "border-slate-200 text-slate-600" : "border-zinc-800 text-zinc-400"
-                }`}>
-                  <Network className="h-3.5 w-3.5 text-blue-400" /> 5 Blueprint Arsitektur
-                </span>
-                <span className={`rounded-lg border px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${
-                  isLight ? "border-slate-200 text-slate-600" : "border-zinc-800 text-zinc-400"
-                }`}>
-                  <Palette className="h-3.5 w-3.5 text-emerald-400" /> DESIGN.md Guidelines
-                </span>
-                <span className={`rounded-lg border px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${
-                  isLight ? "border-slate-200 text-slate-600" : "border-zinc-800 text-zinc-400"
-                }`}>
-                  <Package className="h-3.5 w-3.5 text-purple-400" /> Cursor/Claude Starter Kit
-                </span>
-              </div>
-
-              {/* Fake 2-Column Content in Mockup */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className={`col-span-1 rounded-xl p-4 border space-y-3 ${
-                  isLight ? "bg-slate-50 border-slate-200" : "bg-zinc-900/50 border-zinc-800/80"
-                }`}>
-                  <div className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">
-                    Ringkasan PRD Tergenerate
-                  </div>
-                  <div className={`text-sm font-bold ${isLight ? "text-slate-900" : "text-white"}`}>
-                    Platform Booking & Manajemen Lapangan Futsal Real-Time
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between py-1 border-b border-zinc-800/40">
-                      <span className="text-zinc-500">Tech Stack</span>
-                      <span className="font-semibold text-zinc-300">Next.js 16 + Supabase</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-zinc-800/40">
-                      <span className="text-zinc-500">Pembayaran</span>
-                      <span className="font-semibold text-zinc-300">QRIS Midtrans</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-zinc-800/40">
-                      <span className="text-zinc-500">AI Safety Contract</span>
-                      <span className="font-semibold text-emerald-400">Strict Anti-Double Booking</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`col-span-2 rounded-xl p-4 border font-mono text-xs overflow-hidden ${
-                  isLight ? "bg-slate-900 text-emerald-400 border-slate-700" : "bg-black/60 text-emerald-400 border-zinc-800"
-                }`}>
-                  <div className="flex items-center justify-between text-zinc-500 pb-2 border-b border-zinc-800 text-[10px]">
-                    <span>docs/ARCHITECTURE-SEQUENCE.mmd</span>
-                    <span>MERMAID PREVIEW READY</span>
-                  </div>
-                  <pre className="pt-2 leading-relaxed text-[11px] text-zinc-300 whitespace-pre">
-                    {`sequenceDiagram
-  autonumber
-  actor User as Pelanggan
-  participant FE as Next.js Web App
-  participant API as Supabase Database
-  participant PG as Midtrans QRIS
-  User->>FE: Pilih Jadwal Lapangan (Slot 19:00 - 21:00)
-  FE->>API: Atomic Lock Reservation Slot (5 menit)
-  API-->>FE: Slot Locked (ID: #BKG-992)
-  FE->>PG: Generate Dynamic QRIS Code
-  PG-->>User: Scan & Bayar via BCA/GoPay`}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
+          <LandingTemplateShowcase theme={theme} />
         </section>
 
         {/* ================= SECTION: 5 BLUEPRINT MERMAID ================= */}

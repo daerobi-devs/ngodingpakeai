@@ -77,61 +77,145 @@ ATURAN OUTPUT:
 - 100% Valid JSON murni tanpa markdown wrapper (\`\`\`json).
 - Gunakan Bahasa Indonesia profesional dan istilah engineering modern.`;
 
-export function buildPRDUserPrompt(formData: PRDFormData): string {
+export function buildPRDUserPrompt(
+  formData: PRDFormData,
+  techStack?: {
+    name?: string;
+    frontend?: string;
+    backend?: string;
+    database?: string;
+    deployment?: string;
+    templateId?: string;
+  },
+  language: 'id' | 'en' = 'id'
+): string {
+  let templateDirectives = '';
+  if (techStack) {
+    if (techStack.templateId === 'mobile-app') {
+      templateDirectives = `
+PANDUAN ARSITEKTUR WAJIB (CROSS-PLATFORM MOBILE APP - EXPO ROUTER V3):
+- Frontend: ${techStack.frontend || 'React Native (Expo Router v3) + NativeWind'}
+- Backend: ${techStack.backend || 'Supabase Backend & Edge Functions'}
+- Database: ${techStack.database || 'Supabase (PostgreSQL) + MMKV Offline Cache'}
+- Deployment: ${techStack.deployment || 'EAS Build (Android APK & iOS IPA)'}
+- ATURAN: Fokuskan spesifikasi pada aplikasi smartphone: navigasi file-based Expo Router (app/(tabs)), alur izin perangkat (Kamera, Lokasi GPS, Push Notification), penanganan offline-storage saat tanpa sinyal, dan proses rilis EAS Build. JANGAN menghasilkan konsep SSR web atau meta tags HTML.`;
+    } else if (techStack.templateId === 'ai-service') {
+      templateDirectives = `
+PANDUAN ARSITEKTUR WAJIB (PRODUCTION AI AGENT & VECTOR SERVICE):
+- Frontend: ${techStack.frontend || 'Next.js 16 (Modern Dashboard)'}
+- Backend: ${techStack.backend || 'FastAPI (Python 3.12)'}
+- Database: ${techStack.database || 'PostgreSQL + pgvector (Vector DB)'}
+- Deployment: ${techStack.deployment || 'Docker Multi-Container Compose'}
+- ATURAN: Fokuskan arsitektur pada pemisahan modul FastAPI (/app/api, /app/core, /app/models, /app/schemas dengan Pydantic v2), skema indeks pgvector (HNSW), background task worker (Redis/Celery) untuk async LLM execution, dan streaming response ke frontend.`;
+    } else if (techStack.templateId === 'custom') {
+      templateDirectives = `
+PANDUAN ARSITEKTUR KUSTOM (USER-DEFINED STACK):
+- Frontend: ${techStack.frontend || 'Custom Frontend'}
+- Backend: ${techStack.backend || 'Custom Backend'}
+- Database: ${techStack.database || 'Custom Database'}
+- Deployment: ${techStack.deployment || 'Custom Deployment'}
+- ATURAN: Susun arsitektur, konvensi koding, struktur folder, skema data, dan instruksi Cursor agent yang 100% SPESIFIK dan AKURAT untuk kombinasi teknologi kustom di atas (misal jika Laravel gunakan struktur Controller & Eloquent, jika Golang gunakan Clean Architecture struct & goroutines, jika Vue/Nuxt gunakan Pages & Composables, jika MongoDB gunakan Document schemas).`;
+    } else {
+      templateDirectives = `
+PANDUAN ARSITEKTUR WAJIB (MODERN FULLSTACK WEB - DOCKERIZED):
+- Frontend: ${techStack.frontend || 'Next.js 16 + Tailwind CSS'}
+- Backend: ${techStack.backend || 'Next.js Server Actions / Route Handlers'}
+- Database: ${techStack.database || 'Supabase (PostgreSQL)'}
+- Deployment: ${techStack.deployment || 'Docker (VPS / Coolify)'}
+- ATURAN: Terapkan konvensi Next.js 16 App Router (Server Components default, Server Actions dengan Zod validation), Supabase PostgreSQL dengan Row-Level Security (RLS), dan deployment Docker container multi-stage (bebas vendor lock-in).`;
+    }
+  }
+
+  const langInstruction =
+    language === 'en'
+      ? 'LANGUAGE DIRECTIVE: Output ALL PRD sections, headings, user stories, technical mappings, and instructions in clear, professional ENGLISH.'
+      : 'LANGUAGE DIRECTIVE: Gunakan Bahasa Indonesia profesional dengan istilah engineering modern yang lazim digunakan developer.';
+
   return `Berikut rincian spesifikasi inisiatif produk dari user:
 ${JSON.stringify(formData, null, 2)}
+${templateDirectives}
+
+${langInstruction}
 
 Susun PRD lengkap, mendalam, dan terperinci sesuai skema yang diminta:
 1. Analisis dan isi 'archetype_detection' (apakah sekolah, katalog UMKM, SaaS, rental, dll beserta warna & target audiens).
 2. Bedah 5-8 fitur MVP inti ke dalam 'feature_breakdown' secara mendalam (Happy Path, Business Rules, Edge Cases, Tech Mapping, dan Agent Prompt untuk Cursor).
-3. Susun 'roadmap_tree' berfase 1 s/d 4 (FASE 1 s/d FASE 4) dengan rincian sub_features yang atomic untuk visual tree node roadmap.
+3. Susun 'roadmap_tree' berfase dinamis sesuai kompleksitas produk (misal: 2-3 fase untuk perkakas simpel/landing page, 4 fase untuk SaaS/MVP standar, atau 5-6 fase untuk platform enterprise kompleks) dengan rincian sub_features yang atomic untuk visual tree node roadmap.
 4. Buat 5 diagram arsitektur Mermaid.js yang valid dan siap render.
 Jangan buat jawaban ringkas generik. Berikan elaborasi teknis yang matang untuk setiap kategori!`;
 }
 
-export function buildClarificationPrompt(userIdea: string): string {
-  return `Kamu adalah Senior Product Architect & Lead Discovery Engineer. User ingin membuat aplikasi/produk dengan ide:
-"${userIdea}"
+export function buildClarificationPrompt(
+  userIdea: string,
+  templateId?: string,
+  language: 'id' | 'en' = 'id'
+): string {
+  let contextNote = '';
+  if (templateId === 'mobile-app') {
+    contextNote = '\nKONTEKS ARSITEKTUR TERPILIH: Aplikasi Mobile Smartphone (React Native / Expo Router v3). Pertanyaan teknis dapat mengarah ke alur notifikasi push, caching offline, atau sensor HP jika relevan.';
+  } else if (templateId === 'ai-service') {
+    contextNote = '\nKONTEKS ARSITEKTUR TERPILIH: Production AI Agent & Vector Service (FastAPI + pgvector). Pertanyaan teknis dapat mengarah ke sumber dokumen/pengetahuan, mode response (streaming/batch), atau integrasi model LLM.';
+  } else if (templateId === 'custom') {
+    contextNote = '\nKONTEKS ARSITEKTUR TERPILIH: Arsitektur Kustom Pengguna. Sesuaikan pertanyaan arsitektural dengan integrasi dan flow data yang cocok untuk kombinasi stack pilihan pengguna.';
+  }
 
-Tugasmu:
-Buat 4-5 pertanyaan interaktif (Smart Discovery) yang SANGAT SPESIFIK dan KONTEKSTUAL untuk ide produk di atas, lengkap dengan opsi jawaban berbentuk badge chips yang realistis dan relevan:
+  const langDirective =
+    language === 'en'
+      ? '\nLANGUAGE DIRECTIVE: Output all questions, options labels, and descriptions strictly in natural, professional ENGLISH.'
+      : '\nLANGUAGE DIRECTIVE: Gunakan Bahasa Indonesia profesional dan istilah bisnis/teknis yang lazim.';
 
-1. Pertanyaan 1 (Target User & Masalah Nyata):
-   - Kategori: "target_user"
-   - Tanya siapa yang paling butuh aplikasi ini dan bagaimana cara manual mereka mengatasi masalah saat ini.
-   - isMultiSelect: false
-   - Berikan 4-5 pilihan chip jawaban spesifik bidang produk tersebut.
+  return `Kamu adalah Principal Product Architect & Lead Discovery Engineer kelas dunia.
+Tugasmu adalah membedah ide inisiatif produk berikut dan merumuskan antara 4 HINGGA MAKSIMAL 10 PERTANYAAN PENEMUAN (Product Discovery) yang SANGAT TAJAM, SPESIFIK INDUSTRI, dan KRUSIAL secara arsitektur bisnis & teknis:
 
-2. Pertanyaan 2 (First-Time User Core Action):
-   - Kategori: "core_flow"
-   - Tanya 1 hal utama yang wajib diselesaikan user saat pertama kali buka aplikasi sebelum menutupnya.
-   - isMultiSelect: false
-   - Berikan 4-5 pilihan chip jawaban konkret.
+IDE PRODUK USER:
+"${userIdea}"${contextNote}
+${langDirective}
 
-3. Pertanyaan 3 (Prioritas Fitur Wajib MVP):
-   - Kategori: "feature_priority"
-   - Tanya 3 fitur yang paling wajib ada di aplikasi ini untuk rilis awal.
-   - isMultiSelect: true
-   - Berikan 5-7 pilihan chip fitur yang sangat spesifik untuk ide produk tersebut (misal jika rental tenda: katalog alat, filter & cari, jadwal & tanggal, kirim order ke WA, dashboard admin).
+PEDOMAN JUMLAH PERTANYAAN (DINAMIS 4 - 10 PERTANYAAN SESUAI KOMPLEKSITAS):
+- Jika ide produk simpel (misal landing page, bio link, kalkulator mini): buat 4-5 pertanyaan.
+- Jika ide produk menengah (misal toko online UMKM, barbershop booking, blog/portal berita): buat 5-7 pertanyaan.
+- Jika ide produk kompleks (misal marketplace, rental multi-cabang, SaaS B2B, ERP sekolah/pesantren, sistem logistik/klinik): buat 7-10 pertanyaan mendalam agar seluruh pilar operasional terbedah tuntas.
 
-4. Pertanyaan 4 (Diferensiasi & Keunggulan):
-   - Kategori: "value_proposition"
-   - Tanya apa keunggulan utama aplikasi ini dibanding cara/solusi yang ada sekarang.
-   - isMultiSelect: false
-   - Berikan 4-5 pilihan chip keunggulan konkret.
+ATURAN UTAMA & LARANGAN KERAS (ANTI-TEMPLATE GUARDRAILS):
+1. DILARANG KERAS menanyakan hal klise/generik yang tidak bernilai teknis, seperti:
+   - ❌ "Apakah aplikasi berbasis Web atau Mobile?"
+   - ❌ "Siapa target audiens Anda?" / "Ceritakan seseorang yang butuh..."
+   - ❌ "Mengapa Anda ingin membuat aplikasi ini?"
+   - ❌ "Fitur apa saja yang wajib ada di MVP?" dengan opsi umum membosankan seperti Login, Register, Profil, Lupa Password.
+2. WAJIB LANGSUNG MASUK KE JANTUNG OPERASIONAL & ATURAN BISNIS PRODUK:
+   - Setiap pertanyaan WAJIB menyebut kata benda atau proses khas dari ide produk tersebut (misal jika rental alat outdoor: sebut alat sewa, jaminan KTP, denda telat; jika sekolah: sebut PPDB, wali murid, verifikasi berkas; jika kasir/POS: sebut shift kasir, metode bayar QRIS, cetak struk; jika kursus: sebut materi video, kuis kelulusan, sertifikat).
 
-5. Pertanyaan 5 (Retensi & Alasan Balik Lagi):
-   - Kategori: "retention_trigger"
-   - Tanya apa yang membuat user akan kembali menggunakan aplikasi ini secara berulang.
-   - isMultiSelect: false
-   - Berikan 4-5 pilihan chip alasan retensi yang relevan.
+ATURAN MULTI-SELECT FLEKSIBEL (isMultiSelect):
+- Set 'isMultiSelect: true' kapan pun sebuah pertanyaan di dunia nyata wajar/butuh memilih LEBIH DARI SATU opsi.
+  Contoh pertanyaan yang WAJIB isMultiSelect: true:
+  * Integrasi pihak ketiga & eksternal (misal: WhatsApp Gateway + QRIS Dinamis + Cetak Struk).
+  * Struktur peran pengguna / aktor sistem (misal: Owner + Kasir Lapangan + Pelanggan).
+  * Modul fitur prioritas MVP (misal: pilih beberapa modul operasional wajib).
+  * Saluran notifikasi / kanal pembayaran / metode operasional.
+- Set 'isMultiSelect: false' HANYA jika pertanyaan tersebut merupakan pilihan eksklusif (misal: alur transaksi dasar apakah bayar lunas di muka vs DP 50%, atau skema perhitungan tarif sewa).
+
+PILAR-PILAR ARSITEKTUR YANG DAPAT DIBEDAH:
+1. Mekanisme Transaksi & Alur Inti ('core_flow')
+2. Edge Case & Mitigasi Risiko Operasional ('risk_management')
+3. Integrasi Eksternal & Otomasi Pihak Ketiga ('integrations') - biasanya isMultiSelect: true
+4. Struktur Peran Pengguna & Batas Akses ('user_roles') - biasanya isMultiSelect: true jika ada banyak aktor
+5. Skema Monetisasi / Pembayaran / Penagihan ('monetization')
+6. Alur Notifikasi & Saluran Komunikasi ('notifications') - bisa isMultiSelect: true
+7. Manajemen Data & Status Inventaris/Pesanan ('data_management')
+8. Modul Fitur MVP Paling Penentu ('feature_priority') - isMultiSelect: true
 
 Untuk SETIAP pertanyaan:
-- Berikan 'id' unik (contoh: 'q_target_user', 'q_first_action', 'q_core_features', 'q_differentiator', 'q_retention').
-- Berikan 'question' yang jelas, bersahabat, dan tidak teknikal berlebihan.
-- Berikan 'options': array objek { id: string, label: string, description?: string } di mana 'label' ringkas (2-5 kata) untuk badge chip yang enak dibaca.
-- Tentukan 'recommendedOptionId'.
-- Format JSON murni valid sesuai schema.`;
+- id: Berikan ID semantik unik (misal: "q_alur_transaksi", "q_mitigasi_konflik", "q_integrasi_kunci", "q_struktur_aktor", "q_modul_mvp").
+- category: Sesuai kategori pilar di atas.
+- question: Pertanyaan to-the-point, jelas, dan menggunakan istilah bisnis nyata yang elegan.
+- options: Array 3-5 objek { id: string, label: string, description?: string }.
+  * label: Ringkas (2-5 kata), sangat cocok untuk badge chips.
+  * description: 1 kalimat penjelasan teknis/operasional mengapa opsi ini dipilih.
+- recommendedOptionId: Tentukan 1 ID opsi terbaik yang merupakan standar industri / best practice (akan otomatis terpilih awal sebagai default rekomendasi).
+- isMultiSelect: boolean (sesuai aturan fleksibel di atas).
+- inputType: "chips".
+
+Kembalikan format JSON murni yang valid tanpa teks tambahan.`;
 }
 
 export const SECTION_METADATA: Record<

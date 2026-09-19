@@ -36,7 +36,31 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false });
 
       if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true, users: data });
+
+      const now = Date.now();
+      const expiredUserIds: string[] = [];
+      const usersList = (data || []).map((u: any) => {
+        if ((u.subscription_tier === 'pro' || u.subscription_tier === 'plus') && !u.is_admin && u.pro_expires_at) {
+          if (new Date(u.pro_expires_at).getTime() < now) {
+            expiredUserIds.push(u.id);
+            return { ...u, subscription_tier: 'free' };
+          }
+        }
+        return u;
+      });
+
+      if (expiredUserIds.length > 0) {
+        try {
+          await adminSupabase
+            .from('profiles')
+            .update({ subscription_tier: 'free', updated_at: new Date().toISOString() })
+            .in('id', expiredUserIds);
+        } catch (e) {
+          console.error('Failed to auto-downgrade expired users:', e);
+        }
+      }
+
+      return NextResponse.json({ success: true, users: usersList });
     }
 
     if (action === 'orders') {
@@ -63,9 +87,9 @@ export async function GET(req: NextRequest) {
     if (action === 'live_monitoring') {
       const { data: recentGenerations } = await adminSupabase
         .from('prd_history')
-        .select('id, user_id, title, model_used, created_at')
+        .select('id, user_id, title, model_used, gemini_slot_used, tokens_used, is_server_key, created_at')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(30);
 
       const { count: totalGenCount } = await adminSupabase
         .from('prd_history')
@@ -73,17 +97,35 @@ export async function GET(req: NextRequest) {
 
       const { data: profilesData } = await adminSupabase
         .from('profiles')
-        .select('id, email, full_name, subscription_tier, trial_count, updated_at');
+        .select('id, email, full_name, subscription_tier, assigned_gemini_slot, is_banned, trial_count, total_server_tokens, updated_at');
 
-      const profileMap = new Map<string, { email?: string; full_name?: string; tier?: string }>();
-      (profilesData || []).forEach((p) => {
-        profileMap.set(p.id, { email: p.email, full_name: p.full_name, tier: p.subscription_tier });
+      const profileMap = new Map<string, { email?: string; full_name?: string; tier?: string; slot?: string; isBanned?: boolean; tokens?: number }>();
+      (profilesData || []).forEach((p: any) => {
+        profileMap.set(p.id, {
+          email: p.email,
+          full_name: p.full_name,
+          tier: p.subscription_tier,
+          slot: p.assigned_gemini_slot,
+          isBanned: p.is_banned,
+          tokens: p.total_server_tokens || 0,
+        });
       });
 
-      const enrichedGenerations = (recentGenerations || []).map((g) => {
+      // Sum server tokens from profiles and from recorded generations
+      const totalServerTokensFromProfiles = (profilesData || []).reduce((acc: number, p: any) => acc + (p.total_server_tokens || 0), 0);
+      const serverTokensFromHistory = (recentGenerations || [])
+        .filter((g: any) => g.is_server_key !== false)
+        .reduce((acc: number, g: any) => acc + (g.tokens_used || 0), 0);
+
+      const computedTotalTokens = Math.max(totalServerTokensFromProfiles, serverTokensFromHistory);
+
+      const enrichedGenerations = (recentGenerations || []).map((g: any) => {
         const prof = g.user_id ? profileMap.get(g.user_id) : undefined;
         return {
           ...g,
+          gemini_slot_used: g.gemini_slot_used || null,
+          tokens_used: g.tokens_used || 0,
+          is_server_key: typeof g.is_server_key === 'boolean' ? g.is_server_key : true,
           userEmail: prof?.email || (g.user_id ? 'User ID: ' + g.user_id.slice(0, 8) : 'Pengunjung (Guest/Trial)'),
           userName: prof?.full_name || (g.user_id ? 'Member' : 'Tamu / Visitor'),
           userTier: prof?.tier || (g.user_id ? 'free' : 'trial'),
@@ -95,6 +137,7 @@ export async function GET(req: NextRequest) {
         recentGenerations: enrichedGenerations,
         totalGenerations: totalGenCount || 0,
         activeUsersCount: profilesData?.length || 0,
+        totalServerTokens: computedTotalTokens,
       });
     }
 
@@ -116,7 +159,24 @@ export async function POST(req: NextRequest) {
     const adminSupabase = createAdminClient();
 
     if (action === 'approve_order') {
-      const { orderId, userId } = payload;
+      const { orderId, userId, durationDays = 30, targetTier } = payload;
+
+      let grantedTier = targetTier;
+      if (!grantedTier) {
+        const { data: ord } = await adminSupabase
+          .from('payment_orders')
+          .select('admin_notes')
+          .eq('id', orderId)
+          .single();
+        if (ord?.admin_notes?.toLowerCase().includes('tier: plus')) {
+          grantedTier = 'plus';
+        } else {
+          grantedTier = 'pro';
+        }
+      }
+
+      const proExpiresAt = new Date(Date.now() + Number(durationDays) * 24 * 60 * 60 * 1000).toISOString();
+
       const { error: orderErr } = await adminSupabase
         .from('payment_orders')
         .update({ status: 'approved', updated_at: new Date().toISOString() })
@@ -126,12 +186,16 @@ export async function POST(req: NextRequest) {
 
       const { error: profileErr } = await adminSupabase
         .from('profiles')
-        .update({ subscription_tier: 'pro', updated_at: new Date().toISOString() })
+        .update({
+          subscription_tier: grantedTier,
+          pro_expires_at: proExpiresAt,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', userId);
 
       if (profileErr) return NextResponse.json({ success: false, error: profileErr.message }, { status: 500 });
 
-      return NextResponse.json({ success: true, message: 'Pesanan disetujui & Akun Pro telah aktif!' });
+      return NextResponse.json({ success: true, message: `Pesanan disetujui & Akun ${grantedTier.toUpperCase()} telah aktif (${durationDays} hari)!` });
     }
 
     if (action === 'reject_order') {
@@ -146,9 +210,49 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'update_user_tier') {
-      const { userId, tier, resetTrial } = payload;
+      const { userId, tier, resetTrial, durationDays = 30, extendDays, assigned_gemini_slot, is_banned } = payload;
       const updates: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (tier) updates.subscription_tier = tier;
+
+      if (tier) {
+        updates.subscription_tier = tier;
+        if (tier === 'pro' || tier === 'plus') {
+          if (durationDays === 'lifetime') {
+            updates.subscription_tier = 'unlimited';
+            updates.pro_expires_at = null;
+          } else {
+            updates.pro_expires_at = new Date(Date.now() + Number(durationDays) * 24 * 60 * 60 * 1000).toISOString();
+          }
+        } else if (tier === 'free' || tier === 'unlimited') {
+          updates.pro_expires_at = null;
+        }
+      }
+
+      if (extendDays && typeof extendDays === 'number') {
+        const { data: userProfile } = await adminSupabase
+          .from('profiles')
+          .select('pro_expires_at, subscription_tier')
+          .eq('id', userId)
+          .single();
+
+        let baseTime = Date.now();
+        if (userProfile?.pro_expires_at) {
+          const currentExp = new Date(userProfile.pro_expires_at).getTime();
+          if (currentExp > baseTime) {
+            baseTime = currentExp;
+          }
+        }
+        updates.subscription_tier = userProfile?.subscription_tier === 'plus' ? 'plus' : 'pro';
+        updates.pro_expires_at = new Date(baseTime + extendDays * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      if (assigned_gemini_slot !== undefined) {
+        updates.assigned_gemini_slot = assigned_gemini_slot;
+      }
+
+      if (typeof is_banned === 'boolean') {
+        updates.is_banned = is_banned;
+      }
+
       if (resetTrial) updates.trial_count = 0;
 
       const { error } = await adminSupabase
@@ -156,8 +260,52 @@ export async function POST(req: NextRequest) {
         .update(updates)
         .eq('id', userId);
 
-      if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      if (error) {
+        if (error.message?.includes('schema cache') || error.message?.includes('column')) {
+          return NextResponse.json({
+            success: false,
+            error: `Database Supabase memerlukan migrasi kolom (${error.message}). Jalankan supabase_migration_v2.sql di Supabase SQL Editor.`
+          }, { status: 500 });
+        }
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
       return NextResponse.json({ success: true, message: 'Data user diperbarui' });
+    }
+
+    if (action === 'assign_gemini_slot') {
+      const { userId, slotId } = payload;
+      const { error } = await adminSupabase
+        .from('profiles')
+        .update({ assigned_gemini_slot: slotId || null, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (error) {
+        if (error.message?.includes('schema cache') || error.message?.includes('assigned_gemini_slot') || error.message?.includes('column')) {
+          return NextResponse.json({
+            success: false,
+            error: `Kolom assigned_gemini_slot belum ada di Supabase (${error.message}). Harap jalankan script supabase_migration_v2.sql di Supabase SQL Editor.`
+          }, { status: 500 });
+        }
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ success: true, message: 'Slot Gemini pengguna berhasil diperbarui' });
+    }
+
+    if (action === 'toggle_user_ban') {
+      const { userId, isBanned } = payload;
+      const { error } = await adminSupabase
+        .from('profiles')
+        .update({ is_banned: Boolean(isBanned), updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (error) {
+        if (error.message?.includes('schema cache') || error.message?.includes('is_banned') || error.message?.includes('column')) {
+          return NextResponse.json({
+            success: false,
+            error: `Kolom is_banned belum ada di Supabase (${error.message}). Harap jalankan script supabase_migration_v2.sql di Supabase SQL Editor.`
+          }, { status: 500 });
+        }
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ success: true, message: isBanned ? 'Pengguna berhasil diblokir' : 'Blokir pengguna dibuka' });
     }
 
     if (action === 'test_ai_endpoint') {
@@ -258,7 +406,7 @@ export async function POST(req: NextRequest) {
         const availableModels: string[] = (listData?.models || [])
           .map((m: any) => m.name?.replace('models/', ''))
           .filter((name: string) =>
-            name && (name.includes('gemini') || name.includes('flash') || name.includes('pro'))
+            name && (name.includes('gemini') || name.includes('flash') || name.includes('pro') || name.includes('gemma') || name.includes('thinking'))
           );
 
         return NextResponse.json({
@@ -266,7 +414,7 @@ export async function POST(req: NextRequest) {
           slotId,
           status: 'online',
           latencyMs,
-          models: availableModels.slice(0, 8),
+          models: availableModels,
           lastChecked: new Date().toLocaleTimeString('id-ID'),
         });
       } catch (err: unknown) {

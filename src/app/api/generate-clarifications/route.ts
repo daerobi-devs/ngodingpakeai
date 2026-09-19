@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createKeyPool, generateClarifications, getKeysFromSettings } from "@/lib/gemini/gemini-client";
+import { generateClarificationsUnified } from "@/lib/ai/ai-service";
 import { buildClarificationPrompt } from "@/lib/gemini/prompts";
 import { getDomainDiscoveryQuestions } from "@/lib/gemini/domain-discovery";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { Profile, SystemSettings } from "@/lib/supabase/types";
 
 export async function POST(req: NextRequest) {
+  let userIdea = "";
   try {
     const body = await req.json();
-    const userIdea: string = body.userIdea || "";
+    userIdea = body.userIdea || "";
+    const templateId = body.templateId;
+    const language = body.language || 'id';
+    const userId = body.userId;
 
     if (!userIdea.trim()) {
       return NextResponse.json(
@@ -16,72 +21,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Instant domain-specific fallback questions ready in < 5ms
-    const domainQuestions = getDomainDiscoveryQuestions(userIdea);
+    const adminSupabase = createAdminClient();
+    let systemSettings: SystemSettings = {
+      id: "default",
+      auth_mode: "hybrid",
+      api_key_mode: "byok_only",
+      monetization_mode: "freemium",
+      ai_provider: "gemini_direct",
+      trial_limit: 1,
+      qris_merchant_name: "NGODINGPAKEPRD OFFICIAL",
+      pro_price_rp: 49000,
+      pro_price_formatted: "Rp 49.000 / Lifetime Access",
+    };
 
-    let headerKeys = req.headers.get("x-gemini-api-key") || "";
-    let envKeys = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "";
-
-    let masterKeys = "";
-    if (!headerKeys.trim() && !envKeys.trim()) {
-      try {
-        const adminSupabase = createAdminClient();
-        const { data } = await adminSupabase
-          .from("system_settings")
-          .select("gemini_master_keys, gemini_slots")
-          .eq("id", "default")
-          .single();
-        if (data) {
-          const keys = getKeysFromSettings(data);
-          if (keys.length > 0) {
-            masterKeys = keys.join(",");
-          }
-        }
-      } catch (e) {
-        console.warn("Could not fetch master keys:", e);
+    try {
+      const { data: dbSettings } = await adminSupabase
+        .from("system_settings")
+        .select("*")
+        .eq("id", "default")
+        .single();
+      if (dbSettings) {
+        systemSettings = dbSettings as SystemSettings;
       }
+    } catch {
+      // use default fallback
     }
 
-    const combinedKeys = [
-      ...headerKeys.split(",").map((k) => k.trim()),
-      ...envKeys.split(",").map((k) => k.trim()),
-      ...masterKeys.split(",").map((k) => k.trim()),
-    ].filter((k) => k.length > 0);
-
-    // If no keys configured, return instant domain questions without error
-    if (combinedKeys.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          userIdea,
-          questions: domainQuestions,
-        },
-      });
+    // Strict Login Mode Enforcement
+    let userProfile: Profile | null = null;
+    if (userId) {
+      const { data: prof } = await adminSupabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (prof) userProfile = prof as Profile;
     }
 
-    const keyPool = createKeyPool(combinedKeys);
-    const prompt = buildClarificationPrompt(userIdea);
-    const preferredModel = req.headers.get("x-gemini-preferred-model") || undefined;
+    if (systemSettings.auth_mode === 'strict_login' && !userProfile) {
+      return NextResponse.json(
+        { success: false, error: 'Akses dibatasi. Silakan Login menggunakan Akun Google terlebih dahulu.' },
+        { status: 401 }
+      );
+    }
 
-    // Fast AI race with 3.5s timeout: if Gemini is slow or fails, seamlessly use domain questions!
-    const aiPromise = generateClarifications({
-      apiKeyPool: keyPool,
+    const userGeminiKey = req.headers.get("x-gemini-api-key") || "";
+    const userPreferredModel = req.headers.get("x-gemini-preferred-model") || undefined;
+    const prompt = buildClarificationPrompt(userIdea, templateId, language);
+
+    const questions = await generateClarificationsUnified({
+      systemSettings,
+      userGeminiKey,
       userIdea,
       prompt,
-      preferredModel,
+      userPreferredModel,
     });
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("AI clarification timeout (fallback to domain)")), 3500)
-    );
-
-    let questions = domainQuestions;
-    try {
-      questions = await Promise.race([aiPromise, timeoutPromise]);
-    } catch (raceErr) {
-      console.warn("Using instant domain discovery questions:", raceErr);
-      questions = domainQuestions;
-    }
 
     return NextResponse.json({
       success: true,
@@ -92,14 +86,14 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Error in generate-clarifications:", error);
-    const body = await req.json().catch(() => ({}));
-    const fallback = getDomainDiscoveryQuestions(body?.userIdea || "Aplikasi Web");
+    const fallback = getDomainDiscoveryQuestions(userIdea || "Aplikasi Web");
     return NextResponse.json({
       success: true,
       data: {
-        userIdea: body?.userIdea || "",
+        userIdea,
         questions: fallback,
       },
     });
   }
 }
+

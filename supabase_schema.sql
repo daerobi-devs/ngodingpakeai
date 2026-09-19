@@ -28,6 +28,10 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFA
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS trial_count INTEGER DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS assigned_gemini_slot TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS daily_limit_override INTEGER;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS total_server_tokens INTEGER DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 3. TABEL SYSTEM SETTINGS (Pengaturan Master Switchboard, AI Engine & Monetisasi)
@@ -77,6 +81,9 @@ ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS pro_ai_provider TEXT
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS pro_model TEXT DEFAULT 'deepseek-chat';
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS free_ai_provider TEXT DEFAULT 'gemini_direct';
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS free_model TEXT DEFAULT 'gemini-flash-latest';
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_gemini_slot TEXT DEFAULT 'auto';
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS pricing_tiers JSONB;
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS announcement_banner JSONB;
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 4. TABEL PRD HISTORY & GENERATIONS (Riwayat Hasil Generate PRD Pengguna)
@@ -86,8 +93,15 @@ CREATE TABLE IF NOT EXISTS public.prd_history (
   title TEXT NOT NULL,
   prd_data JSONB NOT NULL,
   model_used TEXT,
+  tokens_used INTEGER DEFAULT 0,
+  is_server_key BOOLEAN DEFAULT false,
+  gemini_slot_used TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS is_server_key BOOLEAN DEFAULT false;
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS gemini_slot_used TEXT;
 
 CREATE TABLE IF NOT EXISTS public.prd_generations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -110,6 +124,7 @@ CREATE TABLE IF NOT EXISTS public.payment_orders (
   payment_method TEXT DEFAULT 'QRIS GoPay',
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   admin_notes TEXT,
+  tier_id TEXT DEFAULT 'pro',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -122,6 +137,7 @@ ALTER TABLE public.payment_orders ADD COLUMN IF NOT EXISTS amount_formatted TEXT
 ALTER TABLE public.payment_orders ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'QRIS GoPay';
 ALTER TABLE public.payment_orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
 ALTER TABLE public.payment_orders ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+ALTER TABLE public.payment_orders ADD COLUMN IF NOT EXISTS tier_id TEXT DEFAULT 'pro';
 
 -- 6. DEFAULT RECORD UNTUK SYSTEM SETTINGS
 INSERT INTO public.system_settings (

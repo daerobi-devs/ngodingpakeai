@@ -18,6 +18,7 @@ interface ApiKeyModalProps {
   onSaveKeys: (keys: string[], preferredModel?: string) => void;
   currentKeys: string[];
   currentPreferredModel?: string;
+  required?: boolean;
 }
 
 const PRESET_GEMINI_MODELS = [
@@ -26,7 +27,7 @@ const PRESET_GEMINI_MODELS = [
     name: "Gemini 3.8 Flash",
     tag: "Terbaru & Paling Pintar",
     desc: "Optimasi coding & reasoning arsitektur tajam untuk Cursor & Claude Code",
-    badge: "🚀 Rekomendasi Utama",
+    badge: "Rekomendasi Utama",
     badgeClass: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   },
   {
@@ -34,7 +35,7 @@ const PRESET_GEMINI_MODELS = [
     name: "Gemini 3.5 Flash",
     tag: "Agentic & High-Speed",
     desc: "Dioptimalkan untuk eksekusi agentic cepat & formulasi PRD presisi",
-    badge: "⚡ Super Cepat",
+    badge: "Super Cepat",
     badgeClass: "border-blue-500/30 bg-blue-500/10 text-blue-300",
   },
   {
@@ -42,7 +43,7 @@ const PRESET_GEMINI_MODELS = [
     name: "Gemini 3.5 Flash Lite",
     tag: "Ultra Low-Latency",
     desc: "Konsumsi token hemat dan respon instan untuk koneksi terbatas",
-    badge: "🪶 Ringan & Hemat",
+    badge: "Ringan & Hemat",
     badgeClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   },
   {
@@ -50,7 +51,7 @@ const PRESET_GEMINI_MODELS = [
     name: "Gemini Flash Latest",
     tag: "Auto-Track Terbaru",
     desc: "Selalu mengarah otomatis ke rilis Gemini Flash stabil terkini Google",
-    badge: "🔄 Auto Sync",
+    badge: "Auto Sync",
     badgeClass: "border-purple-500/30 bg-purple-500/10 text-purple-300",
   },
   {
@@ -66,7 +67,7 @@ const PRESET_GEMINI_MODELS = [
     name: "Gemini 2.5 Flash",
     tag: "LTS Stable",
     desc: "Versi 2.5 teruji dengan konsistensi output data JSON tinggi",
-    badge: "🛡️ Stabil",
+    badge: "Stabil",
     badgeClass: "border-zinc-700/40 bg-zinc-800/40 text-zinc-300",
   },
 ];
@@ -77,6 +78,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   onSaveKeys,
   currentKeys,
   currentPreferredModel,
+  required = false,
 }) => {
   const [inputVal, setInputVal] = useState("");
   const [selectedModel, setSelectedModel] = useState("gemini-3.8-flash");
@@ -98,19 +100,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       if (!initialModel && typeof window !== "undefined") {
         initialModel = localStorage.getItem("gemini_preferred_model") || "";
       }
-      if (!initialModel) {
-        initialModel = "gemini-3.8-flash";
-      }
-
-      const matchPreset = PRESET_GEMINI_MODELS.find((m) => m.id === initialModel);
-      if (matchPreset) {
-        setSelectedModel(initialModel);
-        setIsCustomModel(false);
-        setCustomModelVal("");
-      } else {
-        setSelectedModel(initialModel);
-        setIsCustomModel(true);
-        setCustomModelVal(initialModel);
+      if (initialModel) {
+        const isPreset = PRESET_GEMINI_MODELS.some((m) => m.id === initialModel);
+        if (isPreset) {
+          setSelectedModel(initialModel);
+          setIsCustomModel(false);
+        } else {
+          setIsCustomModel(true);
+          setCustomModelVal(initialModel);
+        }
       }
     }
   }, [isOpen, currentKeys, currentPreferredModel]);
@@ -118,32 +116,26 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   if (!isOpen) return null;
 
   const handleSave = () => {
-    const parsedKeys = inputVal
-      .split(/[\n,]+/)
+    const parsed = inputVal
+      .split("\n")
       .map((k) => k.trim())
       .filter((k) => k.length > 0);
 
-    const modelToSave =
-      (isCustomModel ? customModelVal.trim() : selectedModel) || "gemini-3.8-flash";
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("gemini_preferred_model", modelToSave);
-    }
-
-    onSaveKeys(parsedKeys, modelToSave);
+    const activeModel = isCustomModel ? customModelVal.trim() : selectedModel;
+    onSaveKeys(parsed, activeModel || undefined);
     onClose();
   };
 
   const handleTestConnection = async () => {
     const parsedKeys = inputVal
-      .split(/[\n,]+/)
+      .split("\n")
       .map((k) => k.trim())
       .filter((k) => k.length > 0);
 
     if (parsedKeys.length === 0) {
       setTestResult({
         valid: false,
-        message: "Masukkan minimal satu Gemini API Key untuk diuji.",
+        message: "Masukkan minimal 1 API Key untuk diuji",
       });
       return;
     }
@@ -178,13 +170,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
       <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 bg-[#111114] p-6 shadow-2xl text-zinc-100 my-auto">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        {/* Close Button - hidden if required and no keys yet */}
+        {!required && (
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
 
         {/* Title */}
         <div className="flex items-center gap-3 mb-4">
@@ -199,34 +193,64 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </span>
             </h3>
             <p className="text-xs text-zinc-400">
-              Mendukung Gemini 3.5 hingga 3.8 & Rotasi Kunci Otomatis
+              {required 
+                ? "Sistem mewajibkan penggunaan Gemini API Key pribadi untuk memulai pembuatan PRD"
+                : "Mendukung Gemini 3.5 hingga 3.8 & Rotasi Kunci Otomatis"}
             </p>
           </div>
         </div>
 
-        {/* Universal Support Notice */}
+        {/* 1-Minute Clean Guide Banner */}
+        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-950/15 p-4 text-xs">
+          <div className="flex items-center justify-between pb-2 mb-3 border-b border-amber-500/15">
+            <div className="flex items-center gap-2 font-bold text-amber-300">
+              <Key className="h-4 w-4 text-amber-400" />
+              <span>Panduan Dapatkan Kunci Gratis 1-Menit</span>
+            </div>
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 text-zinc-950 font-bold text-[11px] hover:bg-amber-400 transition-colors shadow-xs"
+            >
+              Buka Google AI Studio <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+            <div className="rounded-lg bg-zinc-900/80 border border-zinc-800/80 p-2.5">
+              <span className="font-mono text-[10px] font-bold text-amber-400 block mb-1">LANGKAH 01</span>
+              <p className="text-[11px] text-zinc-300 font-medium">Buka Google AI Studio</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Login menggunakan akun Google apapun (100% gratis)</p>
+            </div>
+            <div className="rounded-lg bg-zinc-900/80 border border-zinc-800/80 p-2.5">
+              <span className="font-mono text-[10px] font-bold text-amber-400 block mb-1">LANGKAH 02</span>
+              <p className="text-[11px] text-zinc-300 font-medium">Klik &quot;Create API Key&quot;</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Pilih Create in new project dalam 1 klik instan</p>
+            </div>
+            <div className="rounded-lg bg-zinc-900/80 border border-zinc-800/80 p-2.5">
+              <span className="font-mono text-[10px] font-bold text-amber-400 block mb-1">LANGKAH 03</span>
+              <p className="text-[11px] text-zinc-300 font-medium">Salin &amp; Tempel di Sini</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Paste kode key di kolom bawah lalu simpan</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Universal Support & Local Storage Notice */}
         <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-950/15 p-3 text-xs text-emerald-300">
           <Shield className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
           <div>
-            <span className="font-semibold text-emerald-200">API Key Universal Google AI Studio:</span>
+            <span className="font-semibold text-emerald-200">Kunci Tersimpan Aman Secara Lokal:</span>
             <p className="text-[11px] text-emerald-300/80 mt-0.5 leading-relaxed">
-              API key Google Anda berlaku universal untuk seluruh model (termasuk Gemini 3.5 & 3.8). Kunci disimpan secara lokal di browser (`localStorage`) dan tidak pernah disimpan di database kami.
+              API key disimpan langsung di memori browser Anda (<code>localStorage</code>) dan tidak pernah disimpan di database server kami.
             </p>
           </div>
         </div>
 
         {/* Input Area */}
         <div className="space-y-2 mb-4">
-          <label className="text-xs font-semibold text-zinc-300 flex justify-between items-center">
-            <span>Gemini API Key (tempel 1 per baris untuk multi-key pool):</span>
-            <a
-              href="https://aistudio.google.com/app/apikey"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-[11px] text-amber-400 hover:underline"
-            >
-              Dapatkan Key Gratis <ExternalLink className="h-3 w-3" />
-            </a>
+          <label className="text-xs font-semibold text-zinc-300 block">
+            Gemini API Key (tempel 1 per baris untuk multi-key pool):
           </label>
           <textarea
             rows={3}
@@ -391,13 +415,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           </button>
 
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-zinc-800 px-3.5 py-2 text-xs font-semibold text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
-            >
-              Batal
-            </button>
+            {!required && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-zinc-800 px-3.5 py-2 text-xs font-semibold text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+              >
+                Batal
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSave}

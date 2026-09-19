@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { SystemSettings } from '@/lib/supabase/types';
+import { DEFAULT_PRICING_TIERS, SystemSettings } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -11,9 +11,16 @@ const DEFAULT_SETTINGS: SystemSettings = {
   api_key_mode: 'server_managed',
   monetization_mode: 'freemium',
   ai_provider: 'gemini_direct',
+  global_gemini_slot: 'auto',
+  pricing_tiers: DEFAULT_PRICING_TIERS,
+  announcement_banner: {
+    active: false,
+    message: '',
+    type: 'info',
+  },
   trial_limit: 1,
   qris_merchant_name: 'NGODINGPAKEPRD OFFICIAL',
-  qris_gopay_number: '0821-4475-4089',
+  qris_gopay_number: '0851-2360-7711',
   qris_image_url: '/qris-gopay-placeholder.png',
   pro_price_rp: 49000,
   pro_price_formatted: 'Rp 49.000 / Lifetime Access',
@@ -95,6 +102,9 @@ export async function PUT(req: NextRequest) {
       // Gracefully retry with core columns if optional extension columns are not yet migrated
       const coreUpdates = { ...updates };
       delete coreUpdates.gemini_slots;
+      delete coreUpdates.global_gemini_slot;
+      delete coreUpdates.pricing_tiers;
+      delete coreUpdates.announcement_banner;
       delete coreUpdates.pro_ai_provider;
       delete coreUpdates.pro_model;
       delete coreUpdates.free_ai_provider;

@@ -113,33 +113,65 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
     return ans && ans.length > 0 && ans[0] !== '[Dilewati oleh user]';
   }).length;
 
-  // Compile answers into full PRDFormData
+  // Compile answers dynamically and intelligently into full PRDFormData
   const handleFinalSubmit = () => {
-    const q1 = answers[questions[0]?.id] || [];
-    const q2 = answers[questions[1]?.id] || [];
-    const q3 = answers[questions[2]?.id] || [];
-    const q4 = answers[questions[3]?.id] || [];
-    const q5 = answers[questions[4]?.id] || [];
+    // Helper to find answers by category or semantic id keywords with fallback index
+    const getAnswersBy = (keywords: string[], fallbackIndex: number): string[] => {
+      const found = questions.find((q) =>
+        keywords.some((k) =>
+          q.category.toLowerCase().includes(k) || q.id.toLowerCase().includes(k)
+        )
+      );
+      if (found && answers[found.id] && answers[found.id].length > 0) {
+        const valid = answers[found.id].filter((a) => a !== '[Dilewati oleh user]');
+        if (valid.length > 0) return valid;
+      }
+      const fb = questions[fallbackIndex];
+      if (fb && answers[fb.id] && answers[fb.id].length > 0) {
+        return answers[fb.id].filter((a) => a !== '[Dilewati oleh user]');
+      }
+      return [];
+    };
+
+    const coreFlowAns = getAnswersBy(['core_flow', 'alur', 'transaksi', 'layanan', 'skema', 'mekanisme'], 0);
+    const riskAns = getAnswersBy(['risk_management', 'mitigasi', 'konflik', 'selisih', 'stok', 'berkas', 'pencegahan'], 1);
+    const integrasiAns = getAnswersBy(['integrations', 'integrasi', 'hardware', 'ekspedisi', 'ekosistem'], 2);
+    const rolesAns = getAnswersBy(['user_roles', 'role', 'aktor', 'struktur', 'shift', 'akses'], 3);
+    const featureAns = getAnswersBy(['feature_priority', 'modul', 'mvp', 'fitur'], 4);
 
     const compiledTitle = idea.length > 60 ? idea.slice(0, 57) + '...' : idea;
 
-    const coreProblem = q1.length > 0
-      ? `Masalah pengguna saat ini: ${q1.join(', ')}. Pengguna membutuhkan solusi digital yang praktis untuk ${idea}.`
-      : `Pengguna membutuhkan platform terintegrasi untuk ${idea}.`;
+    const coreProblem = rolesAns.length > 0
+      ? `Kebutuhan operasional untuk ${rolesAns.join(', ')}: Sistem saat ini membutuhkan otomatisasi alur digital untuk ${idea} guna mencegah inefisiensi dan kendala operasional.`
+      : `Pengguna dan pengelola membutuhkan platform digital terpadu untuk efisiensi ${idea}.`;
 
-    const hypothesis = q2.length > 0
-      ? `Dengan menyediakan aksi instan "${q2.join(', ')}", pengguna dapat menyelesaikan kebutuhan mereka lebih cepat tanpa kendala manual.`
-      : `Dengan platform ini, efisiensi operasional dan kepuasan pengguna meningkat secara terukur.`;
+    const hypothesis = coreFlowAns.length > 0
+      ? `Dengan mengimplementasikan mekanisme alur "${coreFlowAns.join(', ')}", proses transaksi dan pertukaran data berjalan cepat, akurat, dan minim friksi bagi pengguna.`
+      : `Dengan sistem ini, efisiensi operasional dan kepuasan pengguna meningkat secara terukur.`;
 
-    const strategyFit = q4.length > 0
-      ? `Keunggulan kompetitif utama: ${q4.join(', ')}.`
-      : `Fokus pada kemudahan akses dan reliabilitas sistem.`;
+    const strategyFit = integrasiAns.length > 0
+      ? `Keunggulan arsitektur & integrasi kunci: Mengandalkan ${integrasiAns.join(' serta ')} untuk menjamin keandalan dan daya saing operasional.`
+      : `Fokus pada kemudahan akses, keandalan sistem, dan reliabilitas data.`;
 
-    const scopeFeatures = q3.length > 0 ? q3.join('\n') : `${idea}\nKatalog & Manajemen Data\nNotifikasi`;
+    // Combine selected MVP features with integration points
+    const scopeItems: string[] = [];
+    if (featureAns.length > 0) {
+      scopeItems.push(...featureAns);
+    } else {
+      scopeItems.push(`Modul Operasional Inti ${idea}`, 'Katalog & Manajemen Data', 'Pusat Notifikasi');
+    }
+    if (integrasiAns.length > 0) {
+      scopeItems.push(`Integrasi Layanan: ${integrasiAns.join(', ')}`);
+    }
 
-    const retentionNotes = q5.length > 0
-      ? `Faktor retensi & retargeting: ${q5.join(', ')}.`
-      : 'User experience yang cepat dan responsif.';
+    const riskDetection = 'Log anomali transaksi terpusat, validasi integritas skema database, dan pemantauan status API realtime.';
+    const fallbackKillSwitch = riskAns.length > 0
+      ? `Kebijakan mitigasi risiko: ${riskAns.join('. ')}. Sediakan saklar darurat (kill-switch) dan mode baca-saja jika terjadi gangguan pihak ketiga.`
+      : 'Fallback mode baca-saja jika backend transaksi atau pihak ketiga mengalami kendala.';
+
+    const primaryOwner = rolesAns.length > 0
+      ? `Lead Product Architect / PIC Operasional (${rolesAns[0]})`
+      : 'Lead Developer / Product Owner';
 
     const formData: PRDFormData = {
       title: compiledTitle,
@@ -149,29 +181,29 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
         strategy_fit: strategyFit,
       },
       boundaries: {
-        scope: scopeFeatures,
-        non_goals: 'Fitur di luar lingkup MVP tahap 1 sengaja ditunda agar fokus pada validasi produk dan stabilitas sistem awal.',
+        scope: scopeItems.join('\n'),
+        non_goals: 'Fitur di luar lingkup prioritas MVP fase 1 sengaja ditunda agar pengembangan terfokus pada stabilitas alur transaksi inti dan rilis tepat waktu.',
       },
       success_measurement: {
-        offline_golden_set: 'Semua alur utama (happy path) lolos validasi tanpa error blocking.',
-        human_review: 'Review usability ramah untuk pengguna baru (first-time user).',
-        online_metrics: `Tingkat adopsi fitur utama > 75%, ${retentionNotes}`,
+        offline_golden_set: 'Semua alur utama (happy path) lolos validasi fungsional dan pengujian end-to-end tanpa blocking bug.',
+        human_review: 'Uji kepuasan operasional ramah pengguna dengan alur transaksi yang jelas dan minim klik.',
+        online_metrics: `Tingkat keberhasilan transaksi > 95%, adopsi modul utama > 75%, latensi respons API < 1.5 detik.`,
       },
       rollout_plan: {
         exposure: '100% rilis publik web responsive.',
-        duration: 'Fase evaluasi 14 hari pasca peluncuran.',
-        segments_gates: 'Pastikan performa loading < 2 detik dan tidak ada crash log di database.',
+        duration: 'Fase evaluasi 14 hari pasca peluncuran awal.',
+        segments_gates: 'Pastikan performa loading < 2 detik dan tidak ada error fatal di log server.',
       },
       risk_management: {
-        detection: 'Log error terpusat dan monitoring status API realtime.',
-        fallback_kill_switch: 'Fallback mode baca-saja jika backend transaksi mengalami kendala.',
+        detection: riskDetection,
+        fallback_kill_switch: fallbackKillSwitch,
       },
       ownership_action: {
-        primary_owner: 'Lead Developer / Product Owner',
-        decision_points: 'Evaluasi metrik mingguan untuk menentukan prioritas fitur fase berikutnya.',
+        primary_owner: primaryOwner,
+        decision_points: 'Evaluasi metrik operasional mingguan untuk menentukan peningkatan fitur fase 2.',
       },
       ai_specific: {
-        behavior_contract: `Tech stack wajib: ${techStack.frontend}, ${techStack.backend}, ${techStack.database}.\nSistem harus menerapkan kode modular, type-safe, dan responsive.`,
+        behavior_contract: `Tech stack wajib: ${techStack.frontend}, ${techStack.backend}, ${techStack.database}.\nSistem harus menerapkan kode modular, type-safe, dan responsive.\nAlur bisnis wajib mengadopsi mekanisme: ${coreFlowAns.join(', ') || 'Alur standar industri'}.`,
         guardrails: 'Validasi input dengan Zod, sanitasi data, cegah SQL injection, dan gunakan environment variables aman.',
       },
     };
@@ -180,26 +212,62 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto py-6 sm:py-10 px-4">
+    <div className="w-full max-w-3xl mx-auto pt-2 sm:pt-4 pb-8 px-4">
       {/* 1. Step Progress Indicator */}
-      <div className="flex items-center justify-center gap-3 sm:gap-6 mb-10 text-xs sm:text-sm font-medium">
+      <div className="flex items-center justify-center gap-3 sm:gap-6 mb-6 sm:mb-8 text-xs sm:text-sm font-medium">
+        {/* Step 1: Konsep Ide (Done) */}
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          disabled={isGeneratingPrd}
+          className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors cursor-pointer disabled:cursor-not-allowed"
         >
           <Check className="h-3.5 w-3.5 text-emerald-400" />
-          <span>Input ide</span>
+          <span>Konsep Ide</span>
         </button>
-        <div className="h-px w-8 sm:w-16 bg-amber-500/50" />
-        <div className="flex items-center gap-2 text-amber-400 font-semibold">
-          <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20" />
-          <span>Klarifikasi kebutuhan</span>
+
+        {/* Connector 1 -> 2 (Finished) */}
+        <div className="h-0.5 w-10 sm:w-20 bg-amber-500/50 rounded-full" />
+
+        {/* Step 2: Bedah Kebutuhan */}
+        <div className={`flex items-center gap-2 font-semibold transition-all ${
+          isGeneratingPrd ? 'text-zinc-400' : 'text-amber-400'
+        }`}>
+          {isGeneratingPrd ? (
+            <Check className="h-3.5 w-3.5 text-emerald-400" />
+          ) : (
+            <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20" />
+          )}
+          <span>Bedah Kebutuhan</span>
         </div>
-        <div className="h-px w-8 sm:w-16 bg-zinc-800" />
-        <div className="flex items-center gap-2 text-zinc-500">
-          <span className="flex h-2 w-2 rounded-full bg-zinc-700" />
-          <span>Blueprint & Roadmap</span>
+
+        {/* Connector 2 -> 3 with Flowing Beam when generating PRD */}
+        <div className="relative h-0.5 w-10 sm:w-20 bg-zinc-800 rounded-full overflow-hidden">
+          {isGeneratingPrd ? (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400 to-transparent w-full animate-beam-flow shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+          ) : (
+            <div className="h-full w-full bg-zinc-800" />
+          )}
+        </div>
+
+        {/* Step 3: Cetak Biru & Roadmap */}
+        <div className={`flex items-center gap-2 transition-all ${
+          isGeneratingPrd ? 'text-amber-400 font-semibold' : 'text-zinc-500'
+        }`}>
+          {isGeneratingPrd ? (
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 ring-2 ring-amber-400/30" />
+            </span>
+          ) : (
+            <span className="flex h-2 w-2 rounded-full bg-zinc-700" />
+          )}
+          <span>Cetak Biru & Roadmap</span>
+          {isGeneratingPrd && (
+            <span className="text-[10px] font-mono text-amber-400/80 animate-pulse hidden sm:inline">
+              (Merancang...)
+            </span>
+          )}
         </div>
       </div>
 

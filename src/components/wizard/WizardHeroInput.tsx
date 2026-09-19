@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowRight,
   Globe,
@@ -8,8 +8,43 @@ import {
   Box,
   ChevronDown,
   Loader2,
-  Lightbulb,
+  Check,
+  SlidersHorizontal,
+  Wrench,
+  Lock,
 } from 'lucide-react';
+import {
+  TEMPLATE_ARCHETYPES,
+  DEFAULT_ARCHETYPE_ID,
+  TemplateArchetype,
+  LanguageOption,
+} from '@/lib/templates/archetypes';
+import { useAuth } from '@/context/AuthContext';
+import { hasTierFeature } from '@/lib/supabase/types';
+import {
+  NextJsLogo,
+  NodeJsLogo,
+  SupabaseLogo,
+  DockerLogo,
+  ReactLogo,
+  FastApiLogo,
+  PostgresLogo,
+  EasLogo,
+  VueLogo,
+  SvelteLogo,
+  AstroLogo,
+  FlutterLogo,
+  GoLogo,
+  PythonLogo,
+  LaravelLogo,
+  MySqlLogo,
+  MongoLogo,
+  SqliteLogo,
+  RedisLogo,
+  CloudflareLogo,
+  AwsLogo,
+} from '@/components/icons/TechIcons';
+import { CustomStackModal } from './CustomStackModal';
 
 export interface TechStackConfig {
   name: string;
@@ -19,6 +54,8 @@ export interface TechStackConfig {
   backend: string;
   database: string;
   deployment: string;
+  templateId?: string;
+  language?: LanguageOption;
 }
 
 export const DEFAULT_TECH_STACK: TechStackConfig = {
@@ -28,93 +65,145 @@ export const DEFAULT_TECH_STACK: TechStackConfig = {
   frontend: 'Next.js 16 + Tailwind CSS',
   backend: 'Next.js Server Actions / Route Handlers',
   database: 'Supabase (PostgreSQL)',
-  deployment: 'Vercel / Docker',
+  deployment: 'Docker (VPS / Coolify)',
+  templateId: 'starter',
+  language: 'id',
 };
-
-// 1. Official Next.js Vector Logo
-const NextJsLogo: React.FC<{ className?: string }> = ({ className = 'h-5 w-5' }) => (
-  <svg viewBox="0 0 180 180" className={className} xmlns="http://www.w3.org/2000/svg">
-    <circle cx="90" cy="90" r="90" fill="#000000" />
-    <path
-      d="M149.508 157.52L69.142 54H54V125.97H66.1136V69.3836L139.999 164.845C143.333 162.614 146.509 160.165 149.508 157.52Z"
-      fill="#FFFFFF"
-    />
-    <path d="M115 54H127.142V126H115V54Z" fill="#FFFFFF" />
-  </svg>
-);
-
-// 2. Official Node.js Hexagon Vector Logo
-const NodeJsLogo: React.FC<{ className?: string }> = ({ className = 'h-5 w-5' }) => (
-  <svg viewBox="0 0 256 289" className={className} xmlns="http://www.w3.org/2000/svg">
-    <path d="M128 0L256 73.9V215.1L128 289L0 215.1V73.9L128 0Z" fill="#5FA04E" />
-    <path d="M128 73.9L192 110.8V178.2L128 215.1L64 178.2V110.8L128 73.9Z" fill="#FFFFFF" />
-    <path d="M128 100L168 123V169L128 192L88 169V123L128 100Z" fill="#5FA04E" />
-  </svg>
-);
-
-// 3. Official Supabase Lightning Vector Logo
-const SupabaseLogo: React.FC<{ className?: string }> = ({ className = 'h-5 w-5' }) => (
-  <svg viewBox="0 0 109 113" className={className} xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M63.7076 110.284C60.8481 113.885 55.0703 111.905 54.9809 107.314L53.9739 55.541H97.1065C104.992 55.541 109.194 64.8327 103.957 70.7397L63.7076 110.284Z"
-      fill="#3ECF8E"
-    />
-    <path
-      d="M45.297 2.71603C48.1565 -0.884877 53.9343 1.09503 54.0237 5.68593L55.0307 57.459H11.8981C4.0127 57.459 -0.189569 48.1673 5.04781 42.2603L45.297 2.71603Z"
-      fill="#249361"
-    />
-  </svg>
-);
-
-// 4. Official Vercel Triangle Vector Logo
-const VercelLogo: React.FC<{ className?: string; isLight?: boolean }> = ({ className = 'h-5 w-5', isLight = false }) => (
-  <svg viewBox="0 0 76 65" className={className} xmlns="http://www.w3.org/2000/svg">
-    <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill={isLight ? '#000000' : '#FFFFFF'} />
-  </svg>
-);
-
-// Quick suggestions for universal ideas
-const QUICK_SUGGESTIONS = [
-  {
-    label: '🏫 Web Profil Sekolah',
-    idea: 'Bikin website profil sekolah modern lengkap dengan pendaftaran PPDB online, direktori guru, dan pengumuman kegiatan siswa.',
-  },
-  {
-    label: '🛒 Toko Online UMKM',
-    idea: 'Bikin toko online e-commerce katalog produk UMKM dengan keranjang belanja, integrasi ongkir, dan checkout langsung ke WhatsApp.',
-  },
-  {
-    label: '⛺ Sewa Alat & Rental',
-    idea: 'Bikin web sewa alat camping dan booking tenda otomatis ada kalender tanggal ketersediaan dan dashboard admin.',
-  },
-  {
-    label: '📊 Kasir & POS',
-    idea: 'Bikin aplikasi kasir POS toko dengan pembayaran QRIS, cetak struk thermal, manajemen stok, dan laporan omzet harian.',
-  },
-  {
-    label: '💼 SaaS Web App',
-    idea: 'Bikin platform SaaS manajemen tugas tim dan kolaborasi proyek dengan dashboard analitik dan subscription billing.',
-  },
-];
 
 interface WizardHeroInputProps {
   initialIdea?: string;
-  onSubmitIdea: (idea: string, stack: TechStackConfig) => void;
+  userName?: string;
+  onSubmitIdea: (idea: string, stack: TechStackConfig, language?: LanguageOption) => void;
   isLoading?: boolean;
   theme?: 'dark' | 'light';
+  initialTemplateId?: string;
+  onRequireUpgrade?: () => void;
 }
 
 export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   initialIdea = '',
+  userName = '',
   onSubmitIdea,
   isLoading = false,
   theme = 'dark',
+  initialTemplateId,
+  onRequireUpgrade,
 }) => {
   const isLight = theme === 'light';
+  const { profile, systemSettings } = useAuth();
+  const userTier = profile?.subscription_tier || 'free';
+  const isAdmin = Boolean(profile?.is_admin);
+
+  const isTemplateLocked = (templateId: string): boolean => {
+    if (isAdmin || userTier === 'unlimited') return false;
+
+    // Starter selalu gratis
+    if (templateId === 'starter') return false;
+
+    // Custom Stack
+    if (templateId === 'custom') {
+      return !hasTierFeature(userTier, 'custom_stack', systemSettings, isAdmin);
+    }
+
+    // Advanced Templates (Mobile App & AI Service)
+    if (templateId === 'mobile-app' || templateId === 'ai-service') {
+      return !hasTierFeature(userTier, 'advanced_templates', systemSettings, isAdmin);
+    }
+
+    return false;
+  };
+
   const [idea, setIdea] = useState(initialIdea);
-  const [techStack, setTechStack] = useState<TechStackConfig>(DEFAULT_TECH_STACK);
-  const [showStackModal, setShowStackModal] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
+    initialTemplateId && TEMPLATE_ARCHETYPES[initialTemplateId] ? initialTemplateId : DEFAULT_ARCHETYPE_ID
+  );
+  const [selectedLanguage, setSelectedLanguage] = useState<LanguageOption>('id');
+  const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTemplateId && TEMPLATE_ARCHETYPES[initialTemplateId]) {
+      setSelectedTemplateId(initialTemplateId);
+    }
+  }, [initialTemplateId]);
+
+  // Typewriter effect for personalized greeting (smooth, runs once on mount/user change)
+  const [typedGreeting, setTypedGreeting] = useState('');
+  const [isTyping, setIsTyping] = useState(true);
+
+  useEffect(() => {
+    const greetingText = userName ? `Halo, ${userName}!` : 'Halo!';
+    let currentIndex = 0;
+    setTypedGreeting('');
+    setIsTyping(true);
+
+    const timer = setInterval(() => {
+      if (currentIndex < greetingText.length) {
+        setTypedGreeting(greetingText.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        setIsTyping(false);
+        clearInterval(timer);
+      }
+    }, 45);
+
+    return () => clearInterval(timer);
+  }, [userName]);
+
+  // Custom Stack overrides
+  const [customTechConfig, setCustomTechConfig] = useState<{
+    frontend: string;
+    backend: string;
+    database: string;
+    deployment: string;
+  }>({
+    frontend: 'Next.js 16 + Tailwind CSS',
+    backend: 'Next.js Server Actions',
+    database: 'Supabase (PostgreSQL)',
+    deployment: 'Docker (VPS / Coolify)',
+  });
+
+  const templateMenuRef = useRef<HTMLDivElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (templateMenuRef.current && !templateMenuRef.current.contains(event.target as Node)) {
+        setIsTemplateMenuOpen(false);
+      }
+      if (langMenuRef.current && !langMenuRef.current.contains(event.target as Node)) {
+        setIsLangMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const currentTemplate: TemplateArchetype =
+    TEMPLATE_ARCHETYPES[selectedTemplateId] || TEMPLATE_ARCHETYPES[DEFAULT_ARCHETYPE_ID];
+
+  const isCustomActive = selectedTemplateId === 'custom';
+
+  // Effective tech stack values
+  const effectiveFrontend = isCustomActive ? customTechConfig.frontend : currentTemplate.tech.frontend.name;
+  const effectiveBackend = isCustomActive ? customTechConfig.backend : currentTemplate.tech.backend.name;
+  const effectiveDatabase = isCustomActive ? customTechConfig.database : currentTemplate.tech.database.name;
+  const effectiveDeployment = isCustomActive ? customTechConfig.deployment : currentTemplate.tech.deployment.name;
+
+  const techStack: TechStackConfig = {
+    name: isCustomActive ? 'custom' : currentTemplate.name,
+    version: isCustomActive ? 'Kustom Pengguna' : currentTemplate.version,
+    description: isCustomActive ? 'Arsitektur Kustom Racikan Sendiri' : currentTemplate.description,
+    frontend: effectiveFrontend,
+    backend: effectiveBackend,
+    database: effectiveDatabase,
+    deployment: effectiveDeployment,
+    templateId: isCustomActive ? 'custom' : currentTemplate.id,
+    language: selectedLanguage,
+  };
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -123,7 +212,7 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
       return;
     }
     setCustomError(null);
-    onSubmitIdea(idea.trim(), techStack);
+    onSubmitIdea(idea.trim(), techStack, selectedLanguage);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -133,77 +222,129 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
     }
   };
 
-  const handleSelectSuggestion = (suggestedIdea: string) => {
-    setIdea(suggestedIdea);
-    if (customError) setCustomError(null);
+  // SMART SVG ICON MATCHING (Akut & Tidak Ada yang Miss)
+  const renderSmartIcon = (text: string, category: 'frontend' | 'backend' | 'database' | 'deployment') => {
+    const t = (text || '').toLowerCase();
+
+    if (category === 'frontend') {
+      if (t.includes('vue') || t.includes('nuxt')) return <VueLogo className="h-5 w-5" />;
+      if (t.includes('svelte')) return <SvelteLogo className="h-5 w-5" />;
+      if (t.includes('astro')) return <AstroLogo className="h-5 w-5" />;
+      if (t.includes('flutter')) return <FlutterLogo className="h-5 w-5" />;
+      if (t.includes('react native') || t.includes('expo') || t.includes('vite') || t.includes('react'))
+        return <ReactLogo className="h-5 w-5" />;
+      return <NextJsLogo className="h-5 w-5" />;
+    }
+
+    if (category === 'backend') {
+      if (t.includes('go') || t.includes('gin') || t.includes('fiber')) return <GoLogo className="h-5 w-5" />;
+      if (t.includes('fastapi')) return <FastApiLogo className="h-5 w-5" />;
+      if (t.includes('python') || t.includes('django')) return <PythonLogo className="h-5 w-5" />;
+      if (t.includes('laravel') || t.includes('php')) return <LaravelLogo className="h-5 w-5" />;
+      if (t.includes('supabase') || t.includes('deno')) return <SupabaseLogo className="h-5 w-5" />;
+      if (t.includes('next.js') || t.includes('server action')) return <NextJsLogo className="h-5 w-5" />;
+      return <NodeJsLogo className="h-5 w-5" />;
+    }
+
+    if (category === 'database') {
+      if (t.includes('postgres') || t.includes('neon') || t.includes('rds')) return <PostgresLogo className="h-5 w-5" />;
+      if (t.includes('mysql') || t.includes('mariadb')) return <MySqlLogo className="h-5 w-5" />;
+      if (t.includes('mongo')) return <MongoLogo className="h-5 w-5" />;
+      if (t.includes('sqlite') || t.includes('turso')) return <SqliteLogo className="h-5 w-5" />;
+      if (t.includes('redis') || t.includes('upstash')) return <RedisLogo className="h-5 w-5" />;
+      return <SupabaseLogo className="h-5 w-5" />;
+    }
+
+    if (category === 'deployment') {
+      if (t.includes('cloudflare')) return <CloudflareLogo className="h-5 w-5" />;
+      if (t.includes('aws') || t.includes('amazon')) return <AwsLogo className="h-5 w-5" />;
+      if (t.includes('eas') || t.includes('app store') || t.includes('play store')) return <EasLogo className="h-5 w-5" />;
+      if (t.includes('vercel')) return <NextJsLogo className="h-5 w-5" />;
+      return <DockerLogo className="h-5 w-5" />;
+    }
+
+    return <Box className="h-5 w-5 text-amber-400" />;
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto py-6 sm:py-10 px-4">
+    <div className="w-full max-w-3xl mx-auto pt-2 sm:pt-4 pb-8 px-4">
       {/* 1. Step Progress Indicator */}
-      <div className="flex items-center justify-center gap-3 sm:gap-6 mb-10 text-xs sm:text-sm font-medium">
-        <div className="flex items-center gap-2 text-amber-400 font-semibold">
-          <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20" />
-          <span>Input ide</span>
+      <div className="flex items-center justify-center gap-3 sm:gap-6 mb-6 sm:mb-8 text-xs sm:text-sm font-medium">
+        {/* Step 1: Konsep Ide */}
+        <div className={`flex items-center gap-2 transition-all ${
+          isLoading ? 'text-zinc-400 font-medium' : 'text-amber-400 font-semibold'
+        }`}>
+          {isLoading ? (
+            <Check className="h-3.5 w-3.5 text-emerald-400" />
+          ) : (
+            <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20" />
+          )}
+          <span>Konsep Ide</span>
         </div>
-        <div className="h-px w-8 sm:w-16 bg-zinc-800" />
+
+        {/* Connector 1 -> 2 with Flowing Beam when loading */}
+        <div className="relative h-0.5 w-10 sm:w-20 bg-zinc-800 rounded-full overflow-hidden">
+          {isLoading ? (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400 to-transparent w-full animate-beam-flow shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+          ) : (
+            <div className="h-full w-full bg-zinc-800" />
+          )}
+        </div>
+
+        {/* Step 2: Bedah Kebutuhan */}
+        <div className={`flex items-center gap-2 transition-all ${
+          isLoading ? 'text-amber-400 font-semibold' : 'text-zinc-500'
+        }`}>
+          {isLoading ? (
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 ring-2 ring-amber-400/30" />
+            </span>
+          ) : (
+            <span className="flex h-2 w-2 rounded-full bg-zinc-700" />
+          )}
+          <span>Bedah Kebutuhan</span>
+          {isLoading && (
+            <span className="text-[10px] font-mono text-amber-400/80 animate-pulse hidden sm:inline">
+              (Menganalisis...)
+            </span>
+          )}
+        </div>
+
+        {/* Connector 2 -> 3 */}
+        <div className="h-0.5 w-10 sm:w-20 bg-zinc-800 rounded-full" />
+
+        {/* Step 3: Cetak Biru & Roadmap */}
         <div className="flex items-center gap-2 text-zinc-500">
           <span className="flex h-2 w-2 rounded-full bg-zinc-700" />
-          <span>Klarifikasi kebutuhan</span>
-        </div>
-        <div className="h-px w-8 sm:w-16 bg-zinc-800" />
-        <div className="flex items-center gap-2 text-zinc-500">
-          <span className="flex h-2 w-2 rounded-full bg-zinc-700" />
-          <span>Blueprint & Roadmap</span>
+          <span>Cetak Biru & Roadmap</span>
         </div>
       </div>
 
       {/* 2. Hero Headline */}
-      <div className="text-center space-y-3 mb-6">
-        <div className="inline-flex items-center justify-center gap-2.5">
-          <h1 className={`text-3xl sm:text-5xl font-black tracking-tight ${
-            isLight ? 'text-zinc-900' : 'text-white'
-          }`}>
-            Mau bikin apa?
-          </h1>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-            <Box className="h-5 w-5" />
+      <div className="text-center space-y-2 mb-6">
+        {userName && (
+          <div className="inline-flex items-center gap-1.5 text-base sm:text-xl font-bold tracking-tight text-amber-400 font-mono mb-1">
+            <span>{typedGreeting}</span>
+            {isTyping && <span className="inline-block w-2 h-4 sm:h-5 bg-amber-400 animate-pulse rounded-xs" />}
           </div>
-        </div>
+        )}
+        <h1 className={`text-3xl sm:text-5xl font-black tracking-tight ${
+          isLight ? 'text-zinc-900' : 'text-white'
+        }`}>
+          Mau bikin apa hari ini?
+        </h1>
         <p className={`text-sm sm:text-base max-w-lg mx-auto ${
           isLight ? 'text-zinc-600' : 'text-zinc-400'
         }`}>
-          Ubah ide kamu menjadi rencana teknis yang bisa dipahami AI tools pilihanmu (Cursor, Claude Code, Antigravity, Windsurf).
+          Ubah ide kamu menjadi rencana arsitektur teknis kelas dunia yang siap dipahami AI Coding pilihanmu.
         </p>
-
-        {/* Quick Suggestion Chips */}
-        <div className="pt-2 flex flex-wrap items-center justify-center gap-1.5 max-w-2xl mx-auto">
-          <span className="text-[11px] text-zinc-500 font-medium mr-1 flex items-center gap-1">
-            <Lightbulb className="h-3 w-3 text-amber-400" /> Inspirasi:
-          </span>
-          {QUICK_SUGGESTIONS.map((item, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleSelectSuggestion(item.idea)}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-xl transition-all cursor-pointer border ${
-                idea === item.idea
-                  ? 'border-amber-500 bg-amber-500/15 text-amber-300 font-semibold'
-                  : isLight
-                  ? 'border-zinc-300 bg-white text-zinc-700 hover:border-amber-400'
-                  : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-zinc-700 hover:text-white'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* 3. Main Input Box Container */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div
-          className={`relative rounded-2xl border transition-all duration-200 shadow-xl overflow-hidden ${
+          className={`relative rounded-2xl border transition-all duration-200 shadow-xl overflow-visible ${
             isLight
               ? 'bg-white border-zinc-300 focus-within:border-amber-500/80 focus-within:ring-2 focus-within:ring-amber-500/20'
               : 'bg-[#181C26] border-zinc-800/80 focus-within:border-amber-500/60 focus-within:ring-2 focus-within:ring-amber-500/20'
@@ -231,32 +372,165 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
           <div className={`px-4 py-3 border-t flex flex-wrap items-center justify-between gap-3 ${
             isLight ? 'bg-zinc-50/80 border-zinc-200' : 'bg-zinc-950/40 border-zinc-800/60'
           }`}>
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Tech Stack Chip Pill */}
-              <button
-                type="button"
-                onClick={() => setShowStackModal(!showStackModal)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  isLight
-                    ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                }`}
-                title="Lihat template tech stack"
-              >
-                <Box className="h-3.5 w-3.5 text-amber-400" />
-                <span>{techStack.name}</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </button>
+            <div className="flex items-center gap-2 flex-wrap relative z-20">
+              {/* Template Selector Dropdown */}
+              <div className="relative" ref={templateMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTemplateMenuOpen(!isTemplateMenuOpen);
+                    setIsLangMenuOpen(false);
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+                    isTemplateMenuOpen
+                      ? 'border-amber-500 bg-amber-500/20 text-amber-300 ring-2 ring-amber-500/20'
+                      : isLight
+                      ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                  }`}
+                  title="Pilih Template Arsitektur Starter"
+                >
+                  <Box className="h-3.5 w-3.5 text-amber-400" />
+                  <span>{techStack.name}</span>
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </button>
 
-              {/* Language Pill */}
-              <div className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-medium ${
-                isLight
-                  ? 'border-zinc-300 bg-white text-zinc-700'
-                  : 'border-zinc-800 bg-zinc-900/80 text-zinc-300'
-              }`}>
-                <Globe className="h-3 w-3 text-zinc-400" />
-                <span>Bahasa Indonesia</span>
+                {/* Template Dropdown Popover */}
+                {isTemplateMenuOpen && (
+                  <div className="absolute left-0 bottom-full mb-2 w-72 sm:w-80 rounded-2xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-2 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                    <div className="px-2.5 py-1.5 mb-1 border-b border-zinc-800/80 flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-mono font-bold text-zinc-400">Pilih Preset Template</span>
+                      <span className="text-[10px] text-amber-400/80 font-mono">Arsitektur</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      {Object.values(TEMPLATE_ARCHETYPES).map((arch) => {
+                        const isSelected = selectedTemplateId === arch.id;
+                        const locked = isTemplateLocked(arch.id);
+                        return (
+                          <button
+                            key={arch.id}
+                            type="button"
+                            onClick={() => {
+                              if (locked) {
+                                setIsTemplateMenuOpen(false);
+                                if (onRequireUpgrade) onRequireUpgrade();
+                                return;
+                              }
+                              setSelectedTemplateId(arch.id);
+                              setIsTemplateMenuOpen(false);
+                              if (arch.id === 'custom') {
+                                setIsCustomModalOpen(true);
+                              }
+                            }}
+                            className={`w-full text-left p-2.5 rounded-xl transition-all flex items-start justify-between gap-2 cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-xs'
+                                : 'hover:bg-zinc-800/80 text-zinc-300 border border-transparent'
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-zinc-100 text-xs">{arch.name}</span>
+                                {locked ? (
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-0.5">
+                                    <Lock className="h-2.5 w-2.5" /> PRO
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-500/20 text-amber-400">
+                                    {arch.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-zinc-400 leading-tight line-clamp-1">{arch.description}</p>
+                            </div>
+                            {isSelected && <Check className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Language Selector Dropdown */}
+              <div className="relative" ref={langMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLangMenuOpen(!isLangMenuOpen);
+                    setIsTemplateMenuOpen(false);
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer shadow-xs ${
+                    isLangMenuOpen
+                      ? 'border-zinc-700 bg-zinc-800 text-white'
+                      : isLight
+                      ? 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400'
+                      : 'border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:border-zinc-700 hover:text-white'
+                  }`}
+                  title="Pilih Bahasa Output PRD"
+                >
+                  <Globe className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>{selectedLanguage === 'id' ? 'Bahasa Indonesia' : 'English'}</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+
+                {/* Language Dropdown Popover */}
+                {isLangMenuOpen && (
+                  <div className="absolute left-0 bottom-full mb-2 w-48 rounded-xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-1.5 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLanguage('id');
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                        selectedLanguage === 'id'
+                          ? 'bg-amber-500/15 text-amber-300 font-bold'
+                          : 'text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🇮🇩</span>
+                        <span>Bahasa Indonesia</span>
+                      </div>
+                      {selectedLanguage === 'id' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLanguage('en');
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                        selectedLanguage === 'en'
+                          ? 'bg-amber-500/15 text-amber-300 font-bold'
+                          : 'text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🇬🇧</span>
+                        <span>English</span>
+                      </div>
+                      {selectedLanguage === 'en' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Button to customize stack if on custom */}
+              {isCustomActive && (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1.5 text-xs font-semibold text-amber-300 transition-colors cursor-pointer"
+                  title="Buka pemilih custom stack"
+                >
+                  <Wrench className="h-3.5 w-3.5" />
+                  <span>Ubah Stack</span>
+                </button>
+              )}
             </div>
 
             {/* Submit Arrow Button */}
@@ -280,7 +554,7 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
         )}
 
         {/* 4. Tech Stack Card with Official Vector Logos */}
-        <div className={`rounded-2xl border p-5 transition-all ${
+        <div className={`rounded-2xl border p-5 transition-all shadow-md ${
           isLight
             ? 'bg-zinc-50 border-zinc-300 shadow-xs'
             : 'bg-[#12151D] border-zinc-800/80'
@@ -293,12 +567,23 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Template terpilih
+                    <CheckCircle2 className="h-3 w-3" /> {isCustomActive ? 'Custom Stack Aktif' : 'Template Terpilih'}
                   </span>
                 </div>
-                <h3 className={`text-base font-bold mt-1 ${isLight ? 'text-zinc-900' : 'text-white'}`}>
-                  {techStack.name}
-                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <h3 className={`text-base font-bold ${isLight ? 'text-zinc-900' : 'text-white'}`}>
+                    {techStack.name}
+                  </h3>
+                  {isCustomActive && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomModalOpen(true)}
+                      className="text-[11px] text-amber-400 hover:text-amber-300 hover:underline font-semibold cursor-pointer"
+                    >
+                      (Ubah Pilihan)
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-zinc-400">{techStack.version} — {techStack.description}</p>
               </div>
             </div>
@@ -309,57 +594,57 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
               Teknologi bawaan yang akan dipersiapkan untuk PRD:
             </span>
 
-            {/* Official Logo Grid */}
+            {/* Official Dynamic Logo Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-              {/* Frontend: Official Next.js */}
+              {/* Frontend */}
               <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
                 isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
               }`}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/80 border border-zinc-700/80 shadow-xs">
-                  <NextJsLogo className="h-5 w-5" />
+                  {renderSmartIcon(effectiveFrontend, 'frontend')}
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] text-zinc-500 block uppercase font-mono">Frontend</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{techStack.frontend}</span>
+                  <span className="font-semibold text-zinc-200 truncate block">{effectiveFrontend}</span>
                 </div>
               </div>
 
-              {/* Backend: Official Node.js */}
+              {/* Backend */}
               <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
                 isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
               }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5FA04E]/15 border border-[#5FA04E]/30 shadow-xs">
-                  <NodeJsLogo className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900/90 border border-zinc-800 shadow-xs">
+                  {renderSmartIcon(effectiveBackend, 'backend')}
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] text-zinc-500 block uppercase font-mono">Backend</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{techStack.backend}</span>
+                  <span className="font-semibold text-zinc-200 truncate block">{effectiveBackend}</span>
                 </div>
               </div>
 
-              {/* Database: Official Supabase */}
+              {/* Database */}
               <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
                 isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
               }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#3ECF8E]/15 border border-[#3ECF8E]/30 shadow-xs">
-                  <SupabaseLogo className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900/90 border border-zinc-800 shadow-xs">
+                  {renderSmartIcon(effectiveDatabase, 'database')}
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] text-zinc-500 block uppercase font-mono">Database</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{techStack.database}</span>
+                  <span className="font-semibold text-zinc-200 truncate block">{effectiveDatabase}</span>
                 </div>
               </div>
 
-              {/* Deployment: Official Vercel */}
+              {/* Deployment */}
               <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
                 isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
               }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/90 border border-zinc-700/80 shadow-xs">
-                  <VercelLogo className="h-4 w-4" isLight={isLight} />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900/90 border border-zinc-800 shadow-xs">
+                  {renderSmartIcon(effectiveDeployment, 'deployment')}
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] text-zinc-500 block uppercase font-mono">Deployment</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{techStack.deployment}</span>
+                  <span className="font-semibold text-zinc-200 truncate block">{effectiveDeployment}</span>
                 </div>
               </div>
             </div>
@@ -387,6 +672,23 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
           </div>
         </div>
       </form>
+
+      {/* Custom Stack Modal */}
+      <CustomStackModal
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        currentStack={techStack}
+        onSaveCustomStack={(newConfig) => {
+          setCustomTechConfig({
+            frontend: newConfig.frontend,
+            backend: newConfig.backend,
+            database: newConfig.database,
+            deployment: newConfig.deployment,
+          });
+          setSelectedTemplateId('custom');
+        }}
+        theme={theme}
+      />
     </div>
   );
 };

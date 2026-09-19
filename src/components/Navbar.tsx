@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Bot,
   FileText,
   Key,
   RotateCcw,
@@ -17,6 +16,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface NavbarProps {
   hasApiKey?: boolean;
@@ -26,12 +26,10 @@ interface NavbarProps {
   onOpenPricing?: () => void;
   onOpenAuth?: () => void;
   onOpenGenerator?: () => void;
-  onLoadDemo?: () => void;
   onReset?: () => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
   isLandingPage?: boolean;
-  onOpenProChat?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,7 +44,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme = 'dark',
   onToggleTheme,
   isLandingPage = false,
-  onOpenProChat,
 }) => {
   const router = useRouter();
   const { user, profile, isPro, isAdmin, remainingTrials, logout, systemSettings } = useAuth();
@@ -123,18 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {isLandingPage ? (
             <>
               {onToggleTheme && (
-                <button
-                  type="button"
-                  onClick={onToggleTheme}
-                  className="flex items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
-                  title={theme === 'dark' ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-3.5 w-3.5 text-amber-400" />
-                  ) : (
-                    <Moon className="h-3.5 w-3.5 text-blue-300" />
-                  )}
-                </button>
+                <ThemeToggle theme={theme || 'dark'} onToggle={onToggleTheme} />
               )}
 
               {!user ? (
@@ -241,28 +227,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <Key className="h-3.5 w-3.5" />
                   <span>
-                    {hasApiKey
-                      ? activeModel
-                        ? `${activeModel.replace('gemini-', '')}`
-                        : 'Key Ready'
-                      : 'Set Key'}
+                    {hasApiKey ? 'Key Aktif' : 'Set Key'}
                   </span>
                 </button>
               )}
 
               {onToggleTheme && (
-                <button
-                  type="button"
-                  onClick={onToggleTheme}
-                  className="flex items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 p-2 text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors"
-                  title={theme === 'dark' ? 'Mode Terang' : 'Mode Gelap'}
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-3.5 w-3.5 text-amber-400" />
-                  ) : (
-                    <Moon className="h-3.5 w-3.5 text-blue-300" />
-                  )}
-                </button>
+                <ThemeToggle theme={theme || 'dark'} onToggle={onToggleTheme} />
               )}
 
 
@@ -314,6 +285,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                             {isPro ? 'PRO ACTIVE' : 'FREE TRIAL'}
                           </span>
                         </div>
+                        {isPro && profile?.pro_expires_at && !profile?.is_admin && (
+                          <div className="flex items-center justify-between text-[10px] pt-1">
+                            <span className="text-zinc-400">Masa Aktif:</span>
+                            <span className="text-amber-400 font-mono font-medium">
+                              {(() => {
+                                const exp = new Date(profile.pro_expires_at);
+                                const diffDays = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                return diffDays > 0 ? `Sisa ${diffDays} hari` : 'Kedaluwarsa';
+                              })()}
+                            </span>
+                          </div>
+                        )}
                         {!isPro && (
                           <div className="flex items-center justify-between text-[11px] pt-1">
                             <span className="text-zinc-400">Sisa Kuota:</span>
@@ -321,22 +304,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                           </div>
                         )}
                       </div>
-
-
-
-                      {onOpenProChat && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsUserMenuOpen(false);
-                            onOpenProChat();
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 transition-colors text-left font-medium cursor-pointer"
-                        >
-                          <Bot className="h-3.5 w-3.5" />
-                          <span>Diskusi Arsitek PRO</span>
-                        </button>
-                      )}
 
                       {isAdmin && (
                         <Link

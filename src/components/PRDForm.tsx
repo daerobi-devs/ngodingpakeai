@@ -37,7 +37,6 @@ interface PRDFormProps {
   apiKeyHeader?: string;
   preferredModel?: string;
   theme?: "dark" | "light";
-  onOpenProChat?: () => void;
 }
 
 export const PRDForm: React.FC<PRDFormProps> = ({
@@ -50,7 +49,6 @@ export const PRDForm: React.FC<PRDFormProps> = ({
   apiKeyHeader,
   preferredModel,
   theme = "dark",
-  onOpenProChat,
 }) => {
   const { user, isPro, remainingTrials, systemSettings } = useAuth();
   const isLight = theme === "light";
@@ -288,19 +286,6 @@ export const PRDForm: React.FC<PRDFormProps> = ({
                 </>
               )}
             </button>
-
-            {/* PRO Exclusive: Brainstorming Architect Room */}
-            {onOpenProChat && (
-              <button
-                type="button"
-                onClick={onOpenProChat}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 px-3.5 py-2.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors shrink-0 shadow-xs cursor-pointer"
-                title="Buka Ruang Diskusi Brainstorming Khusus PRO"
-              >
-                <Crown className="h-3.5 w-3.5 text-amber-400" />
-                <span>Diskusi PRO</span>
-              </button>
-            )}
           </div>
 
           {autofillError && (

@@ -42,9 +42,18 @@ import {
   Crown,
   CheckCircle2,
   Play,
+  Copy,
+  Database,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { SystemSettings, Profile, PaymentOrder, GeminiKeySlot } from '@/lib/supabase/types';
+import {
+  SystemSettings,
+  Profile,
+  PaymentOrder,
+  GeminiKeySlot,
+  PricingTierConfig,
+  DEFAULT_PRICING_TIERS,
+} from '@/lib/supabase/types';
 
 const DEFAULT_10_SLOTS: GeminiKeySlot[] = Array.from({ length: 10 }, (_, i) => ({
   id: `slot_${i + 1}`,
@@ -56,21 +65,21 @@ const DEFAULT_10_SLOTS: GeminiKeySlot[] = Array.from({ length: 10 }, (_, i) => (
 }));
 
 const POPULAR_GEMINI_FREE_MODELS = [
-  { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (🚀 Generasi 3.8 - Coding & Reasoning Unggul)' },
-  { id: 'gemini-3.5-flash', label: 'gemini-3.5-flash (⚡ Generasi 3.5 - Agentic & Satset)' },
-  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🪶 Ultra Rendah Latensi & Hemat Kuota)' },
-  { id: 'gemini-flash-latest', label: 'gemini-flash-latest (⚡ Auto Latest Flash Stable)' },
+  { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Generasi 3.8 - Coding & Reasoning Unggul)' },
+  { id: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Generasi 3.5 - Agentic & Cepat)' },
+  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (Ultra Rendah Latensi & Hemat Kuota)' },
+  { id: 'gemini-flash-latest', label: 'gemini-flash-latest (Auto Latest Flash Stable)' },
   { id: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Stabil & Akurat LTS)' },
   { id: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite (Ringan Generasi 2.5)' },
 ];
 
 const POPULAR_GEMINI_PRO_MODELS = [
-  { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (🚀 Generasi 3.8 Flagship Fast Reasoning)' },
-  { id: 'gemini-3.5-flash', label: 'gemini-3.5-flash (⚡ Generasi 3.5 Agentic Pro)' },
+  { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Generasi 3.8 Flagship Fast Reasoning)' },
+  { id: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Generasi 3.5 Agentic Pro)' },
   { id: 'gemini-2.5-pro', label: 'gemini-2.5-pro (Generasi 2.5 PRO Analitis Mendalam)' },
-  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🪶 Ultra Low-Latency Flash)' },
+  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (Ultra Low-Latency Flash)' },
   { id: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Cepat & Kualitas Tinggi)' },
-  { id: 'gemini-flash-latest', label: 'gemini-flash-latest (Satset Tanpa Jeda)' },
+  { id: 'gemini-flash-latest', label: 'gemini-flash-latest (Cepat Tanpa Jeda)' },
   { id: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite (Lite Edition)' },
 ];
 
@@ -100,6 +109,15 @@ export default function AdminDashboard() {
     free_ai_provider: 'gemini_direct',
     free_model: 'gemini-flash-latest',
     gemini_slots: DEFAULT_10_SLOTS,
+    global_gemini_slot: 'auto',
+    pricing_tiers: DEFAULT_PRICING_TIERS,
+    announcement_banner: {
+      active: false,
+      isActive: false,
+      message: 'Diskon Spesial! Dapatkan akses PRO dengan harga promo terbatas.',
+      type: 'promo',
+      dismissible: true,
+    },
     trial_limit: 1,
     nine_router_url: 'http://127.0.0.1:2080/v1/chat/completions',
     nine_router_key: '',
@@ -108,13 +126,14 @@ export default function AdminDashboard() {
     openrouter_key: '',
     openrouter_model: 'anthropic/claude-3.5-sonnet',
     qris_merchant_name: 'NGODINGPAKEPRD OFFICIAL',
-    qris_gopay_number: '0821-4475-4089',
+    qris_gopay_number: '0851-2360-7711',
     qris_image_url: '/qris-gopay-placeholder.png',
     pro_price_rp: 49000,
     pro_price_formatted: 'Rp 49.000 / Lifetime Access',
   });
 
   const [usersList, setUsersList] = useState<Profile[]>([]);
+  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'expiring' | 'expired' | 'free' | 'banned'>('all');
   const [ordersList, setOrdersList] = useState<PaymentOrder[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -135,6 +154,7 @@ export default function AdminDashboard() {
     recentGenerations: any[];
     totalGenerations: number;
     activeUsersCount: number;
+    totalServerTokens?: number;
   } | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
 
@@ -262,9 +282,30 @@ export default function AdminDashboard() {
                   return slot;
                 });
 
+          const rawTiers = data.settings.pricing_tiers && data.settings.pricing_tiers.length > 0
+            ? data.settings.pricing_tiers
+            : DEFAULT_PRICING_TIERS;
+          const mergedTiers = [...rawTiers];
+          if (!mergedTiers.some((t: any) => t.id === 'free')) {
+            mergedTiers.unshift(DEFAULT_PRICING_TIERS[0]);
+          }
+          const normalizedTiers = mergedTiers.map((t: any) => {
+            const def = DEFAULT_PRICING_TIERS.find((d) => d.id === t.id);
+            return {
+              ...t,
+              feature_flags: t.feature_flags || def?.feature_flags || {
+                advanced_templates: t.id !== 'free',
+                custom_stack: t.id !== 'free',
+                export_zip: t.id !== 'free',
+                architecture_diagrams: t.id !== 'free',
+              },
+            };
+          });
+
           setSettings({
             ...data.settings,
             gemini_slots: loadedSlots,
+            pricing_tiers: normalizedTiers,
             pro_ai_provider: data.settings.pro_ai_provider || 'nine_router',
             pro_model: data.settings.pro_model || 'deepseek-chat',
             free_ai_provider: data.settings.free_ai_provider || 'gemini_direct',
@@ -290,6 +331,7 @@ export default function AdminDashboard() {
             recentGenerations: data.recentGenerations || [],
             totalGenerations: data.totalGenerations || 0,
             activeUsersCount: data.activeUsersCount || 0,
+            totalServerTokens: data.totalServerTokens || 0,
           });
         }
       }
@@ -611,7 +653,7 @@ export default function AdminDashboard() {
   };
 
   const handleApproveOrder = async (orderId: string, userId: string) => {
-    if (!confirm('Apakah kamu sudah mencocokkan pembayaran di GoBiz dan yakin ingin mengaktifkan akun PRO user ini?')) {
+    if (!confirm('Apakah kamu sudah mencocokkan pembayaran di GoBiz dan yakin ingin mengaktifkan akun PRO (30 Hari) user ini?')) {
       return;
     }
 
@@ -623,12 +665,13 @@ export default function AdminDashboard() {
           action: 'approve_order',
           orderId,
           userId,
+          durationDays: 30,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        showToast('success', 'Pesanan disetujui & Akun Pro telah aktif!');
+        showToast('success', 'Pesanan disetujui & Akun Pro telah aktif (30 Hari)!');
         fetchOrders();
         fetchUsers();
       }
@@ -672,16 +715,45 @@ export default function AdminDashboard() {
           action: 'update_user_tier',
           userId,
           tier: nextTier,
+          durationDays: 30,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        showToast('success', `Tier user diubah ke ${nextTier.toUpperCase()}`);
+        showToast('success', nextTier === 'pro' ? 'User diaktifkan PRO (30 Hari)' : 'Tier user diturunkan ke FREE');
         fetchUsers();
+      } else {
+        showToast('error', data.error || 'Gagal mengubah tier');
       }
     } catch (e) {
       console.error('Failed to toggle tier:', e);
+      showToast('error', 'Terjadi kesalahan jaringan');
+    }
+  };
+
+  const handleExtendUserPro = async (userId: string, days = 30) => {
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'update_user_tier',
+          userId,
+          extendDays: days,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', `Masa aktif PRO berhasil diperpanjang +${days} hari`);
+        fetchUsers();
+      } else {
+        showToast('error', data.error || 'Gagal memperpanjang durasi PRO');
+      }
+    } catch (e) {
+      console.error('Failed to extend pro:', e);
+      showToast('error', 'Terjadi kesalahan jaringan');
     }
   };
 
@@ -704,6 +776,87 @@ export default function AdminDashboard() {
       }
     } catch (e) {
       console.error('Failed to reset trial:', e);
+    }
+  };
+
+  const handleAssignGeminiSlot = async (userId: string, slotId: string | null) => {
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'assign_gemini_slot',
+          userId,
+          slotId: slotId === 'auto' ? null : slotId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', slotId === 'auto' || !slotId ? 'Slot Gemini direset ke Auto / Global' : `Dedicated slot disetel ke ${slotId}`);
+        fetchUsers();
+      } else {
+        showToast('error', data.error || 'Gagal mengatur slot user');
+      }
+    } catch {
+      showToast('error', 'Gagal menghubungi server');
+    }
+  };
+
+  const handleToggleUserBan = async (userId: string, currentBanned: boolean) => {
+    const nextBanned = !currentBanned;
+    const confirmMsg = nextBanned
+      ? 'Apakah Anda yakin ingin MEMBLOKIR akun user ini? User tidak akan bisa generate PRD.'
+      : 'Apakah Anda yakin ingin MEMBUKA BLOKIR akun user ini?';
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'toggle_user_ban',
+          userId,
+          isBanned: nextBanned,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', nextBanned ? 'Akun user telah dinonaktifkan / diblokir' : 'Blokir akun user telah dicabut');
+        fetchUsers();
+      } else {
+        showToast('error', data.error || 'Gagal mengubah status blokir');
+      }
+    } catch {
+      showToast('error', 'Gagal menghubungi server');
+    }
+  };
+
+  const handleSetUserTierWithDuration = async (
+    userId: string,
+    tier: 'free' | 'plus' | 'pro' | 'unlimited',
+    durationDays?: number
+  ) => {
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'update_user_tier',
+          userId,
+          tier,
+          durationDays,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const durationText = durationDays ? (durationDays > 3650 ? 'Lifetime' : `+${durationDays} Hari`) : '';
+        showToast('success', `Tier user berhasil diubah ke ${tier.toUpperCase()} ${durationText}`);
+        fetchUsers();
+      } else {
+        showToast('error', data.error || 'Gagal mengubah tier user');
+      }
+    } catch {
+      showToast('error', 'Gagal menghubungi server');
     }
   };
 
@@ -958,7 +1111,7 @@ export default function AdminDashboard() {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Stat Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
                   <div className="flex items-center justify-between text-zinc-400 mb-2">
                     <span className="text-xs font-semibold">Total Pengguna</span>
@@ -990,8 +1143,21 @@ export default function AdminDashboard() {
 
                 <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
                   <div className="flex items-center justify-between text-zinc-400 mb-2">
+                    <span className="text-xs font-semibold">Token Server Terpakai</span>
+                    <Zap className="h-4 w-4 text-amber-400" />
+                  </div>
+                  <div className="text-2xl font-black text-amber-400 font-mono">
+                    {((monitoringData as any)?.totalServerTokens || 0).toLocaleString('id-ID')}
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mt-1">
+                    ~{Math.round(((monitoringData as any)?.totalServerTokens || 0) / 6000)} PRD dari Kuota Admin
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 shadow-xs">
+                  <div className="flex items-center justify-between text-zinc-400 mb-2">
                     <span className="text-xs font-semibold">AI Provider Aktif</span>
-                    <Cpu className="h-4 w-4 text-amber-400" />
+                    <Cpu className="h-4 w-4 text-purple-400" />
                   </div>
                   <div className="text-lg font-black text-white truncate uppercase">
                     {settings.ai_provider.replace('_', ' ')}
@@ -1092,50 +1258,113 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px]">
-                      <tr>
-                        <th className="px-4 py-2.5">User / Akun</th>
-                        <th className="px-4 py-2.5">Judul PRD</th>
-                        <th className="px-4 py-2.5">Mesin AI Digunakan</th>
-                        <th className="px-4 py-2.5">Tier</th>
-                        <th className="px-4 py-2.5 text-right">Waktu</th>
+                      <tr className="border-b border-zinc-800">
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[24%] min-w-[180px]">
+                          User / Akun
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[28%] min-w-[220px]">
+                          Judul Dokumen PRD
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
+                          Mesin AI & Slot Key
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[14%] min-w-[120px]">
+                          Konsumsi Token
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[8%] min-w-[80px]">
+                          Tier
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider text-right w-[8%] min-w-[80px]">
+                          Waktu
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800/80 text-zinc-300">
+                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
                       {!monitoringData?.recentGenerations || monitoringData.recentGenerations.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                          <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 font-medium">
                             Belum ada aktivitas generate PRD yang tercatat di database.
                           </td>
                         </tr>
                       ) : (
                         monitoringData.recentGenerations.map((gen: any) => (
                           <tr key={gen.id} className="hover:bg-zinc-900/40 transition-colors">
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-white truncate max-w-[180px]">
-                                {gen.userEmail}
+                            {/* User Account */}
+                            <td className="px-4 py-3 align-middle">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-[10px] font-bold text-amber-400 shrink-0 select-none">
+                                  {(gen.userName || gen.userEmail || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-white truncate max-w-[170px]" title={gen.userEmail}>
+                                    {gen.userEmail}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 truncate max-w-[170px]" title={gen.userName}>
+                                    {gen.userName || 'Guest / Pengguna'}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="text-[10px] text-zinc-500 truncate">{gen.userName}</div>
                             </td>
-                            <td className="px-4 py-3 font-medium text-amber-200 truncate max-w-[220px]">
-                              {gen.title}
+
+                            {/* Judul PRD */}
+                            <td className="px-4 py-3 align-middle">
+                              <div className="font-semibold text-amber-300/90 hover:text-amber-200 transition-colors truncate max-w-[240px]" title={gen.title}>
+                                {gen.title}
+                              </div>
+                              <div className="text-[10px] text-zinc-500 font-mono">
+                                ID: {gen.id.slice(0, 8)}...
+                              </div>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-900 text-zinc-300 border border-zinc-800">
-                                {gen.model_used || 'AI Engine'}
-                              </span>
+
+                            {/* Mesin AI & Slot Key */}
+                            <td className="px-4 py-3 align-middle">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
+                                  {gen.model_used || 'AI Engine'}
+                                </span>
+                                {gen.gemini_slot_used && (
+                                  <span className="px-2 py-0.5 rounded-md text-[9px] font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                                    {gen.gemini_slot_used}
+                                  </span>
+                                )}
+                              </div>
                             </td>
-                            <td className="px-4 py-3">
+
+                            {/* Token Consumption */}
+                            <td className="px-4 py-3 align-middle">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-xs font-bold text-white">
+                                  {(gen.tokens_used || 0).toLocaleString('id-ID')}
+                                </span>
+                                <span
+                                  className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                    gen.is_server_key
+                                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                  }`}
+                                >
+                                  {gen.is_server_key ? 'Server' : 'BYOK'}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Tier */}
+                            <td className="px-4 py-3 align-middle">
                               <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono ${
+                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded uppercase font-mono tracking-wide ${
                                   gen.userTier === 'pro'
                                     ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : 'bg-zinc-800 text-zinc-400'
+                                    : gen.userTier === 'plus'
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                    : 'bg-zinc-800/90 text-zinc-400 border border-zinc-700/50'
                                 }`}
                               >
                                 {gen.userTier || 'FREE'}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-right text-zinc-400 font-mono text-[11px]">
+
+                            {/* Timestamp */}
+                            <td className="px-4 py-3 text-right text-zinc-400 font-mono text-[11px] align-middle">
                               {gen.created_at
                                 ? new Date(gen.created_at).toLocaleTimeString('id-ID', {
                                     hour: '2-digit',
@@ -1266,6 +1495,95 @@ export default function AdminDashboard() {
                       <span className="text-[11px] text-zinc-500 mt-1 block">
                         Misal 1 = User hanya bisa 1x generate gratis dari server key kamu.
                       </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Announcement Banner System */}
+                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4 md:col-span-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                      <Radio className="h-4 w-4" />
+                      <span>Announcement & Promo Banner (Live Bar Atas)</span>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.announcement_banner?.active || settings.announcement_banner?.isActive || false}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            announcement_banner: {
+                              ...(settings.announcement_banner || {
+                                message: '',
+                                type: 'promo',
+                                dismissible: true,
+                              }),
+                              active: e.target.checked,
+                              isActive: e.target.checked,
+                            },
+                          })
+                        }
+                        className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-4 w-4"
+                      />
+                      <span className="text-xs font-semibold text-white">
+                        {settings.announcement_banner?.active || settings.announcement_banner?.isActive ? 'Banner Aktif (Tampil di Web)' : 'Banner Nonaktif'}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div className="md:col-span-2">
+                      <label className="text-zinc-400 block mb-1">Teks Pesan / Pengumuman Promo:</label>
+                      <input
+                        type="text"
+                        value={settings.announcement_banner?.message || ''}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            announcement_banner: {
+                              ...(settings.announcement_banner || {
+                                active: false,
+                                isActive: false,
+                                type: 'promo',
+                                dismissible: true,
+                              }),
+                              active: settings.announcement_banner?.active || false,
+                              isActive: settings.announcement_banner?.isActive || false,
+                              message: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="Diskon Spesial! Dapatkan paket PLUS Rp 25.000 atau PRO Rp 49.000 hari ini."
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 text-white focus:border-amber-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-zinc-400 block mb-1">Tipe Tampilan:</label>
+                      <select
+                        value={settings.announcement_banner?.type || 'promo'}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            announcement_banner: {
+                              ...(settings.announcement_banner || {
+                                active: false,
+                                isActive: false,
+                                message: '',
+                                dismissible: true,
+                              }),
+                              active: settings.announcement_banner?.active || false,
+                              isActive: settings.announcement_banner?.isActive || false,
+                              type: e.target.value as any,
+                            },
+                          })
+                        }
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 text-white focus:border-amber-500 focus:outline-hidden"
+                      >
+                        <option value="promo">Promo (Warna Emas / Amber)</option>
+                        <option value="info">Info Pengumuman (Warna Biru)</option>
+                        <option value="warning">Peringatan / Maintenance (Warna Merah)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -1771,11 +2089,39 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Global Pin Selector */}
+                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-amber-400" />
+                      <span>Global Default Gemini Slot Routing</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Tentukan slot default untuk seluruh user umum yang tidak memiliki dedicated slot assignment.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={settings.global_gemini_slot || 'auto'}
+                      onChange={(e) => setSettings({ ...settings, global_gemini_slot: e.target.value })}
+                      className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-amber-400 font-semibold focus:outline-hidden"
+                    >
+                      <option value="auto">Otomatis (Load Balance antar slot aktif)</option>
+                      {(settings.gemini_slots || DEFAULT_10_SLOTS).map((s) => (
+                        <option key={s.id} value={s.id} disabled={!s.isActive || !s.key.trim()}>
+                          {s.label || `Slot ${s.id}`} {!s.isActive || !s.key.trim() ? '(Nonaktif / Kosong)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* Slots List */}
                 <div className="space-y-3">
                   {(settings.gemini_slots || DEFAULT_10_SLOTS).map((slot, index) => {
                     const isKeyVisible = showKeyMap[slot.id] || false;
                     const isTestingThis = testingSlotId === slot.id;
+                    const assignedUsers = usersList.filter((u: any) => u.assigned_gemini_slot === slot.id);
 
                     return (
                       <div
@@ -1894,23 +2240,132 @@ export default function AdminDashboard() {
                           </button>
                         </div>
 
-                        {/* Model Chips if Detected */}
-                        {slot.models && slot.models.length > 0 && (
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-                            <span className="text-zinc-500">Model Aktif:</span>
-                            {slot.models.slice(0, 5).map((m, mIdx) => (
-                              <span
-                                key={mIdx}
-                                className="px-2 py-0.5 rounded-md bg-zinc-800/80 text-zinc-300 font-mono border border-zinc-700/50"
-                              >
-                                {m}
+                        {/* Model Configuration & Assigned Users Panel */}
+                        <div className="mt-3.5 pt-3 border-t border-zinc-800/60 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                          {/* Preferred Model Dropdown */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-[11px] font-semibold text-zinc-300">
+                                Model Gemini Prioritas Slot Ini:
+                              </label>
+                              {slot.preferredModel && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                                  Aktif: {slot.preferredModel}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              value={slot.preferredModel || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = (settings.gemini_slots || DEFAULT_10_SLOTS).map((s) =>
+                                  s.id === slot.id ? { ...s, preferredModel: val || undefined } : s
+                                );
+                                setSettings({ ...settings, gemini_slots: updated });
+                              }}
+                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 font-mono focus:border-amber-400 focus:outline-none"
+                            >
+                              <option value="">Default Otomatis (gemini-2.5-flash)</option>
+                              {slot.models && slot.models.length > 0 && (
+                                <optgroup label="Model Terdeteksi di Slot Ini">
+                                  {slot.models.map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="Model Standar Gemini">
+                                <option value="gemini-2.5-flash">gemini-2.5-flash (Cepat & Direkomendasikan)</option>
+                                <option value="gemini-2.5-pro">gemini-2.5-pro (Penalaran Kompleks)</option>
+                                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                              </optgroup>
+                            </select>
+                            <p className="text-[10px] text-zinc-500 mt-1">
+                              Model spesifik yang dieksekusi saat user dialokasikan ke slot ini.
+                            </p>
+                          </div>
+
+                          {/* Assigned Users */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-semibold text-zinc-300">
+                                User Sistem Terdaftar di Slot Ini:
                               </span>
-                            ))}
-                            {slot.models.length > 5 && (
-                              <span className="text-zinc-500 font-mono">
-                                +{slot.models.length - 5} lainnya
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                {assignedUsers.length} User
                               </span>
+                            </div>
+                            {assignedUsers.length === 0 ? (
+                              <div className="text-[11px] text-zinc-500 bg-zinc-950/60 rounded-xl p-2.5 border border-zinc-800/60 leading-relaxed">
+                                Belum ada user yang di-assign khusus. Slot ini melayani user umum secara load-balanced.
+                              </div>
+                            ) : (
+                              <div className="max-h-24 overflow-y-auto space-y-1.5 bg-zinc-950/60 rounded-xl p-2 border border-zinc-800/60">
+                                {assignedUsers.map((u: any) => (
+                                  <div
+                                    key={u.id}
+                                    className="flex items-center justify-between text-[11px] text-zinc-300 bg-zinc-900/60 px-2 py-1 rounded-lg"
+                                  >
+                                    <span className="truncate max-w-[180px] font-mono text-zinc-200" title={u.email}>
+                                      {u.email}
+                                    </span>
+                                    <span
+                                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold font-mono ${
+                                        u.subscription_tier === 'pro'
+                                          ? 'bg-amber-500/20 text-amber-400'
+                                          : u.subscription_tier === 'plus'
+                                          ? 'bg-blue-500/20 text-blue-400'
+                                          : 'bg-zinc-800 text-zinc-400'
+                                      }`}
+                                    >
+                                      {u.subscription_tier || 'free'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             )}
+                          </div>
+                        </div>
+
+                        {/* All Detected Models (Full Display - No Truncation) */}
+                        {slot.models && slot.models.length > 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-zinc-800/40">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-semibold text-zinc-400">
+                                Semua Model Terdeteksi ({slot.models.length} Model):
+                              </span>
+                              <span className="text-[10px] text-zinc-500">
+                                Klik model untuk mengaktifkannya di slot ini
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 max-h-36 overflow-y-auto p-2 bg-zinc-950/50 rounded-xl border border-zinc-800/50">
+                              {slot.models.map((m, mIdx) => {
+                                const isSelected = slot.preferredModel === m;
+                                return (
+                                  <button
+                                    key={mIdx}
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = (settings.gemini_slots || DEFAULT_10_SLOTS).map((s) =>
+                                        s.id === slot.id ? { ...s, preferredModel: isSelected ? undefined : m } : s
+                                      );
+                                      setSettings({ ...settings, gemini_slots: updated });
+                                    }}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 font-bold shadow-xs'
+                                        : 'bg-zinc-900/80 text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-zinc-200'
+                                    }`}
+                                    title={`Klik untuk ${isSelected ? 'kembalikan ke default' : 'tetapkan sebagai model slot ini'}`}
+                                  >
+                                    {m} {isSelected ? '(Terpilih)' : ''}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1931,7 +2386,7 @@ export default function AdminDashboard() {
                   <p className="text-zinc-400 leading-relaxed">
                     1. Pengguna klik "Saya Sudah Selesai Bayar via QRIS" &rarr; Order muncul di tabel dengan status <span className="text-amber-400 font-bold">PENDING</span>.<br />
                     2. Cek notifikasi transaksi masuk di aplikasi GoBiz HP Anda.<br />
-                    3. Klik tombol <strong className="text-emerald-400">[ ✅ Terima PRO ]</strong> untuk mengaktifkan status PRO user seketika.
+                    3. Klik tombol <strong className="text-emerald-400">[ Terima Order ]</strong> untuk mengaktifkan status PRO user seketika.
                   </p>
                 </div>
               </div>
@@ -1954,75 +2409,141 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px]">
-                      <tr>
-                        <th className="px-4 py-3">Order Code</th>
-                        <th className="px-4 py-3">User / Email</th>
-                        <th className="px-4 py-3">Nominal</th>
-                        <th className="px-4 py-3">Status</th>
-                        <th className="px-4 py-3">Waktu</th>
-                        <th className="px-4 py-3 text-right">Aksi Verifikasi</th>
+                      <tr className="border-b border-zinc-800">
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[140px]">
+                          Kode Order
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[26%] min-w-[200px]">
+                          Pengguna / Email
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[16%] min-w-[130px]">
+                          Paket & Nominal
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[12%] min-w-[100px]">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[12%] min-w-[110px]">
+                          Waktu
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider text-right w-[16%] min-w-[150px]">
+                          Aksi Verifikasi
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800 text-zinc-300">
+                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
                       {ordersList.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
-                            Belum ada transaksi QRIS yang tercatat.
+                          <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 font-medium">
+                            Belum ada transaksi QRIS yang tercatat di sistem.
                           </td>
                         </tr>
                       ) : (
-                        ordersList.map((order) => (
-                          <tr key={order.id} className="hover:bg-zinc-900/30 transition-colors">
-                            <td className="px-4 py-3 font-mono font-bold text-amber-400">
-                              {order.order_code}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-white">{order.user_name || 'User'}</div>
-                              <div className="text-[11px] text-zinc-500 font-mono">{order.user_email}</div>
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-white">
-                              {order.amount_formatted || 'Rp 49.000'}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                  order.status === 'approved'
-                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                    : order.status === 'rejected'
-                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
-                                }`}
-                              >
-                                {order.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-zinc-500 text-[11px]">
-                              {order.created_at ? new Date(order.created_at).toLocaleString('id-ID') : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {order.status === 'pending' ? (
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApproveOrder(order.id, order.user_id)}
-                                    className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-[11px] transition-colors"
-                                  >
-                                    ✅ Terima PRO
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRejectOrder(order.id)}
-                                    className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 text-zinc-400 font-semibold text-[11px] transition-colors"
-                                  >
-                                    ❌ Tolak
-                                  </button>
+                        ordersList.map((order) => {
+                          const isPlus = order.amount <= 30000 || (order.admin_notes && order.admin_notes.toLowerCase().includes('plus'));
+                          return (
+                            <tr key={order.id} className="hover:bg-zinc-900/40 transition-colors">
+                              {/* Order Code */}
+                              <td className="px-4 py-3.5 align-middle">
+                                <span className="px-2 py-1 rounded-md font-mono font-bold text-amber-400 bg-zinc-900 border border-zinc-800 tracking-wider inline-block">
+                                  {order.order_code}
+                                </span>
+                              </td>
+
+                              {/* User Info */}
+                              <td className="px-4 py-3.5 align-middle">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-[10px] font-bold text-amber-400 shrink-0 select-none">
+                                    {(order.user_name || order.user_email || 'U').charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-white truncate max-w-[180px]" title={order.user_name || 'User'}>
+                                      {order.user_name || 'User'}
+                                    </div>
+                                    <div className="text-[11px] text-zinc-400 font-mono truncate max-w-[180px]" title={order.user_email}>
+                                      {order.user_email}
+                                    </div>
+                                  </div>
                                 </div>
-                              ) : (
-                                <span className="text-[11px] text-zinc-500 italic">Selesai</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+
+                              {/* Amount & Tier */}
+                              <td className="px-4 py-3.5 align-middle">
+                                <div className="font-semibold text-white text-xs">
+                                  {order.amount_formatted || 'Rp 49.000'}
+                                </div>
+                                <span
+                                  className={`text-[9px] font-bold uppercase font-mono px-1.5 py-0.2 rounded inline-block mt-0.5 ${
+                                    isPlus
+                                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  }`}
+                                >
+                                  {isPlus ? 'Paket PLUS' : 'Paket PRO'}
+                                </span>
+                              </td>
+
+                              {/* Status */}
+                              <td className="px-4 py-3.5 align-middle">
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 ${
+                                    order.status === 'approved'
+                                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                      : order.status === 'rejected'
+                                      ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                      : 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      order.status === 'approved'
+                                        ? 'bg-emerald-400'
+                                        : order.status === 'rejected'
+                                        ? 'bg-red-400'
+                                        : 'bg-amber-400'
+                                    }`}
+                                  />
+                                  <span>{order.status}</span>
+                                </span>
+                              </td>
+
+                              {/* Date */}
+                              <td className="px-4 py-3.5 align-middle text-zinc-400 font-mono text-[11px]">
+                                {order.created_at ? new Date(order.created_at).toLocaleString('id-ID', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                }) : '-'}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="px-4 py-3.5 align-middle text-right">
+                                {order.status === 'pending' ? (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApproveOrder(order.id, order.user_id)}
+                                      className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs transition-all shadow-xs active:scale-95 cursor-pointer"
+                                    >
+                                      Terima
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRejectOrder(order.id)}
+                                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 font-medium text-xs border border-zinc-800 hover:border-red-500/30 transition-all cursor-pointer"
+                                    >
+                                      Tolak
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-zinc-500 font-medium italic">
+                                    {order.status === 'approved' ? 'Telah Disetujui' : 'Ditolak'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -2035,14 +2556,76 @@ export default function AdminDashboard() {
           {activeTab === 'users' && (
             <div className="space-y-6">
               <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
-                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                    Daftar Pengguna Google ({usersList.length})
-                  </h4>
+                {/* Status Filter Header */}
+                <div className="p-4 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 mr-1">
+                      Filter:
+                    </span>
+                    {[
+                      { id: 'all', label: `Semua (${usersList.length})` },
+                      {
+                        id: 'active',
+                        label: `PRO/PLUS Aktif (${
+                          usersList.filter(
+                            (u: any) =>
+                              (u.subscription_tier === 'pro' ||
+                                u.subscription_tier === 'plus' ||
+                                u.subscription_tier === 'unlimited') &&
+                              (!u.pro_expires_at || new Date(u.pro_expires_at).getTime() > Date.now())
+                          ).length
+                        })`,
+                      },
+                      {
+                        id: 'expiring',
+                        label: `Hampir Habis (${
+                          usersList.filter((u: any) => {
+                            if (!u.pro_expires_at) return false;
+                            const diff = Math.ceil(
+                              (new Date(u.pro_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                            );
+                            return diff > 0 && diff <= 5;
+                          }).length
+                        })`,
+                      },
+                      {
+                        id: 'expired',
+                        label: `Kadaluarsa (${
+                          usersList.filter(
+                            (u: any) => u.pro_expires_at && new Date(u.pro_expires_at).getTime() <= Date.now()
+                          ).length
+                        })`,
+                      },
+                      {
+                        id: 'free',
+                        label: `Free (${
+                          usersList.filter((u: any) => u.subscription_tier === 'free' || !u.subscription_tier).length
+                        })`,
+                      },
+                      {
+                        id: 'banned',
+                        label: `Diblokir (${usersList.filter((u: any) => Boolean(u.is_banned)).length})`,
+                      },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setUserFilter(f.id as any)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          userFilter === f.id
+                            ? 'bg-amber-500 text-zinc-950 font-bold'
+                            : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
                     type="button"
                     onClick={fetchUsers}
-                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
+                    className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 transition-colors cursor-pointer"
                   >
                     <RefreshCw className={`h-3 w-3 ${loadingData ? 'animate-spin' : ''}`} />
                     <span>Refresh</span>
@@ -2052,71 +2635,245 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px]">
-                      <tr>
-                        <th className="px-4 py-3">Nama / Email</th>
-                        <th className="px-4 py-3">Status Tier</th>
-                        <th className="px-4 py-3">Trial Terpakai</th>
-                        <th className="px-4 py-3">Tanggal Daftar</th>
-                        <th className="px-4 py-3 text-right">Aksi</th>
+                      <tr className="border-b border-zinc-800">
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[28%] min-w-[220px]">
+                          Pengguna
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
+                          Status Tier & Durasi
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
+                          Slot Gemini
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[12%] min-w-[110px]">
+                          Trial & Token
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider w-[10%] min-w-[100px]">
+                          Terdaftar
+                        </th>
+                        <th className="px-4 py-3 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider text-right w-[14%] min-w-[200px]">
+                          Aksi Cepat
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800 text-zinc-300">
-                      {usersList.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                            Belum ada user yang terdaftar di Supabase.
-                          </td>
-                        </tr>
-                      ) : (
-                        usersList.map((u) => (
-                          <tr key={u.id} className="hover:bg-zinc-900/30 transition-colors">
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-white">{u.full_name || 'User'}</div>
-                              <div className="text-[11px] text-zinc-500 font-mono">{u.email}</div>
+                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                      {(() => {
+                        const filtered = usersList.filter((u: any) => {
+                          if (userFilter === 'banned') return Boolean(u.is_banned);
+                          if (userFilter === 'free') return u.subscription_tier === 'free' || !u.subscription_tier;
+                          if (userFilter === 'active') {
+                            const isPaid =
+                              u.subscription_tier === 'pro' ||
+                              u.subscription_tier === 'plus' ||
+                              u.subscription_tier === 'unlimited';
+                            if (!isPaid) return false;
+                            if (!u.pro_expires_at) return true;
+                            return new Date(u.pro_expires_at).getTime() > Date.now();
+                          }
+                          if (userFilter === 'expiring') {
+                            if (!u.pro_expires_at) return false;
+                            const diff = Math.ceil(
+                              (new Date(u.pro_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                            );
+                            return diff > 0 && diff <= 5;
+                          }
+                          if (userFilter === 'expired') {
+                            if (!u.pro_expires_at) return false;
+                            return new Date(u.pro_expires_at).getTime() <= Date.now();
+                          }
+                          return true;
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 font-medium">
+                                Tidak ada data pengguna yang cocok dengan filter saat ini.
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return filtered.map((u: any) => (
+                          <tr key={u.id} className="hover:bg-zinc-900/40 transition-colors">
+                            {/* Pengguna Info */}
+                            <td className="px-4 py-3.5 align-middle">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 border border-zinc-700/60 flex items-center justify-center text-xs font-bold text-amber-400 shrink-0 select-none shadow-xs">
+                                  {(u.full_name || u.email || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-white text-xs truncate max-w-[170px]" title={u.full_name || 'User'}>
+                                      {u.full_name || 'User'}
+                                    </span>
+                                    {u.is_banned && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase shrink-0">
+                                        BLOKIR
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-zinc-400 font-mono truncate max-w-[190px]" title={u.email}>
+                                    {u.email}
+                                  </div>
+                                  {(u.role || u.favorite_ai) && (
+                                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                      {u.role && (
+                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 truncate max-w-[110px]" title={u.role}>
+                                          {u.role}
+                                        </span>
+                                      )}
+                                      {u.favorite_ai && (
+                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400/90 border border-amber-500/20 font-mono">
+                                          {u.favorite_ai}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                  u.subscription_tier === 'pro' || u.subscription_tier === 'unlimited'
-                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : 'bg-zinc-800 text-zinc-400'
-                                }`}
+
+                            {/* Status Tier & Masa Aktif */}
+                            <td className="px-4 py-3.5 align-middle">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide ${
+                                      u.subscription_tier === 'pro'
+                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                        : u.subscription_tier === 'plus'
+                                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                        : u.subscription_tier === 'unlimited'
+                                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                        : 'bg-zinc-800/90 text-zinc-400 border border-zinc-700/50'
+                                    }`}
+                                  >
+                                    {u.subscription_tier || 'FREE'}
+                                  </span>
+                                  {u.is_admin && (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase">
+                                      ADMIN
+                                    </span>
+                                  )}
+                                </div>
+
+                                {(u.subscription_tier === 'pro' || u.subscription_tier === 'plus') && (
+                                  u.pro_expires_at ? (
+                                    (() => {
+                                      const expDate = new Date(u.pro_expires_at);
+                                      const diffMs = expDate.getTime() - Date.now();
+                                      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                                      const isExpired = diffMs <= 0;
+                                      return (
+                                        <div className="text-[10px] font-mono leading-tight">
+                                          {isExpired ? (
+                                            <span className="text-red-400 font-semibold">
+                                              Kadaluarsa ({expDate.toLocaleDateString('id-ID')})
+                                            </span>
+                                          ) : (
+                                            <span className={diffDays <= 5 ? 'text-amber-400 font-semibold' : 'text-zinc-400'}>
+                                              Sisa {diffDays} hari ({expDate.toLocaleDateString('id-ID')})
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()
+                                  ) : (
+                                    <span className="text-[10px] text-zinc-500 font-mono block">Aktif</span>
+                                  )
+                                )}
+
+                                {u.subscription_tier === 'unlimited' && (
+                                  <span className="text-[10px] text-purple-400/80 font-mono block">Akses Lifetime</span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Slot Gemini Dedicated */}
+                            <td className="px-4 py-3.5 align-middle">
+                              <select
+                                value={u.assigned_gemini_slot || 'auto'}
+                                onChange={(e) => handleAssignGeminiSlot(u.id, e.target.value)}
+                                className="w-full max-w-[145px] rounded-lg border border-zinc-800 bg-zinc-900/90 px-2 py-1 text-[11px] text-amber-300 font-mono hover:border-zinc-700 focus:border-amber-400 focus:outline-none transition-colors cursor-pointer"
                               >
-                                {u.subscription_tier || 'FREE'}
-                              </span>
+                                <option value="auto">Auto (Global Pool)</option>
+                                {(settings.gemini_slots || DEFAULT_10_SLOTS).map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.label || `Slot ${s.id}`} {!s.isActive || !s.key.trim() ? '(Off)' : ''}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
-                            <td className="px-4 py-3 font-mono">
-                              {u.trial_count || 0} / {settings.trial_limit}
+
+                            {/* Trial & Token */}
+                            <td className="px-4 py-3.5 align-middle font-mono">
+                              <div className="text-xs font-semibold text-zinc-200">
+                                {u.trial_count || 0} / {settings.trial_limit} trial
+                              </div>
+                              <div className="text-[10px] text-zinc-400 mt-0.5">
+                                {(u.total_server_tokens || 0).toLocaleString('id-ID')} token
+                              </div>
                             </td>
-                            <td className="px-4 py-3 text-zinc-500 text-[11px]">
-                              {u.created_at ? new Date(u.created_at).toLocaleDateString('id-ID') : '-'}
+
+                            {/* Tanggal Daftar */}
+                            <td className="px-4 py-3.5 align-middle text-zinc-400 font-mono text-[11px]">
+                              {u.created_at ? new Date(u.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                             </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
+
+                            {/* Aksi Cepat Terorganisir */}
+                            <td className="px-4 py-3.5 align-middle text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {/* Tier Quick Selector */}
+                                <select
+                                  value=""
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'pro_30') handleSetUserTierWithDuration(u.id, 'pro', 30);
+                                    else if (val === 'pro_7') handleSetUserTierWithDuration(u.id, 'pro', 7);
+                                    else if (val === 'pro_90') handleSetUserTierWithDuration(u.id, 'pro', 90);
+                                    else if (val === 'unlimited') handleSetUserTierWithDuration(u.id, 'unlimited', 99999);
+                                    else if (val === 'free') handleSetUserTierWithDuration(u.id, 'free', 0);
+                                  }}
+                                  className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 font-medium hover:border-zinc-700 focus:border-amber-400 focus:outline-none cursor-pointer"
+                                  title="Ubah durasi atau tier pengguna"
+                                >
+                                  <option value="" disabled>Set Tier...</option>
+                                  <option value="pro_30">PRO (+30 Hari)</option>
+                                  <option value="pro_7">PRO (+7 Hari)</option>
+                                  <option value="pro_90">PRO (+90 Hari)</option>
+                                  <option value="unlimited">Akses Lifetime</option>
+                                  <option value="free">Turunkan ke Free</option>
+                                </select>
+
+                                {/* Ban/Unban Toggle */}
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleUserPro(u.id, u.subscription_tier)}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
-                                    u.subscription_tier === 'pro'
-                                      ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                                      : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'
+                                  onClick={() => handleToggleUserBan(u.id, Boolean(u.is_banned))}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                                    u.is_banned
+                                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                                      : 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25'
                                   }`}
+                                  title={u.is_banned ? 'Buka blokir akun pengguna' : 'Blokir akses pengguna'}
                                 >
-                                  {u.subscription_tier === 'pro' ? 'Turunkan ke Free' : 'Jadikan PRO'}
+                                  {u.is_banned ? 'Buka' : 'Blokir'}
                                 </button>
+
+                                {/* Reset Trial Button */}
                                 <button
                                   type="button"
                                   onClick={() => handleResetUserTrial(u.id)}
-                                  className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px]"
-                                  title="Reset Trial Kuota ke 0"
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-all cursor-pointer"
+                                  title="Reset pemakaian trial ke 0"
                                 >
-                                  Reset Trial
+                                  Reset
                                 </button>
                               </div>
                             </td>
                           </tr>
-                        ))
-                      )}
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -2126,181 +2883,501 @@ export default function AdminDashboard() {
 
           {/* TAB 6: QRIS & PRICING */}
           {activeTab === 'pricing' && (
-            <div className="max-w-3xl space-y-6">
-              {/* Card 1: Merchant & Price Settings */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-6 space-y-5">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                  <QrCode className="h-4 w-4" />
-                  <span>Pengaturan Merchant QRIS GoPay & Harga</span>
-                </h3>
-
-                <div className="space-y-4 text-xs">
+            <div className="space-y-6">
+              {/* Card 0: Dynamic Multi-Tier Configurator as a Data Table */}
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <label className="text-zinc-400 block mb-1 font-medium">Nama Merchant GoBiz (Tampil di QRIS):</label>
-                    <input
-                      type="text"
-                      value={settings.qris_merchant_name || ''}
-                      onChange={(e) => setSettings({ ...settings, qris_merchant_name: e.target.value })}
-                      placeholder="NGODINGPAKEPRD OFFICIAL"
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 text-white focus:border-amber-500 focus:outline-hidden font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1 font-medium">Nomor Akun GoPay Merchant:</label>
-                    <input
-                      type="text"
-                      value={settings.qris_gopay_number || ''}
-                      onChange={(e) => setSettings({ ...settings, qris_gopay_number: e.target.value })}
-                      placeholder="0821-4475-4089"
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 text-white font-mono focus:border-amber-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-zinc-400 block mb-1 font-medium">Harga PRO (Nominal Angka):</label>
-                      <input
-                        type="number"
-                        value={settings.pro_price_rp || 49000}
-                        onChange={(e) => setSettings({ ...settings, pro_price_rp: parseInt(e.target.value) || 0 })}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 text-white font-mono focus:border-amber-500 focus:outline-hidden"
-                      />
+                    <div className="flex items-center gap-2">
+                      <Sliders className="h-4 w-4 text-amber-400" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                        Tabel Konfigurasi Hak Akses & Batas Harian (Free, PLUS, PRO)
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        DYNAMIC GATING
+                      </span>
                     </div>
-                    <div>
-                      <label className="text-zinc-400 block mb-1 font-medium">Label Tampilan Harga:</label>
-                      <input
-                        type="text"
-                        value={settings.pro_price_formatted || ''}
-                        onChange={(e) => setSettings({ ...settings, pro_price_formatted: e.target.value })}
-                        placeholder="Rp 49.000 / Lifetime Access"
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 text-white focus:border-amber-500 focus:outline-hidden"
-                      />
-                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-1">
+                      Atur kuota harian dan buka/kunci 4 fitur pilar untuk masing-masing tier (Free, PLUS, PRO) secara bebas tanpa edit kode.
+                    </p>
                   </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-zinc-900/60 text-zinc-400 uppercase text-[10px] border-b border-zinc-800">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[15%] min-w-[130px]">
+                          Paket & Status
+                        </th>
+                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[17%] min-w-[150px]">
+                          Harga & Format
+                        </th>
+                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[15%] min-w-[120px]">
+                          Batas Harian (PRD/Hari)
+                        </th>
+                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[18%] min-w-[150px]">
+                          Badge & Deskripsi
+                        </th>
+                        <th className="px-4 py-3 font-semibold text-zinc-400 uppercase text-[10px] tracking-wider w-[35%] min-w-[280px]">
+                          Hak Akses Fitur Utama (Dynamic Gating)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                      {(() => {
+                        const raw = settings.pricing_tiers && settings.pricing_tiers.length > 0
+                          ? [...settings.pricing_tiers]
+                          : [...DEFAULT_PRICING_TIERS];
+                        if (!raw.some((t) => t.id === 'free')) {
+                          raw.unshift(DEFAULT_PRICING_TIERS[0]);
+                        }
+                        const normalizedList = raw.map((t) => {
+                          const def = DEFAULT_PRICING_TIERS.find((d) => d.id === t.id);
+                          return {
+                            ...t,
+                            feature_flags: t.feature_flags || def?.feature_flags || {
+                              advanced_templates: t.id !== 'free',
+                              custom_stack: t.id !== 'free',
+                              export_zip: t.id !== 'free',
+                              architecture_diagrams: t.id !== 'free',
+                            },
+                          };
+                        });
+
+                        return normalizedList.map((tier, tIdx) => {
+                          const isPro = tier.id === 'pro';
+                          const isFree = tier.id === 'free';
+                          const isPlus = tier.id === 'plus';
+
+                          const updateTierAt = (updates: Partial<PricingTierConfig>) => {
+                            const updated = [...normalizedList];
+                            updated[tIdx] = { ...updated[tIdx], ...updates };
+                            const proMatch = updated.find((t) => t.id === 'pro');
+                            const extra: any = { pricing_tiers: updated };
+                            if (proMatch) {
+                              extra.pro_price_rp = proMatch.price_rp;
+                              extra.pro_price_formatted = proMatch.price_formatted;
+                            }
+                            setSettings((prev) => ({ ...prev, ...extra }));
+                          };
+
+                          const flags = tier.feature_flags || {
+                            advanced_templates: !isFree,
+                            custom_stack: !isFree,
+                            export_zip: !isFree,
+                            architecture_diagrams: !isFree,
+                          };
+
+                          return (
+                            <tr key={tier.id} className="hover:bg-zinc-900/30 transition-colors align-top">
+                              {/* Kolom 1: Paket & Status */}
+                              <td className="px-4 py-4 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[11px] font-black uppercase font-mono ${
+                                      isPro
+                                        ? 'bg-amber-500 text-zinc-950'
+                                        : isPlus
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                    }`}
+                                  >
+                                    {isFree ? 'FREE TIER' : `PAKET ${tier.name.replace('Paket ', '')}`}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 font-mono">ID: {tier.id}</span>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-zinc-400 font-medium block">Nama Paket:</label>
+                                  <input
+                                    type="text"
+                                    value={tier.name}
+                                    onChange={(e) => updateTierAt({ name: e.target.value })}
+                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white font-semibold focus:border-amber-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                {!isFree ? (
+                                  <label className="flex items-center gap-2 cursor-pointer pt-1 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      checked={tier.isActive !== false}
+                                      onChange={(e) => updateTierAt({ isActive: e.target.checked })}
+                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
+                                    />
+                                    <span className={`font-semibold ${tier.isActive !== false ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                      {tier.isActive !== false ? 'Status Aktif' : 'Nonaktif'}
+                                    </span>
+                                  </label>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-400 font-mono block pt-1">
+                                    Paket Bawaan Sistem
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Kolom 2: Harga & Format */}
+                              <td className="px-4 py-4 space-y-2">
+                                <div>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Nominal (Rupiah):</label>
+                                  {isFree ? (
+                                    <div className="px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 text-xs font-mono font-bold text-zinc-400">
+                                      Rp 0 (Gratis)
+                                    </div>
+                                  ) : (
+                                    <div className="relative">
+                                      <span className="absolute left-2.5 top-1.5 text-zinc-500 font-mono text-[11px]">Rp</span>
+                                      <input
+                                        type="number"
+                                        value={tier.price_rp}
+                                        onChange={(e) => updateTierAt({ price_rp: parseInt(e.target.value) || 0 })}
+                                        className="w-full rounded-lg border border-zinc-800 bg-zinc-900 pl-8 pr-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-amber-500 focus:outline-hidden"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Label Tampilan:</label>
+                                  <input
+                                    type="text"
+                                    value={tier.price_formatted}
+                                    onChange={(e) => updateTierAt({ price_formatted: e.target.value })}
+                                    placeholder={isFree ? 'Gratis' : 'Rp 25.000 / 30 Hari'}
+                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-hidden"
+                                  />
+                                </div>
+                              </td>
+
+                              {/* Kolom 3: Batas Harian */}
+                              <td className="px-4 py-4 space-y-2">
+                                <div>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Batas Generate:</label>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      value={tier.daily_limit}
+                                      onChange={(e) => updateTierAt({ daily_limit: parseInt(e.target.value) || 0 })}
+                                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-amber-500 focus:outline-hidden"
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-zinc-400 font-mono mt-1 block">
+                                    PRD / hari (Reset 00:00 WIB)
+                                  </span>
+                                </div>
+                                <div className="pt-1">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 inline-block font-mono">
+                                    Fair Usage Active
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Kolom 4: Badge & Deskripsi */}
+                              <td className="px-4 py-4 space-y-2">
+                                <div>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Badge Highlight:</label>
+                                  <input
+                                    type="text"
+                                    value={tier.badge || ''}
+                                    onChange={(e) => updateTierAt({ badge: e.target.value })}
+                                    placeholder="FREE / HEMAT / POPULER"
+                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-hidden font-mono uppercase"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-zinc-400 font-medium block mb-1">Subtitle / Deskripsi:</label>
+                                  <input
+                                    type="text"
+                                    value={tier.description || ''}
+                                    onChange={(e) => updateTierAt({ description: e.target.value })}
+                                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 focus:border-amber-500 focus:outline-hidden"
+                                  />
+                                </div>
+                              </td>
+
+                              {/* Kolom 5: Hak Akses Fitur Utama (Dynamic Gating) */}
+                              <td className="px-4 py-4 space-y-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                  {/* Flag 1: Template Lanjutan */}
+                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(flags.advanced_templates)}
+                                      onChange={(e) =>
+                                        updateTierAt({
+                                          feature_flags: { ...flags, advanced_templates: e.target.checked },
+                                        })
+                                      }
+                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
+                                    />
+                                    <span className={flags.advanced_templates ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
+                                      Template Lanjutan (Mobile & AI)
+                                    </span>
+                                  </label>
+
+                                  {/* Flag 2: Racik Custom Stack */}
+                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(flags.custom_stack)}
+                                      onChange={(e) =>
+                                        updateTierAt({
+                                          feature_flags: { ...flags, custom_stack: e.target.checked },
+                                        })
+                                      }
+                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
+                                    />
+                                    <span className={flags.custom_stack ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
+                                      Racik Custom Tech Stack
+                                    </span>
+                                  </label>
+
+                                  {/* Flag 3: Unduh Starter ZIP */}
+                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(flags.export_zip)}
+                                      onChange={(e) =>
+                                        updateTierAt({
+                                          feature_flags: { ...flags, export_zip: e.target.checked },
+                                        })
+                                      }
+                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
+                                    />
+                                    <span className={flags.export_zip ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
+                                      Unduh Starter Kit (.ZIP)
+                                    </span>
+                                  </label>
+
+                                  {/* Flag 4: Diagram Arsitektur & ERD */}
+                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(flags.architecture_diagrams)}
+                                      onChange={(e) =>
+                                        updateTierAt({
+                                          feature_flags: { ...flags, architecture_diagrams: e.target.checked },
+                                        })
+                                      }
+                                      className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
+                                    />
+                                    <span className={flags.architecture_diagrams ? 'text-zinc-200 font-semibold' : 'text-zinc-500 line-through'}>
+                                      Diagram Arsitektur & ERD
+                                    </span>
+                                  </label>
+                                </div>
+
+                                {/* Collapsible for marketing bullet lines */}
+                                <details className="pt-1 text-[10px]">
+                                  <summary className="text-zinc-500 hover:text-amber-400 cursor-pointer font-mono select-none">
+                                    &rsaquo; Edit Teks Marketing Bullets ({tier.features.length} baris)
+                                  </summary>
+                                  <div className="mt-1.5">
+                                    <textarea
+                                      rows={2}
+                                      value={tier.features.join('\n')}
+                                      onChange={(e) => updateTierAt({ features: e.target.value.split('\n') })}
+                                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-white font-mono text-[10px] focus:border-amber-500 focus:outline-hidden leading-snug"
+                                      placeholder="Poin fitur 1&#10;Poin fitur 2"
+                                    />
+                                  </div>
+                                </details>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              {/* Card 2: Upload Gambar QRIS dari File / Komputer */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    <span>Upload File Gambar QRIS (PNG / JPG / WEBP)</span>
-                  </h3>
-                  {settings.qris_image_url && settings.qris_image_url !== '/qris-gopay-placeholder.png' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettings({ ...settings, qris_image_url: '/qris-gopay-placeholder.png' });
-                        showToast('success', 'Gambar QRIS direset ke placeholder default');
-                      }}
-                      className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Reset Gambar</span>
-                    </button>
-                  )}
-                </div>
+              {/* Section 2: 2-Column Grid for Merchant Info & QRIS Barcode */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Kolom Kiri (5 cols): Info Merchant GoBiz & GoPay */}
+                <div className="lg:col-span-5 rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                      <Wallet className="h-4 w-4" />
+                      <span>Info Merchant & Rekening GoPay</span>
+                    </h3>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+                      GATEWAY
+                    </span>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                  {/* File Input Box */}
-                  <div className="space-y-3">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png, image/jpeg, image/jpg, image/webp"
-                      onChange={handleQRISFileUpload}
-                      className="hidden"
-                    />
-
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-zinc-700 hover:border-amber-500 bg-zinc-900/40 hover:bg-zinc-900/80 p-6 rounded-2xl text-center cursor-pointer transition-all group"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
-                        <Upload className="h-6 w-6" />
-                      </div>
-                      <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">
-                        Klik untuk Pilih File Gambar QRIS
-                      </p>
-                      <p className="text-[11px] text-zinc-400 mt-1">
-                        Mendukung PNG, JPG, JPEG, WEBP (Maksimal 4MB)
-                      </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          fileInputRef.current?.click();
-                        }}
-                        className="mt-3 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        <span>Pilih Gambar dari Komputer</span>
-                      </button>
+                  <div className="space-y-3.5 text-xs">
+                    <div>
+                      <label className="text-zinc-400 block mb-1 font-medium text-[11px]">
+                        Nama Merchant GoBiz (Tampil di QRIS):
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.qris_merchant_name || ''}
+                        onChange={(e) => setSettings({ ...settings, qris_merchant_name: e.target.value })}
+                        placeholder="NGODINGPAKEPRD OFFICIAL"
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-white focus:border-amber-500 focus:outline-hidden font-medium"
+                      />
                     </div>
 
                     <div>
-                      <label className="text-zinc-400 text-xs block mb-1">Atau masukkan URL / Link CDN Gambar:</label>
+                      <label className="text-zinc-400 block mb-1 font-medium text-[11px]">
+                        Nomor Akun GoPay Merchant (Untuk Transfer Manual):
+                      </label>
                       <input
                         type="text"
-                        value={settings.qris_image_url || ''}
-                        onChange={(e) => setSettings({ ...settings, qris_image_url: e.target.value })}
-                        placeholder="https://... atau /qris.png atau base64"
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-white font-mono truncate focus:border-amber-500 focus:outline-hidden"
+                        value={settings.qris_gopay_number || ''}
+                        onChange={(e) => setSettings({ ...settings, qris_gopay_number: e.target.value })}
+                        placeholder="0851-2360-7711"
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-white font-mono focus:border-amber-500 focus:outline-hidden"
                       />
                     </div>
-                  </div>
 
-                  {/* Live Image Preview Frame */}
-                  <div className="flex flex-col items-center justify-center p-4 bg-zinc-900/60 rounded-2xl border border-zinc-800 text-center">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                      Live Preview QRIS (Tampilan Pengguna)
-                    </span>
-                    <div className="w-48 h-48 bg-white rounded-xl p-2 flex items-center justify-center shadow-lg border border-zinc-300 overflow-hidden">
-                      {settings.qris_image_url ? (
-                        <img
-                          src={settings.qris_image_url}
-                          alt="QRIS Preview"
-                          className="w-full h-full object-contain"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="text-zinc-800 text-center text-xs font-bold flex flex-col items-center justify-center">
-                          <QrCode className="h-16 w-16 mx-auto text-zinc-800 mb-1" />
-                          <span>Belum Ada Gambar</span>
-                        </div>
-                      )}
+                    {/* Ringkasan Harga Paket yang Berjalan */}
+                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-3.5 space-y-2">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                        Ringkasan Paket Aktif (Sinkron Otomatis)
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(settings.pricing_tiers || DEFAULT_PRICING_TIERS).map((t) => (
+                          <div key={t.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 block uppercase font-mono">{t.name}</span>
+                            <span className="text-xs font-bold text-amber-400 font-mono">
+                              Rp {t.price_rp.toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-[9px] text-zinc-500 block">{t.daily_limit} PRD/hari</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
+                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-3 text-[11px] text-zinc-400 space-y-1">
+                      <span className="font-semibold text-zinc-300 block">Catatan Verifikasi GoBiz:</span>
+                      <p className="leading-relaxed text-zinc-400 text-[10px]">
+                        Saat pembeli menyelesaikan transaksi QRIS, order masuk ke tab <strong>GoBiz QRIS Orders</strong>. Buka aplikasi GoBiz untuk konfirmasi penerimaan dana.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kolom Kanan (7 cols): Barcode QRIS & File Upload */}
+                <div className="lg:col-span-7 rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                      <QrCode className="h-4 w-4" />
+                      <span>Barcode QRIS & Upload Gambar</span>
+                    </h3>
                     {settings.qris_image_url && settings.qris_image_url !== '/qris-gopay-placeholder.png' && (
                       <button
                         type="button"
                         onClick={() => {
-                          setRawUploadedImage(settings.qris_image_url || null);
-                          setCropScale(1);
-                          setCropOffsetX(0);
-                          setCropOffsetY(0);
-                          setIsCroppingOpen(true);
+                          setSettings({ ...settings, qris_image_url: '/qris-gopay-placeholder.png' });
+                          showToast('success', 'Gambar QRIS direset ke placeholder default');
                         }}
-                        className="mt-2.5 px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer transition-colors"
                       >
-                        <Scissors className="h-3.5 w-3.5" />
-                        <span>Pangkas / Crop Gambar</span>
+                        <Trash2 className="h-3 w-3" />
+                        <span>Reset Gambar</span>
                       </button>
                     )}
+                  </div>
 
-                    <span className="text-xs font-bold text-white mt-2">
-                      {settings.qris_merchant_name || 'NGODINGPAKEPRD OFFICIAL'}
-                    </span>
-                    <span className="text-[11px] text-amber-400 font-mono font-semibold">
-                      {settings.pro_price_formatted || `Rp ${(settings.pro_price_rp || 49000).toLocaleString('id-ID')}`}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 mt-0.5 font-mono">
-                      GoPay: {settings.qris_gopay_number || '0821-4475-4089'}
-                    </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                    {/* Live Preview Barcode QRIS Box */}
+                    <div className="sm:col-span-5 flex flex-col items-center justify-center p-3.5 bg-zinc-900/70 rounded-xl border border-zinc-800 text-center">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                        Live Preview QRIS
+                      </span>
+                      <div className="w-36 h-36 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-lg border border-zinc-300 overflow-hidden">
+                        {settings.qris_image_url ? (
+                          <img
+                            src={settings.qris_image_url}
+                            alt="QRIS Preview"
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="text-zinc-800 text-center text-xs font-bold flex flex-col items-center justify-center">
+                            <QrCode className="h-12 w-12 mx-auto text-zinc-800 mb-1" />
+                            <span className="text-[10px]">Belum Ada Gambar</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {settings.qris_image_url && settings.qris_image_url !== '/qris-gopay-placeholder.png' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRawUploadedImage(settings.qris_image_url || null);
+                            setCropScale(1);
+                            setCropOffsetX(0);
+                            setCropOffsetY(0);
+                            setIsCroppingOpen(true);
+                          }}
+                          className="mt-2 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-[10px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Scissors className="h-3 w-3" />
+                          <span>Pangkas (Crop)</span>
+                        </button>
+                      )}
+
+                      <span className="text-[11px] font-bold text-white mt-1.5 truncate max-w-full">
+                        {settings.qris_merchant_name || 'NGODINGPAKEPRD OFFICIAL'}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        GoPay: {settings.qris_gopay_number || '0851-2360-7711'}
+                      </span>
+                    </div>
+
+                    {/* Upload Controls Box */}
+                    <div className="sm:col-span-7 space-y-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
+                        onChange={handleQRISFileUpload}
+                        className="hidden"
+                      />
+
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-zinc-700 hover:border-amber-500 bg-zinc-900/40 hover:bg-zinc-900/80 p-4 rounded-xl text-center cursor-pointer transition-all group"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform">
+                          <Upload className="h-4 w-4" />
+                        </div>
+                        <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">
+                          Pilih File Gambar QRIS
+                        </p>
+                        <p className="text-[10px] text-zinc-400 mt-0.5">
+                          PNG, JPG, WEBP (Maksimal 6MB)
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          className="mt-2 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-sm cursor-pointer"
+                        >
+                          <Upload className="h-3 w-3" />
+                          <span>Upload File</span>
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="text-zinc-400 text-[10px] font-medium block mb-1">
+                          Atau masukkan Link / URL CDN Gambar:
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.qris_image_url || ''}
+                          onChange={(e) => setSettings({ ...settings, qris_image_url: e.target.value })}
+                          placeholder="https://... atau /qris.png"
+                          className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-white font-mono truncate focus:border-amber-500 focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

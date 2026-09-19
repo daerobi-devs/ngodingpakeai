@@ -13,15 +13,13 @@ import {
   PanelLeft,
   Crown,
   Key,
-  User,
-  LogIn,
   ExternalLink,
   RefreshCw,
-  Cpu,
   Layers,
   Search,
-  MessageSquare,
   Zap,
+  Wand2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PRDOutput } from '@/types/prd';
@@ -42,8 +40,6 @@ interface GeneratorSidebarProps {
   onSelectPrd: (prd: PRDOutput, id: string) => void;
   onNewPrd: () => void;
   onDeletePrd?: (id: string) => void;
-  onOpenProChat: () => void;
-  isProChatOpen: boolean;
   onOpenSettings: () => void;
   onOpenPricing: () => void;
   onOpenAuth: () => void;
@@ -52,6 +48,8 @@ interface GeneratorSidebarProps {
   onToggleTheme: () => void;
   isLoadingHistory?: boolean;
   onRefreshHistory?: () => void;
+  creationMode: 'wizard' | 'manual';
+  onSetCreationMode: (mode: 'wizard' | 'manual') => void;
 }
 
 export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
@@ -62,8 +60,6 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
   onSelectPrd,
   onNewPrd,
   onDeletePrd,
-  onOpenProChat,
-  isProChatOpen,
   onOpenSettings,
   onOpenPricing,
   onOpenAuth,
@@ -72,8 +68,10 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
   onToggleTheme,
   isLoadingHistory = false,
   onRefreshHistory,
+  creationMode,
+  onSetCreationMode,
 }) => {
-  const { user, isPro, remainingTrials, systemSettings, logout } = useAuth();
+  const { isPro, remainingTrials, systemSettings, pendingOrder } = useAuth();
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -92,7 +90,8 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
       if (diffMin < 60) return `${diffMin}m lalu`;
       const diffHour = Math.floor(diffMin / 60);
       if (diffHour < 24) return `${diffHour}j lalu`;
-      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+      const diffDay = Math.floor(diffHour / 24);
+      return `${diffDay}h lalu`;
     } catch {
       return '';
     }
@@ -100,11 +99,8 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (onDeletePrd) {
-      if (window.confirm('Hapus dokumen PRD ini dari riwayat?')) {
-        setDeletingId(id);
-        onDeletePrd(id);
-      }
+    if (confirm('Hapus dokumen PRD ini dari riwayat?')) {
+      if (onDeletePrd) onDeletePrd(id);
     }
   };
 
@@ -114,7 +110,7 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
         <button
           type="button"
           onClick={onToggle}
-          className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors mb-4"
+          className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors mb-4 cursor-pointer"
           title="Buka Sidebar Workspace"
         >
           <PanelLeft className="h-5 w-5 text-amber-400" />
@@ -123,35 +119,38 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
         <button
           type="button"
           onClick={onNewPrd}
-          className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors mb-4 shadow-sm shadow-amber-500/20"
+          className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors mb-4 shadow-sm shadow-amber-500/20 cursor-pointer"
           title="Buat PRD Baru"
         >
           <Plus className="h-5 w-5 stroke-[2.5]" />
         </button>
 
-        <button
-          type="button"
-          onClick={onOpenProChat}
-          className={`p-2.5 rounded-xl transition-colors mb-4 ${
-            isProChatOpen
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-              : 'hover:bg-zinc-800 hover:text-white'
-          }`}
-          title="AI Architect Chat"
-        >
-          <MessageSquare className="h-4 w-4" />
-        </button>
-
-        <div className="mt-auto flex flex-col items-center gap-3">
+        {/* Collapsed Pending Order Indicator */}
+        {pendingOrder && !isPro && (
           <button
             type="button"
-            onClick={onOpenSettings}
-            className="p-2 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-            title={`Model: ${activeModel}`}
+            onClick={onOpenPricing}
+            className="relative p-2 rounded-xl bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors mb-4 border border-amber-500/40 cursor-pointer"
+            title={`Pesanan ${pendingOrder.order_code} Menunggu Verifikasi`}
           >
-            <Key className="h-4 w-4 text-emerald-400" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500" />
+            <Clock className="h-4 w-4" />
           </button>
-        </div>
+        )}
+
+        {!isServerManaged && (
+          <div className="mt-auto flex flex-col items-center gap-3">
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="p-2 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              title="Pengaturan Kunci API"
+            >
+              <Key className="h-4 w-4 text-emerald-400" />
+            </button>
+          </div>
+        )}
       </aside>
     );
   }
@@ -189,27 +188,41 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
           <Plus className="h-4 w-4 stroke-[2.5]" />
           <span>Buat PRD Baru</span>
         </button>
+      </div>
 
-        {/* AI Architect Quick Nav Button */}
-        <button
-          type="button"
-          onClick={onOpenProChat}
-          className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold border transition-all ${
-            isProChatOpen
-              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-xs'
-              : 'bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <MessageSquare className="h-3 w-3" />
-            </div>
-            <span>AI Architect Room</span>
-          </div>
-          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-            PRO
-          </span>
-        </button>
+      {/* Mode Pembuatan Section */}
+      <div className="px-3 py-2.5 border-b border-zinc-800/60">
+        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2 px-0.5">
+          Mode Pembuatan
+        </span>
+        <div className="flex items-center rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-0.5 gap-0.5">
+          <button
+            type="button"
+            onClick={() => onSetCreationMode('wizard')}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all ${
+              creationMode === 'wizard'
+                ? 'bg-amber-500 text-zinc-950 shadow-sm shadow-amber-500/30'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+            title="Mode Terpandu (Wizard)"
+          >
+            <Wand2 className="h-3 w-3 shrink-0" />
+            <span>Terpandu</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onSetCreationMode('manual')}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all ${
+              creationMode === 'manual'
+                ? 'bg-zinc-700 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+            title="Form Manual (7 Kategori)"
+          >
+            <SlidersHorizontal className="h-3 w-3 shrink-0" />
+            <span>Manual</span>
+          </button>
+        </div>
       </div>
 
       {/* Projects History Section */}
@@ -283,10 +296,8 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                    <span className="truncate max-w-[120px]">
-                      {item.model_used ? item.model_used.replace('gemini-', '') : 'AI Model'}
-                    </span>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                    <span>Dokumen PRD</span>
                     <span>{formatTimeAgo(item.created_at)}</span>
                   </div>
                 </div>
@@ -304,57 +315,39 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
         )}
       </div>
 
-      {/* Footer Info: Model Status & Profile */}
+      {/* Footer Info: User Tier & Quota */}
       <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/90 space-y-2">
-        {/* Model Chooser Pill */}
-        {isServerManaged ? (
-          <div className="w-full flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2 text-left">
-            <div className="flex items-center gap-2 truncate">
-              <div className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-                <Cpu className="h-3.5 w-3.5" />
+        {/* Pending Order Status Card */}
+        {pendingOrder && !isPro && (
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs animate-in fade-in duration-200">
+            <div className="flex items-center justify-between gap-1 mb-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-400 text-[11px]">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <span>Menunggu Verifikasi</span>
               </div>
-              <div className="truncate">
-                <div className="text-[10px] text-zinc-400 font-medium leading-none mb-1">
-                  Mesin AI
-                </div>
-                <div className="text-xs font-mono font-bold text-emerald-400 truncate">
-                  {isPro
-                    ? systemSettings?.pro_model || 'PRO Cloud AI'
-                    : systemSettings?.free_model || 'Auto Flash AI'}
-                </div>
-              </div>
+              <span className="font-mono font-bold text-[10px] text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/40">
+                {pendingOrder.order_code}
+              </span>
             </div>
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Cloud
-            </span>
+            <p className="text-[10px] text-zinc-400 leading-relaxed">
+              Pesanan sedang divalidasi admin.
+            </p>
+            <button
+              type="button"
+              onClick={onOpenPricing}
+              className="mt-2 w-full py-1.5 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold text-amber-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Clock className="h-3 w-3" />
+              <span>Lihat Detail / Konfirmasi WA</span>
+            </button>
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="w-full flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 p-2 text-left hover:border-zinc-700 transition-colors"
-          >
-            <div className="flex items-center gap-2 truncate">
-              <div className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-                <Cpu className="h-3.5 w-3.5" />
-              </div>
-              <div className="truncate">
-                <div className="text-[10px] text-zinc-400 font-medium leading-none mb-1">
-                  Model Prioritas (BYOK)
-                </div>
-                <div className="text-xs font-mono font-bold text-zinc-200 truncate">
-                  {activeModel}
-                </div>
-              </div>
-            </div>
-            <span className="text-[10px] text-amber-400 hover:underline shrink-0 ml-1 font-semibold">
-              Ganti
-            </span>
-          </button>
         )}
 
         {/* User Tier & Quota Card */}
-        <div className="flex items-center justify-between px-2 py-1 text-xs">
+        <div className="flex items-center justify-between px-1 py-1 text-xs">
           <div className="flex items-center gap-1.5">
             {isPro ? (
               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
@@ -369,40 +362,13 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
             )}
           </div>
 
-          {!isPro && (
+          {!isPro && !pendingOrder && (
             <button
               type="button"
               onClick={onOpenPricing}
-              className="text-[10px] font-bold text-amber-400 hover:text-amber-300 hover:underline"
+              className="text-[10px] font-bold text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
             >
               Upgrade PRO
-            </button>
-          )}
-        </div>
-
-        {/* User login / status */}
-        <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60 text-xs">
-          {user ? (
-            <div className="flex items-center justify-between w-full">
-              <span className="truncate text-zinc-400 text-[11px] max-w-[160px]">
-                {user.email}
-              </span>
-              <button
-                type="button"
-                onClick={() => logout()}
-                className="text-[10px] text-zinc-400 hover:text-rose-400 transition-colors"
-              >
-                Keluar
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onOpenAuth}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg py-1 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition-colors font-medium"
-            >
-              <LogIn className="h-3.5 w-3.5 text-amber-400" />
-              <span>Login Akun Google</span>
             </button>
           )}
         </div>

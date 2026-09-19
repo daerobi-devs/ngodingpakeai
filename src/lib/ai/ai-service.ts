@@ -1,8 +1,9 @@
-import { PRDOutput } from '@/types/prd';
-import { PRDOutputZodSchema } from '@/lib/gemini/schemas';
-import { createKeyPool, generateStructuredPRD as generateGeminiDirect, getKeysFromSettings } from '@/lib/gemini/gemini-client';
+import { PRDOutput, ClarificationQuestion } from '@/types/prd';
+import { PRDOutputZodSchema, normalizeAndSanitizePRDOutput, normalizeAndSanitizeClarifications } from '@/lib/gemini/schemas';
+import { createKeyPool, generateStructuredPRD as generateGeminiDirect, generateClarifications as generateGeminiClarifications, getKeysFromSettings, resolveGeminiKeysAndSlot } from '@/lib/gemini/gemini-client';
 import { SystemSettings, AiProvider } from '@/lib/supabase/types';
-import { normalizeOpenAiEndpoint, parseOpenAiChatResponse } from './openai-compat';
+import { normalizeOpenAiEndpoint, parseOpenAiChatResponse, repairAndParseJSON } from './openai-compat';
+import { getDomainDiscoveryQuestions } from '@/lib/gemini/domain-discovery';
 
 interface GenerateOptions {
   systemSettings: SystemSettings;
@@ -11,6 +12,7 @@ interface GenerateOptions {
   userPrompt: string;
   isPro?: boolean;
   userId?: string;
+  assignedGeminiSlot?: string | null;
   signal?: AbortSignal;
   userPreferredModel?: string;
 }
@@ -27,20 +29,18 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
     userPreferredModel,
   } = options;
 
-  // Determine provider and model based on user tier
+  // Resolve provider & model based on PRO status and preferred overrides
   const provider: AiProvider = isPro
-    ? (systemSettings.pro_ai_provider || systemSettings.ai_provider || 'gemini_direct')
+    ? (systemSettings.pro_ai_provider || systemSettings.ai_provider || 'nine_router')
     : (systemSettings.free_ai_provider || systemSettings.ai_provider || 'gemini_direct');
 
-  const preferredModel = isPro
-    ? (systemSettings.pro_model || systemSettings.nine_router_model || 'deepseek-chat')
-    : (systemSettings.free_model || 'gemini-flash-latest');
+  const preferredModel = userPreferredModel?.trim() || (isPro ? systemSettings.pro_model : systemSettings.free_model);
 
-  // 1. If provider is 9Router (OpenAI Compatible)
+  // 1. 9Router provider
   if (provider === 'nine_router') {
     const endpoint = normalizeOpenAiEndpoint(systemSettings.nine_router_url);
-    const apiKey = systemSettings.nine_router_key || 'sk-test';
-    const model = preferredModel || 'deepseek-chat';
+    const apiKey = systemSettings.nine_router_key || '9router-local';
+    const model = preferredModel || systemSettings.nine_router_model || 'deepseek-chat';
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -54,10 +54,10 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
+        max_tokens: 8192,
         temperature: 0.3,
-        stream: false,
       }),
-      signal: signal || AbortSignal.timeout(150000), // 150s timeout for large PRD generation
+      signal: signal || AbortSignal.timeout(180000),
     });
 
     if (!res.ok) {
@@ -65,26 +65,14 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
       throw new Error('9Router Error [' + res.status + ']: ' + errText.slice(0, 200));
     }
 
-    const rawText = await res.text();
-    const { content: rawContent } = parseOpenAiChatResponse(rawText);
+    const rawResponseText = await res.text();
+    const { content: rawContent } = parseOpenAiChatResponse(rawResponseText);
     if (!rawContent) {
       throw new Error('Respons 9Router kosong atau format stream tidak terbaca.');
     }
 
-    let cleanedText = rawContent.trim();
-    const firstBrace = cleanedText.indexOf('{');
-    const lastBrace = cleanedText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanedText = cleanedText.slice(firstBrace, lastBrace + 1);
-    } else {
-      cleanedText = cleanedText
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/\s*```$/i, '');
-    }
-
-    const parsed = JSON.parse(cleanedText);
-    const validated = PRDOutputZodSchema.parse(parsed);
+    const parsed = repairAndParseJSON(rawContent);
+    const validated = normalizeAndSanitizePRDOutput(parsed);
 
     return {
       ...validated,
@@ -121,10 +109,11 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
+        max_tokens: 8192,
         response_format: { type: 'json_object' },
         temperature: 0.3,
       }),
-      signal: signal || AbortSignal.timeout(60000),
+      signal: signal || AbortSignal.timeout(180000),
     });
 
     if (!res.ok) {
@@ -136,14 +125,8 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
     const rawContent = data?.choices?.[0]?.message?.content;
     if (!rawContent) throw new Error('Respons OpenRouter kosong.');
 
-    const cleanedText = rawContent
-      .trim()
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '');
-
-    const parsed = JSON.parse(cleanedText);
-    const validated = PRDOutputZodSchema.parse(parsed);
+    const parsed = repairAndParseJSON(rawContent);
+    const validated = normalizeAndSanitizePRDOutput(parsed);
 
     return {
       ...validated,
@@ -158,15 +141,22 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
 
   // 3. Default: Gemini Direct
   let keyList: string[] = [];
+  let slotUsedLabel: string | undefined = undefined;
+  let slotPreferredModel: string | undefined = undefined;
   if (systemSettings.api_key_mode === 'server_managed') {
-    keyList = getKeysFromSettings(systemSettings, userId);
+    const resolved = resolveGeminiKeysAndSlot(systemSettings, userId, options.assignedGeminiSlot);
+    keyList = resolved.keys;
+    slotUsedLabel = resolved.slotUsedLabel;
+    slotPreferredModel = resolved.slotPreferredModel;
     if (keyList.length === 0) {
       const envKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
       keyList = envKeys;
+      if (envKeys.length > 0) slotUsedLabel = 'Env Key';
     }
   } else {
     if (userGeminiKey) {
       keyList = [userGeminiKey.trim()];
+      slotUsedLabel = 'BYOK Key';
     }
   }
 
@@ -174,13 +164,187 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
     throw new Error('API Key belum diisi. Masukkan Gemini API Key atau aktifkan Server Managed Key / Multi-Key Slot di Admin.');
   }
 
-  const chosenGeminiModel = userPreferredModel?.trim() || preferredModel || 'gemini-3.8-flash';
+  const chosenGeminiModel = slotPreferredModel?.trim() || userPreferredModel?.trim() || preferredModel || 'gemini-2.5-flash';
   const pool = createKeyPool(keyList);
-  return await generateGeminiDirect({
+  const geminiResult = await generateGeminiDirect({
     apiKeyPool: pool,
     systemPrompt,
     userPrompt,
     preferredModel: chosenGeminiModel,
     signal,
   });
+
+  return {
+    ...geminiResult,
+    metadata: {
+      modelUsed: geminiResult.metadata?.modelUsed || chosenGeminiModel,
+      generatedAt: geminiResult.metadata?.generatedAt || new Date().toISOString(),
+      retries: geminiResult.metadata?.retries,
+      fallbackCount: geminiResult.metadata?.fallbackCount,
+      geminiSlotUsed: slotUsedLabel,
+    },
+  };
+}
+
+export interface ClarificationUnifiedOptions {
+  systemSettings: SystemSettings;
+  userGeminiKey?: string;
+  userIdea: string;
+  prompt: string;
+  isPro?: boolean;
+  userId?: string;
+  signal?: AbortSignal;
+  userPreferredModel?: string;
+}
+
+export async function generateClarificationsUnified(
+  options: ClarificationUnifiedOptions
+): Promise<ClarificationQuestion[]> {
+  const {
+    systemSettings,
+    userGeminiKey,
+    userIdea,
+    prompt,
+    isPro,
+    userId,
+    signal,
+    userPreferredModel,
+  } = options;
+
+  const fallbackQuestions = getDomainDiscoveryQuestions(userIdea);
+
+  const provider: AiProvider = isPro
+    ? (systemSettings.pro_ai_provider || systemSettings.ai_provider || 'nine_router')
+    : (systemSettings.free_ai_provider || systemSettings.ai_provider || 'gemini_direct');
+
+  const preferredModel =
+    userPreferredModel?.trim() || (isPro ? systemSettings.pro_model : systemSettings.free_model);
+
+  try {
+    // 1. 9Router Provider
+    if (provider === 'nine_router') {
+      const endpoint = normalizeOpenAiEndpoint(systemSettings.nine_router_url);
+      const apiKey = systemSettings.nine_router_key || '9router-local';
+      const model = preferredModel || systemSettings.nine_router_model || 'deepseek-chat';
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Kamu adalah Lead Discovery Engineer. Outputkan JSON murni valid berisi array questions sesuai schema.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 3000,
+          temperature: 0.3,
+        }),
+        signal: signal || AbortSignal.timeout(20000),
+      });
+
+      if (!res.ok) {
+        console.warn('9Router clarification HTTP error:', res.status);
+        return fallbackQuestions;
+      }
+
+      const rawResponseText = await res.text();
+      const { content: rawContent } = parseOpenAiChatResponse(rawResponseText);
+      if (!rawContent) return fallbackQuestions;
+
+      const parsed = repairAndParseJSON(rawContent);
+      return normalizeAndSanitizeClarifications(parsed);
+    }
+
+    // 2. OpenRouter Provider
+    if (provider === 'openrouter') {
+      const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+      const apiKey = systemSettings.openrouter_key;
+      const model =
+        preferredModel || systemSettings.openrouter_model || 'anthropic/claude-3.5-haiku';
+
+      if (!apiKey) return fallbackQuestions;
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey,
+          'HTTP-Referer': 'https://ngodingpakeprd.com',
+          'X-Title': 'ngodingpakeprd',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Kamu adalah Lead Discovery Engineer. Outputkan JSON murni valid berisi array questions sesuai schema.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 3000,
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+        }),
+        signal: signal || AbortSignal.timeout(20000),
+      });
+
+      if (!res.ok) {
+        console.warn('OpenRouter clarification HTTP error:', res.status);
+        return fallbackQuestions;
+      }
+
+      const data = await res.json();
+      const rawContent = data?.choices?.[0]?.message?.content;
+      if (!rawContent) return fallbackQuestions;
+
+      const parsed = repairAndParseJSON(rawContent);
+      return normalizeAndSanitizeClarifications(parsed);
+    }
+
+    // 3. Default: Gemini Direct
+    let keyList: string[] = [];
+    if (systemSettings.api_key_mode === 'server_managed') {
+      keyList = getKeysFromSettings(systemSettings, userId);
+      if (keyList.length === 0) {
+        const envKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
+          .split(',')
+          .map((k) => k.trim())
+          .filter(Boolean);
+        keyList = envKeys;
+      }
+    } else {
+      if (userGeminiKey) {
+        keyList = [userGeminiKey.trim()];
+      } else {
+        // In BYOK or hybrid without header, check if server slots exist as backup
+        const slots = getKeysFromSettings(systemSettings, userId);
+        if (slots.length > 0) keyList = slots;
+      }
+    }
+
+    if (keyList.length === 0) {
+      return fallbackQuestions;
+    }
+
+    const chosenModel = userPreferredModel?.trim() || preferredModel || 'gemini-2.5-flash';
+    const pool = createKeyPool(keyList);
+
+    return await generateGeminiClarifications({
+      apiKeyPool: pool,
+      userIdea,
+      prompt,
+      preferredModel: chosenModel,
+    });
+  } catch (err) {
+    console.warn('generateClarificationsUnified error, returning smart domain questions:', err);
+    return fallbackQuestions;
+  }
 }

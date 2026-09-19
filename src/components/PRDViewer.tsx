@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { PRDOutput } from "@/types/prd";
 import { MindmapViewer } from "./MindmapViewer";
 import { PhasedFeatureTree } from "./PhasedFeatureTree";
 import { MermaidRenderer } from "./MermaidRenderer";
-import { generateDesignDoc, getDesignPalette } from "@/lib/design-template";
+import { generateDesignDoc, getDesignPalette, generateAIHarmonicPalette, DesignPalette } from "@/lib/design-template";
 import { BeginnerRoadmap } from "./BeginnerRoadmap";
+import { CustomPaletteModal } from "./CustomPaletteModal";
 import {
   FileText,
   GitFork,
@@ -33,20 +34,34 @@ import {
   Terminal,
   Layers,
   FolderTree,
+  Sparkles,
+  SlidersHorizontal,
+  Lock,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { hasTierFeature } from "@/lib/supabase/types";
 
 interface PRDViewerProps {
   prd: PRDOutput;
   onBackToEdit: () => void;
   theme?: "dark" | "light";
+  onRequireUpgrade?: () => void;
 }
 
 export const PRDViewer: React.FC<PRDViewerProps> = ({
   prd,
   onBackToEdit,
   theme = "dark",
+  onRequireUpgrade,
 }) => {
   const isLight = theme === "light";
+  const { profile, systemSettings } = useAuth();
+  const userTier = profile?.subscription_tier || 'free';
+  const isAdmin = Boolean(profile?.is_admin);
+
+  const canExportZip = hasTierFeature(userTier, 'export_zip', systemSettings, isAdmin);
+  const canViewDiagrams = hasTierFeature(userTier, 'architecture_diagrams', systemSettings, isAdmin);
+
   const [activeTab, setActiveTab] = useState<
     "doc" | "tree" | "design" | "diagrams" | "mindmap" | "tasks" | "roadmap" | "json"
   >("doc");
@@ -61,6 +76,21 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
     prd.feature_breakdown?.[0]?.id || null
   );
   const [copiedFeatureId, setCopiedFeatureId] = useState<string | null>(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleCopyFeaturePrompt = (featId: string, promptText: string) => {
     navigator.clipboard.writeText(promptText);
@@ -72,8 +102,26 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
     setCompletedTasks((prev) => ({ ...prev, [index]: !prev[index] }));
   };
 
-  const designMarkdown = useMemo(() => generateDesignDoc(prd), [prd]);
-  const palette = useMemo(() => getDesignPalette(prd), [prd]);
+  const defaultPalette = useMemo(() => getDesignPalette(prd), [prd]);
+  const [activePalette, setActivePalette] = useState<DesignPalette>(defaultPalette);
+  const [isCustomColorModalOpen, setIsCustomColorModalOpen] = useState(false);
+  const [isGeneratingAIPalette, setIsGeneratingAIPalette] = useState(false);
+
+  useEffect(() => {
+    setActivePalette(getDesignPalette(prd));
+  }, [prd]);
+
+  const palette = activePalette;
+  const designMarkdown = useMemo(() => generateDesignDoc(prd, activePalette), [prd, activePalette]);
+
+  const handleGenerateAIPalette = () => {
+    setIsGeneratingAIPalette(true);
+    setTimeout(() => {
+      const newAI = generateAIHarmonicPalette(prd, activePalette.primaryHex);
+      setActivePalette(newAI);
+      setIsGeneratingAIPalette(false);
+    }, 200);
+  };
 
   const defaultFlowchart = useMemo(() => {
     return (
@@ -173,6 +221,11 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
   }, [prd.architecture_diagrams?.api_integration_matrix]);
 
   const handleDownloadBundleZip = async () => {
+    if (!canExportZip) {
+      if (onRequireUpgrade) onRequireUpgrade();
+      return;
+    }
+
     setDownloadingZip(true);
     try {
       const JSZip = (await import("jszip")).default;
@@ -496,14 +549,15 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
   return (
     <div className="space-y-6 pb-20">
       {/* Top Bar with metadata and action buttons */}
-      <div className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border p-5 transition-colors ${
+      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-2xl border p-4 sm:p-5 transition-colors ${
         isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
       }`}>
-        <div className="flex items-center gap-3">
+        {/* Left Title & Return button */}
+        <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={onBackToEdit}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`shrink-0 flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
               isLight
                 ? "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900"
                 : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 hover:text-white"
@@ -512,11 +566,11 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Kembali Edit</span>
           </button>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" /> PRD MENDALAM SIAP IMPLEMENTASI
             </span>
-            <h1 className={`text-base sm:text-lg font-bold line-clamp-1 mt-0.5 ${
+            <h1 className={`text-base sm:text-lg font-bold truncate mt-0.5 ${
               isLight ? "text-slate-900" : "text-white"
             }`}>
               {prd.title}
@@ -524,269 +578,301 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
           </div>
         </div>
 
-        {/* Export & Actions */}
-        <div className="flex flex-wrap items-center gap-2">
-          {prd.metadata && (
-            <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-mono font-semibold ${
-              isLight
-                ? "border-slate-300 bg-slate-100 text-slate-600"
-                : "border-zinc-800 bg-zinc-900 text-zinc-300"
-            }`}>
-              <Cpu className="h-3 w-3 text-zinc-400" />
-              <span>{prd.metadata.modelUsed}</span>
-            </div>
-          )}
-
-          {/* Unduh Full Bundle (.ZIP) */}
+        {/* Action Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* 1. Primary CTA: Unduh Starter Kit */}
           <button
             type="button"
             onClick={handleDownloadBundleZip}
             disabled={downloadingZip}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50"
-            title="Unduh paket lengkap (.ZIP): .cursorrules, CLAUDE.md, docs/PRD.md, docs/DESIGN.md"
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-md ${
+              !canExportZip
+                ? "bg-zinc-900 border border-amber-500/40 text-zinc-200 hover:border-amber-400 hover:text-white"
+                : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20"
+            }`}
+            title={canExportZip ? "Unduh paket lengkap (.ZIP): .cursorrules, CLAUDE.md, docs/PRD.md, docs/DESIGN.md" : "Fitur unduh Starter Kit (.ZIP) memerlukan paket langganan"}
           >
             {downloadingZip ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : !canExportZip ? (
+              <Lock className="h-3.5 w-3.5 text-amber-400" />
             ) : (
               <Package className="h-3.5 w-3.5" />
             )}
             <span>{downloadingZip ? "Membuat ZIP..." : "Unduh Starter Kit (.ZIP)"}</span>
-          </button>
-
-          {/* Copy DESIGN.md */}
-          <button
-            type="button"
-            onClick={handleCopyDesignDoc}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-              isLight
-                ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
-                : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-zinc-700 hover:text-white"
-            }`}
-            title="Salin Standar Desain Frontend (DESIGN.md)"
-          >
-            {copiedDesign ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-emerald-500 font-bold">DESIGN.md Tersalin!</span>
-              </>
-            ) : (
-              <>
-                <Palette className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Copy DESIGN.md</span>
-              </>
+            {!canExportZip && (
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                PRO
+              </span>
             )}
           </button>
 
-          {/* Copy Cursor Rules */}
+          {/* 2. Copy .cursorrules */}
           <button
             type="button"
             onClick={handleCopyCursorRules}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-              isLight
-                ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
-                : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-zinc-700 hover:text-white"
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              copiedCursorRules
+                ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
+                : isLight
+                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
             }`}
             title="Salin snippet .cursorrules / CLAUDE.md"
           >
             {copiedCursorRules ? (
               <>
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-emerald-500 font-bold">Rules Tersalin!</span>
+                <Check className="h-3.5 w-3.5 text-amber-400" />
+                <span className="text-amber-400 font-bold">Rules Tersalin!</span>
               </>
             ) : (
               <>
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
+                <Zap className="h-3.5 w-3.5 text-amber-400" />
                 <span>Copy .cursorrules</span>
               </>
             )}
           </button>
 
-          {/* Salin MD */}
+          {/* 3. Copy DESIGN.md */}
           <button
             type="button"
-            onClick={handleCopyMarkdown}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-              isLight
-                ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
-                : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-zinc-700 hover:text-white"
+            onClick={handleCopyDesignDoc}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              copiedDesign
+                ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
+                : isLight
+                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
             }`}
+            title="Salin Standar Desain Frontend (DESIGN.md)"
           >
-            {copiedMarkdown ? (
+            {copiedDesign ? (
               <>
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-emerald-500 font-bold">Tersalin</span>
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-emerald-400 font-bold">DESIGN.md Tersalin!</span>
               </>
             ) : (
               <>
-                <Copy className="h-3.5 w-3.5 text-zinc-400" />
-                <span>Salin Markdown</span>
+                <Palette className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Copy DESIGN.md</span>
               </>
             )}
           </button>
 
-          {/* Unduh .MD */}
+          {/* 4. Salin PRD Markdown */}
           <button
             type="button"
-            onClick={handleDownloadMarkdown}
-            className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 px-3.5 py-1.5 text-xs font-bold text-zinc-950 transition-colors"
+            onClick={handleCopyMarkdown}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              copiedMarkdown
+                ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
+                : isLight
+                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
+            }`}
+            title="Salin seluruh isi dokumen PRD dalam format Markdown"
           >
-            <Download className="h-3.5 w-3.5" />
-            <span>Unduh .MD</span>
+            {copiedMarkdown ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-emerald-400 font-bold">PRD Tersalin!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5 text-zinc-400" />
+                <span>Salin PRD</span>
+              </>
+            )}
           </button>
 
-          {/* Unduh .JSON */}
-          <button
-            type="button"
-            onClick={handleDownloadJSON}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-              isLight
-                ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
-                : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-zinc-700 hover:text-white"
-            }`}
-          >
-            <Download className="h-3.5 w-3.5 text-zinc-400" />
-            <span>Unduh .JSON</span>
-          </button>
+          {/* 5. Ekspor Menu Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                isExportMenuOpen
+                  ? "border-zinc-600 bg-zinc-800 text-white"
+                  : isLight
+                  ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
+              }`}
+              title="Opsi Ekspor File"
+            >
+              <Download className="h-3.5 w-3.5 text-zinc-400" />
+              <span>Ekspor File</span>
+              <ChevronDown className={`h-3 w-3 opacity-60 transition-transform ${isExportMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isExportMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-1.5 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadMarkdown();
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Unduh Markdown (.MD)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadJSON();
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Code2 className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Unduh Raw JSON (.JSON)</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className={`flex flex-wrap border rounded-xl p-1 gap-1 transition-colors ${
-        isLight ? "bg-slate-100 border-slate-200" : "bg-[#121215] border-zinc-800"
+      {/* Tabs Navigation (Single Row with Smooth Horizontal Scroll) */}
+      <div className={`flex items-center gap-1.5 p-1.5 rounded-2xl border overflow-x-auto no-scrollbar transition-colors ${
+        isLight ? "bg-slate-100/80 border-slate-200" : "bg-[#101216]/90 border-zinc-800/80 backdrop-blur-md"
       }`}>
         <button
           type="button"
           onClick={() => setActiveTab("doc")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "doc"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <FileText className="h-4 w-4" />
-          <span>Dokumen PRD Lengkap</span>
+          <FileText className="h-3.5 w-3.5 text-amber-400" />
+          <span>Dokumen PRD</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("tree")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "tree"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <FolderTree className="h-4 w-4 text-amber-400" />
-          <span>Pohon Fitur (Fase 1-4)</span>
+          <FolderTree className="h-3.5 w-3.5 text-amber-400" />
+          <span>Pohon Fitur</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("design")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "design"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <Palette className="h-4 w-4 text-emerald-500" />
-          <span>Standar Desain (DESIGN.md)</span>
+          <Palette className="h-3.5 w-3.5 text-emerald-400" />
+          <span>Standar Desain</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("diagrams")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "diagrams"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <Network className="h-4 w-4 text-amber-500" />
-          <span>Diagram Arsitektur (5 Mermaid)</span>
+          <Network className="h-3.5 w-3.5 text-amber-400" />
+          <span>Diagram Arsitektur</span>
+          {!canViewDiagrams && <Lock className="h-3 w-3 text-amber-400 shrink-0" />}
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("mindmap")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "mindmap"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <GitFork className="h-4 w-4 text-blue-500" />
-          <span>Visual Mindmap (Infografis)</span>
+          <GitFork className="h-3.5 w-3.5 text-blue-400" />
+          <span>Visual Mindmap</span>
+          {!canViewDiagrams && <Lock className="h-3 w-3 text-amber-400 shrink-0" />}
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("tasks")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "tasks"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <CheckSquare className="h-4 w-4 text-purple-500" />
-          <span>Coding Task Checklist ({prd.task_breakdown.length})</span>
+          <CheckSquare className="h-3.5 w-3.5 text-purple-400" />
+          <span>Coding Checklist ({prd.task_breakdown.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("roadmap")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "roadmap"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <Compass className="h-4 w-4 text-amber-500" />
-          <span>Roadmap Pemula (Panduan AI)</span>
+          <Compass className="h-3.5 w-3.5 text-amber-400" />
+          <span>Panduan AI</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("json")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "json"
               ? isLight
                 ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "bg-zinc-800 text-white shadow-xs"
+                : "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
               : isLight
               ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
           }`}
         >
-          <Code2 className="h-4 w-4" />
+          <Code2 className="h-3.5 w-3.5 text-zinc-400" />
           <span>Raw JSON</span>
         </button>
       </div>
@@ -1412,26 +1498,53 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
           <div className={`rounded-xl border p-5 space-y-4 ${
             isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
           }`}>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 border-zinc-800/60 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 border-zinc-800/60 dark:border-zinc-800">
               <div>
-                <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isLight ? "text-slate-800" : "text-zinc-200"}`}>
-                  <Palette className="h-4 w-4 text-amber-500" />
-                  <span>🎨 Palet Warna Terkalibrasi (Design Tokens)</span>
-                </h4>
-                <p className={`text-xs mt-0.5 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isLight ? "text-slate-800" : "text-zinc-200"}`}>
+                    <Palette className="h-4 w-4 text-amber-500" />
+                    <span>Palet Warna Terkalibrasi (Design Tokens)</span>
+                  </h4>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-500 font-mono">
+                    {palette.primaryColorName || palette.domain.toUpperCase()}
+                  </span>
+                  {palette.hasDashboard && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 text-[10px] font-bold text-blue-400 font-mono">
+                      <Layers className="h-3 w-3" /> Dashboard Shell
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs mt-1 max-w-xl ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
                   {palette.moodDescription}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[11px] font-bold text-amber-500">
-                  <Palette className="h-3 w-3" />
-                  {palette.domain.toUpperCase()}
-                </span>
-                {palette.hasDashboard && (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 text-[11px] font-bold text-blue-400">
-                    <Layers className="h-3 w-3" /> Dashboard App Shell
-                  </span>
-                )}
+
+              {/* Action Buttons: AI Roll & Custom Color Picker */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleGenerateAIPalette}
+                  disabled={isGeneratingAIPalette}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                  title="Minta AI meracikkan kombinasi warna baru yang terkalibrasi"
+                >
+                  <Sparkles className={`h-3.5 w-3.5 ${isGeneratingAIPalette ? "animate-spin" : ""}`} />
+                  <span>{isGeneratingAIPalette ? "Meracik..." : "Racik Palet AI"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCustomColorModalOpen(true)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                    isLight
+                      ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      : "border-zinc-800 bg-zinc-900/90 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800"
+                  }`}
+                  title="Pilih dan sesuaikan kode warna primer dan aksen secara kustom"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>Kustomisasi Warna</span>
+                </button>
               </div>
             </div>
 
@@ -1562,79 +1675,133 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
 
       {/* TAB 3: Diagram Arsitektur & ERD (5 Mermaid) */}
       {activeTab === "diagrams" && (
-        <div className="space-y-6">
-          <div className={`rounded-xl border p-5 flex flex-wrap items-center justify-between gap-4 ${
-            isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
-          }`}>
-            <div>
-              <h3 className={`font-semibold text-sm flex items-center gap-2 ${
-                isLight ? "text-slate-900" : "text-white"
-              }`}>
-                <Network className="h-4 w-4 text-amber-500" />
-                <span>5 Blueprint Arsitektur Sistem & Interaksi (Mermaid.js)</span>
+        !canViewDiagrams ? (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-8 text-center max-w-lg mx-auto space-y-4 my-8 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+              <Lock className="h-6 w-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-white">
+                5 Blueprint Arsitektur & Database ERD Terkunci
               </h3>
-              <p className={`text-xs mt-0.5 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
-                Diagram interaktif alur sistem, user journey sitemap, skema database, matriks API, dan sequence diagram siap pakai untuk AI & engineer.
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Akses visual diagram arsitektur interaktif (System Flowchart, User Journey, Database ERD, API Matrix, dan Sequence Flow) dikhususkan untuk paket yang memiliki izin akses.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-500">
-                <CheckCircle2 className="h-3 w-3" /> Live Render SVG (Tanpa Kedip)
-              </span>
+            {onRequireUpgrade && (
+              <button
+                type="button"
+                onClick={onRequireUpgrade}
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span>Buka Akses dengan Upgrade Paket</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className={`rounded-xl border p-5 flex flex-wrap items-center justify-between gap-4 ${
+              isLight ? "bg-white border-slate-200 shadow-xs" : "bg-[#121215] border-zinc-800"
+            }`}>
+              <div>
+                <h3 className={`font-semibold text-sm flex items-center gap-2 ${
+                  isLight ? "text-slate-900" : "text-white"
+                }`}>
+                  <Network className="h-4 w-4 text-amber-500" />
+                  <span>5 Blueprint Arsitektur Sistem & Interaksi (Mermaid.js)</span>
+                </h3>
+                <p className={`text-xs mt-0.5 ${isLight ? "text-slate-500" : "text-zinc-400"}`}>
+                  Diagram interaktif alur sistem, user journey sitemap, skema database, matriks API, dan sequence diagram siap pakai untuk AI & engineer.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-500">
+                  <CheckCircle2 className="h-3 w-3" /> Live Render SVG (Tanpa Kedip)
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Diagram 1: System Flowchart */}
+              <div className="lg:col-span-2">
+                <MermaidRenderer
+                  chart={defaultFlowchart}
+                  title="1. Alur Data & Arsitektur Sistem (System Data Flowchart)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 2: User Journey & Sitemap Flow */}
+              <div className="lg:col-span-2">
+                <MermaidRenderer
+                  chart={defaultUserJourney}
+                  title="2. Alur Pengguna & Peta Navigasi Halaman (User Journey & Sitemap Flow)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 3: Database Schema ERD */}
+              <div>
+                <MermaidRenderer
+                  chart={defaultERD}
+                  title="3. Skema Relasi Database (Entity Relationship Diagram)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 4: API & Webhook Integration Matrix */}
+              <div>
+                <MermaidRenderer
+                  chart={defaultApiMatrix}
+                  title="4. Matriks Integrasi API & Webhook (API Routes Matrix)"
+                  theme={theme}
+                />
+              </div>
+
+              {/* Diagram 5: Sequence Flow */}
+              <div className="lg:col-span-2">
+                <MermaidRenderer
+                  chart={defaultSequence}
+                  title="5. Alur Sekuensial Interaksi Transaksi (Core Sequence Flow)"
+                  theme={theme}
+                />
+              </div>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Diagram 1: System Flowchart */}
-            <div className="lg:col-span-2">
-              <MermaidRenderer
-                chart={defaultFlowchart}
-                title="1. Alur Data & Arsitektur Sistem (System Data Flowchart)"
-                theme={theme}
-              />
-            </div>
-
-            {/* Diagram 2: User Journey & Sitemap Flow */}
-            <div className="lg:col-span-2">
-              <MermaidRenderer
-                chart={defaultUserJourney}
-                title="2. Alur Pengguna & Peta Navigasi Halaman (User Journey & Sitemap Flow)"
-                theme={theme}
-              />
-            </div>
-
-            {/* Diagram 3: Database Schema ERD */}
-            <div>
-              <MermaidRenderer
-                chart={defaultERD}
-                title="3. Skema Relasi Database (Entity Relationship Diagram)"
-                theme={theme}
-              />
-            </div>
-
-            {/* Diagram 4: API & Webhook Integration Matrix */}
-            <div>
-              <MermaidRenderer
-                chart={defaultApiMatrix}
-                title="4. Matriks Integrasi API & Webhook (API Routes Matrix)"
-                theme={theme}
-              />
-            </div>
-
-            {/* Diagram 5: Sequence Flow */}
-            <div className="lg:col-span-2">
-              <MermaidRenderer
-                chart={defaultSequence}
-                title="5. Alur Sekuensial Interaksi Transaksi (Core Sequence Flow)"
-                theme={theme}
-              />
-            </div>
-          </div>
-        </div>
+        )
       )}
 
       {/* TAB 4: Visual Mindmap (Recreated Aakash Gupta Infographic) */}
-      {activeTab === "mindmap" && <MindmapViewer prd={prd} />}
+      {activeTab === "mindmap" && (
+        !canViewDiagrams ? (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-8 text-center max-w-lg mx-auto space-y-4 my-8 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+              <Lock className="h-6 w-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-white">
+                Visual Mindmap Arsitektur Terkunci
+              </h3>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Akses visual peta pikiran interaktif dikhususkan untuk paket yang memiliki izin akses.
+              </p>
+            </div>
+            {onRequireUpgrade && (
+              <button
+                type="button"
+                onClick={onRequireUpgrade}
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span>Buka Akses dengan Upgrade Paket</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <MindmapViewer prd={prd} />
+        )
+      )}
 
       {/* TAB 5: Actionable Coding Task Checklist */}
       {activeTab === "tasks" && (
@@ -1803,6 +1970,15 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
           <pre className="p-2">{JSON.stringify(prd, null, 2)}</pre>
         </div>
       )}
+
+      {/* Custom Palette Modal */}
+      <CustomPaletteModal
+        isOpen={isCustomColorModalOpen}
+        onClose={() => setIsCustomColorModalOpen(false)}
+        currentPalette={activePalette}
+        onApplyPalette={(newPal) => setActivePalette(newPal)}
+        onResetDefault={() => setActivePalette(defaultPalette)}
+      />
     </div>
   );
 };

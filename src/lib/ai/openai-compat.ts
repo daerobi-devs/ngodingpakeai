@@ -105,3 +105,137 @@ export function parseOpenAiChatResponse(rawText: string): { content: string; raw
   // 5. Raw text fallback
   return { content: trimmed, raw: null };
 }
+
+/**
+ * Robust JSON parser and repair engine for LLMs.
+ * Automatically recovers from truncated responses, unescaped quotes,
+ * dangling commas, and incomplete brackets.
+ */
+export function repairAndParseJSON(rawText: string): any {
+  if (!rawText || typeof rawText !== 'string') {
+    throw new Error('Teks JSON kosong.');
+  }
+
+  let text = rawText.trim();
+
+  // Strip markdown code fences if present
+  text = text
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '');
+
+  const firstBrace = text.indexOf('{');
+  if (firstBrace === -1) {
+    throw new Error('Tidak ditemukan kurung kurawal pembuka { dalam respons AI.');
+  }
+  text = text.slice(firstBrace);
+
+  // 1. First attempt: standard JSON.parse
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Expected to continue to repair logic
+  }
+
+  // 2. Second attempt: Clean control characters
+  try {
+    const cleaned = text.replace(/[\u0000-\u001F]+/g, ' ');
+    return JSON.parse(cleaned);
+  } catch {}
+
+  // 3. Third attempt: Trim dangling uncompleted tokens at end
+  // If ended with uncompleted property or trailing comma:
+  let candidate = text;
+  const lastBrace = candidate.lastIndexOf('}');
+  if (lastBrace !== -1 && lastBrace > 0) {
+    try {
+      return JSON.parse(candidate.slice(0, lastBrace + 1));
+    } catch {}
+  }
+
+  // 4. Fourth attempt: Automatic Stack Balancer for Truncated JSON
+  // If model hit max_tokens, it stopped mid-stream.
+  // We close open strings, arrays, and objects.
+  try {
+    let inString = false;
+    let escaped = false;
+    const stack: ('{' | '[')[] = [];
+    let repaired = '';
+
+    for (let i = 0; i < candidate.length; i++) {
+      const char = candidate[i];
+
+      if (escaped) {
+        escaped = false;
+        repaired += char;
+        continue;
+      }
+
+      if (char === '\\') {
+        escaped = true;
+        repaired += char;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        repaired += char;
+        continue;
+      }
+
+      if (inString) {
+        // Normalize literal newlines inside strings which break JSON.parse
+        if (char === '\n') {
+          repaired += '\\n';
+        } else if (char === '\r') {
+          // ignore
+        } else if (char === '\t') {
+          repaired += '\\t';
+        } else {
+          repaired += char;
+        }
+        continue;
+      }
+
+      if (char === '{' || char === '[') {
+        stack.push(char);
+      } else if (char === '}') {
+        if (stack.length > 0 && stack[stack.length - 1] === '{') {
+          stack.pop();
+        }
+      } else if (char === ']') {
+        if (stack.length > 0 && stack[stack.length - 1] === '[') {
+          stack.pop();
+        }
+      }
+
+      repaired += char;
+    }
+
+    // If stream cut off while inside a string, close the string
+    if (inString) {
+      repaired += '"';
+    }
+
+    // Remove any trailing comma before closing brackets
+    repaired = repaired.replace(/,\s*([\}\]])/g, '$1');
+    repaired = repaired.replace(/,\s*$/, '');
+
+    // Close all open brackets in reverse order
+    while (stack.length > 0) {
+      const open = stack.pop();
+      if (open === '{') {
+        repaired += '}';
+      } else if (open === '[') {
+        repaired += ']';
+      }
+    }
+
+    // Clean any lingering trailing commas
+    repaired = repaired.replace(/,\s*([\}\]])/g, '$1');
+
+    return JSON.parse(repaired);
+  } catch (err: any) {
+    throw new Error(`Format JSON dari AI terpotong atau tidak lengkap: ${err?.message || 'Sintaks tidak valid'}`);
+  }
+}

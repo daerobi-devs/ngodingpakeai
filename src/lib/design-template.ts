@@ -138,7 +138,7 @@ export function getDesignPalette(prd: PRDOutput): DesignPalette {
  * Adaptively selects color palette based on product archetype & domain.
  * Includes complete App Shell layout with Collapsible Sidebar for dashboards.
  */
-export function generateDesignDoc(prd: PRDOutput): string {
+export function generateDesignDoc(prd: PRDOutput, customPalette?: DesignPalette): string {
   const {
     domain,
     primaryColorName,
@@ -149,7 +149,7 @@ export function generateDesignDoc(prd: PRDOutput): string {
     moodDescription,
     hasDashboard,
     isStaticSite,
-  } = getDesignPalette(prd);
+  } = customPalette || getDesignPalette(prd);
 
   return `# DESIGN.md — Design System & Frontend Aesthetic Contract
 *Project: ${prd.title}*
@@ -352,4 +352,86 @@ ${
 }
 `;
 }
+
+const AI_PALETTE_INVENTIONS: Array<Omit<DesignPalette, 'hasDashboard' | 'isStaticSite'>> = [
+  {
+    domain: "neo_precision",
+    primaryColorName: "Electric Sapphire & Neon Mint",
+    primaryHex: "#2563eb",
+    primaryHoverHex: "#1d4ed8",
+    primaryTailwind: "blue-600",
+    accentHex: "#10b981",
+    moodDescription: "Presisi tinggi, terpercaya, modern data-dense aesthetic kelas dunia (Stripe & Linear grade)",
+  },
+  {
+    domain: "emerald_wealth",
+    primaryColorName: "Royal Emerald & Luminous Teal",
+    primaryHex: "#059669",
+    primaryHoverHex: "#047857",
+    primaryTailwind: "emerald-600",
+    accentHex: "#2dd4bf",
+    moodDescription: "Kemakmuran, kestabilan finansial, ramah pengguna dengan kontras tinggi yang nyaman di mata",
+  },
+  {
+    domain: "cyber_violet",
+    primaryColorName: "Deep Amethyst & Electric Rose",
+    primaryHex: "#7c3aed",
+    primaryHoverHex: "#6d28d9",
+    primaryTailwind: "violet-600",
+    accentHex: "#f43f5e",
+    moodDescription: "Futuristik, kreatif, eksklusif, cocok untuk platform SaaS generasi baru & perkakas AI",
+  },
+  {
+    domain: "solar_amber",
+    primaryColorName: "Solar Amber & Cyan Spark",
+    primaryHex: "#d97706",
+    primaryHoverHex: "#b45309",
+    primaryTailwind: "amber-600",
+    accentHex: "#06b6d4",
+    moodDescription: "Hangat, berenergi tinggi, fokus operasional cepat tanpa membuat mata lelah",
+  },
+  {
+    domain: "nordic_minimal",
+    primaryColorName: "Nordic Ocean & Arctic Frost",
+    primaryHex: "#0284c7",
+    primaryHoverHex: "#0369a1",
+    primaryTailwind: "sky-600",
+    accentHex: "#38bdf8",
+    moodDescription: "Minimalis Skandinavia, steril, ultra-terbaca dengan pemisahan visual yang tajam",
+  },
+  {
+    domain: "crimson_pulse",
+    primaryColorName: "Crimson Ruby & Gold Flare",
+    primaryHex: "#e11d48",
+    primaryHoverHex: "#be123c",
+    primaryTailwind: "rose-600",
+    accentHex: "#f59e0b",
+    moodDescription: "Tegas, dinamis, mengutamakan konversi cepat dan aksi pengguna yang jelas",
+  },
+  {
+    domain: "obsidian_luxury",
+    primaryColorName: "Titanium Slate & Emerald Glint",
+    primaryHex: "#334155",
+    primaryHoverHex: "#1e293b",
+    primaryTailwind: "slate-700",
+    accentHex: "#10b981",
+    moodDescription: "Mewah, tenang, minimalis monokromatik ala hardware Apple & workstation premium",
+  },
+];
+
+export function generateAIHarmonicPalette(prd: PRDOutput, currentHex?: string): DesignPalette {
+  const current = getDesignPalette(prd);
+  // Filter out the current palette to guarantee a fresh, exciting look
+  const filtered = AI_PALETTE_INVENTIONS.filter(
+    (p) => p.primaryHex.toLowerCase() !== (currentHex || current.primaryHex).toLowerCase()
+  );
+  const picked = filtered[Math.floor(Math.random() * filtered.length)] || AI_PALETTE_INVENTIONS[0];
+
+  return {
+    ...picked,
+    hasDashboard: current.hasDashboard,
+    isStaticSite: current.isStaticSite,
+  };
+}
+
 

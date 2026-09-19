@@ -45,8 +45,11 @@ export const PhasedFeatureTree: React.FC<PhasedFeatureTreeProps> = ({
     const generated: RoadmapPhaseNode[] = [];
 
     if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+      const totalFeats = prd.feature_breakdown.length;
+      const totalPhases = Math.max(2, Math.min(6, Math.ceil(totalFeats / 2)));
+
       prd.feature_breakdown.forEach((feat, idx) => {
-        const phaseNumber = Math.min(4, Math.floor(idx / 2) + 1);
+        const phaseNumber = Math.min(totalPhases, Math.floor((idx / totalFeats) * totalPhases) + 1);
         const phaseLabel = `FASE ${phaseNumber}`;
         const subItems = feat.happy_path && feat.happy_path.length > 0
           ? feat.happy_path.slice(0, 4)
@@ -75,8 +78,11 @@ export const PhasedFeatureTree: React.FC<PhasedFeatureTreeProps> = ({
             'Profil & Pengaturan Sistem',
           ];
 
-      defaultModules.slice(0, 7).forEach((mod, idx) => {
-        const phaseNumber = Math.min(4, Math.floor(idx / 2) + 1);
+      const totalScopes = defaultModules.length;
+      const totalPhases = Math.max(2, Math.min(6, Math.ceil(totalScopes / 2)));
+
+      defaultModules.forEach((mod, idx) => {
+        const phaseNumber = Math.min(totalPhases, Math.floor((idx / totalScopes) * totalPhases) + 1);
         generated.push({
           id: `scope_node_${idx}`,
           title: mod,
@@ -93,6 +99,20 @@ export const PhasedFeatureTree: React.FC<PhasedFeatureTreeProps> = ({
 
     return generated;
   }, [prd.roadmap_tree, prd.feature_breakdown, prd.boundaries.scope]);
+
+  // Extract distinct phases dynamically
+  const availablePhases = useMemo(() => {
+    const set = new Set<string>();
+    nodes.forEach((n) => {
+      if (n.phase) set.add(n.phase.toUpperCase());
+    });
+    const sortedPhases = Array.from(set).sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.replace(/\D/g, '') || '0', 10);
+      return numA - numB;
+    });
+    return ['ALL', ...sortedPhases];
+  }, [nodes]);
 
   // Filter nodes if user clicked a specific phase filter
   const filteredNodes = useMemo(() => {
@@ -137,24 +157,24 @@ Instruksi:
               <span className="text-zinc-200 font-semibold truncate max-w-[200px] sm:max-w-xs">{prd.title}</span>
             </div>
             <p className="text-[11px] text-zinc-500">
-              Peta jalan pengembangan bertahap FASE 1 hingga FASE 4 siap dieksekusi coding agent.
+              Peta jalan pengembangan bertahap siap dieksekusi coding agent secara terarah.
             </p>
           </div>
         </div>
 
-        {/* Phase Filter Chips */}
+        {/* Phase Filter Chips (Dynamically Generated) */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px] text-zinc-500 mr-1 flex items-center gap-1">
             <Filter className="h-3 w-3" /> Filter:
           </span>
-          {['ALL', 'FASE 1', 'FASE 2', 'FASE 3', 'FASE 4'].map((phaseKey) => {
+          {availablePhases.map((phaseKey) => {
             const isSelected = selectedPhaseFilter === phaseKey;
             return (
               <button
                 key={phaseKey}
                 type="button"
                 onClick={() => setSelectedPhaseFilter(phaseKey)}
-                className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-amber-500 text-zinc-950 shadow-xs font-bold'
                     : isLight
