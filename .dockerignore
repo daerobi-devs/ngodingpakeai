@@ -1,3 +1,5 @@
+.git
+.cursor
 .env.local
 .env
 node_modules
