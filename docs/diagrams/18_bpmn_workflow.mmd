@@ -1,0 +1,40 @@
+graph LR
+    subgraph Pool_Pengguna [Swimlane Pengguna]
+        U_Start((Mulai)) --> U_Input[Ketik Ide & Eksplorasi]
+        U_Input --> U_Refine[Klik Perkaya Ide AI]
+        U_Refine --> U_Clarify[Jawab Pertanyaan Bisnis]
+        U_Clarify --> U_GenPRD[Klik Generate PRD]
+        U_View[Review PRD & Diagram] --> U_Export[Ekspor Starter Kit ZIP]
+        U_Pay[Pindai QRIS Dinamis] --> U_Upgrade[Terima Akses Pro]
+    end
+
+    subgraph Pool_Sistem [Swimlane Platform NgodingPakePRD]
+        S_Enrich[Eksekusi Prompt 4 Pilar]
+        S_Ladder[Orkestrasi AI Model Ladder]
+        S_Order[Generate Invoice & QR String]
+        S_Webhook[Verifikasi Signature HMAC]
+    end
+
+    subgraph Pool_LayananLuar [Swimlane Layanan Eksternal]
+        L_Gemini[Google Gemini API Engine]
+        L_MPG[Gateway MPG Mandiri]
+    end
+
+    U_Refine --> S_Enrich
+    S_Enrich --> L_Gemini
+    L_Gemini --> S_Enrich
+    S_Enrich --> U_Clarify
+
+    U_GenPRD --> S_Ladder
+    S_Ladder --> L_Gemini
+    L_Gemini --> S_Ladder
+    S_Ladder --> U_View
+
+    U_GenPRD -.->|Jika Kuota Habis| S_Order
+    S_Order --> L_MPG
+    L_MPG --> S_Order
+    S_Order --> U_Pay
+
+    U_Pay --> L_MPG
+    L_MPG --> S_Webhook
+    S_Webhook --> U_Upgrade

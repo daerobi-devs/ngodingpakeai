@@ -1,0 +1,34 @@
+sequenceDiagram
+    autonumber
+    actor User as Pembeli
+    participant FE as Browser Client (PricingModal)
+    participant API as Next.js API (/api/orders)
+    participant MPG as Mandiri Private Gateway (MPG)
+    participant Hook as Webhook Handler (/api/webhook)
+    participant DB as Supabase Database
+
+    User->>FE: Pilih Paket PLUS / PRO & Mode QRIS
+    FE->>API: POST /api/orders { tierId, checkoutMode: "headless" }
+    API->>MPG: POST /api/v1/invoice { amount, auto_unique_code: true }
+    MPG-->>API: HTTP 200 { order_id, qr_string, final_amount, unique_code }
+    API->>DB: INSERT into payment_orders (status: "pending")
+    API-->>FE: HTTP 200 { qr_string, final_amount, order_code }
+    FE-->>User: Tampilkan Barcode Dynamic QRIS & Nominal Presisi
+
+    User->>MPG: Scan & Bayar QRIS via Mobile Banking / E-Wallet
+    MPG->>Hook: POST /api/webhook/payment-success (Header: X-Signature)
+    Hook->>Hook: Hitung HMAC-SHA256(body, MPG_WEBHOOK_SECRET)
+    
+    alt Signature Valid & Order Pending
+        Hook->>DB: UPDATE payment_orders SET status="approved", paid_at=NOW()
+        Hook->>DB: UPDATE profiles SET subscription_tier="pro", pro_expires_at=NOW()+30d
+        Hook-->>MPG: HTTP 200 { success: true, status: "ok" }
+    else Signature Tidak Valid
+        Hook-->>MPG: HTTP 401 { error: "Invalid HMAC signature" }
+    end
+
+    FE->>API: Polling GET /api/orders?code=xxx
+    API->>DB: SELECT status FROM payment_orders
+    DB-->>API: status: "approved"
+    API-->>FE: HTTP 200 { status: "approved" }
+    FE-->>User: Tampilkan Banner Sukses & Efek Confetti

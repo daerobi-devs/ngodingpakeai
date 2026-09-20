@@ -1,0 +1,21 @@
+graph TD
+    User([Pengguna / Klien])
+    Admin([Super Administrator])
+    Gemini([Google Gemini AI API])
+    MPG([Mandiri Private Gateway MPG])
+
+    System((Sistem NgodingPakePRD<br/>Sistem Pembuat PRD & Solusi Arsitektur))
+
+    User -->|Input Ide Produk & Jawaban Klarifikasi| System
+    User -->|Permintaan Order Langganan| System
+    System -->|Dokumen PRD, 8 Diagram, Starter Kit ZIP| User
+    System -->|Barcode Dynamic QRIS & Status Pembayaran| User
+
+    Admin -->|Kredensial Slot AI, Harga Paket & Bypass User| System
+    System -->|Laporan Transaksi, Log PRD, Metrik Komunitas| Admin
+
+    System -->|Prompt Rekayasa Dokumen & Schema Arsitektur| Gemini
+    Gemini -->|Structured JSON Output PRD & Klarifikasi| System
+
+    System -->|Request Invoice Dinamis| MPG
+    MPG -->|Data QRIS EMVCo & Callback Webhook Lunas| System

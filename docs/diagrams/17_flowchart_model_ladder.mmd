@@ -1,0 +1,26 @@
+graph TD
+    Start([Mulai: Request Generate PRD]) --> LoadSettings[Ambil system_settings & Kunci API]
+    LoadSettings --> CheckUserSlot{User Punya Assigned Slot?}
+    
+    CheckUserSlot -- Ya --> PinSlot[Gunakan Kunci Slot Khusus User] --> InitLadder
+    CheckUserSlot -- Tidak --> CheckGlobalSlot{Global Slot Aktif?}
+    CheckGlobalSlot -- Ya --> PinGlobal[Gunakan Kunci Global Pilihan] --> InitLadder
+    CheckGlobalSlot -- Tidak --> RoundRobin[Load Balancing Round-Robin Slot Aktif] --> InitLadder
+
+    InitLadder[Inisialisasi Model Ladder:<br/>gemini-3.8-flash -> gemini-3.5-flash -> gemini-flash-latest -> gemini-2.5-flash]
+    InitLadder --> StartModelLoop[Pilih Model Teratas dalam Ladder]
+    
+    StartModelLoop --> ExecFetch[Kirim Request REST API generateContent]
+    ExecFetch --> EvalResp{Status HTTP?}
+    
+    EvalResp -- 200 OK --> ValidateZod{Lolos Validasi Zod Schema?}
+    ValidateZod -- Valid --> FinishSuccess([Sukses: Kembalikan PRD Lengkap])
+    ValidateZod -- Gagal Parse --> NextAttempt
+    
+    EvalResp -- 429 Rate Limit --> MarkCooldown[Tandai Kunci Cooldown 60 Detik] --> TryNextKey[Coba Kunci Berikutnya di Pool]
+    TryNextKey --> ExecFetch
+
+    EvalResp -- Error Lainnya / 503 --> NextAttempt{Masih Ada Model di Ladder?}
+    NextAttempt -- Ya --> ShiftModel[Turun ke Model Berikutnya di Ladder] --> StartModelLoop
+    NextAttempt -- Tidak --> TriggerFallback[Eksekusi Domain Fallback Fast Generator]
+    TriggerFallback --> FinishSuccess

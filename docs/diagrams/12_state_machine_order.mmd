@@ -1,0 +1,22 @@
+stateDiagram-v2
+    [*] --> Inisiasi : Klik Beli Paket Langganan
+    Inisiasi --> Pending : Order Code & Dynamic QRIS Diterbitkan
+    
+    state Pending {
+        [*] --> MenungguPembayaran : Timer 15 Menit Aktif
+        MenungguPembayaran --> MemindaiQRIS : Pengguna Scan via Mobile Banking
+        MemindaiQRIS --> MemverifikasiMutasi : Notifikasi Masuk ke Gateway MPG
+    }
+
+    Pending --> Approved : Webhook Valid / Admin Approve Manual
+    Pending --> Rejected : Kadaluarsa (>15 menit) / Admin Tolak
+    Pending --> Cancelled : Pengguna Membatalkan Pesanan
+
+    state Approved {
+        [*] --> AkunDiperpanjang : Tambah 30 Hari Akses Pro
+        AkunDiperpanjang --> HakAksesAktif : Buka Gating Template Lanjutan & Diagram
+    }
+
+    Approved --> [*] : Selesai
+    Rejected --> [*] : Selesai
+    Cancelled --> [*] : Selesai

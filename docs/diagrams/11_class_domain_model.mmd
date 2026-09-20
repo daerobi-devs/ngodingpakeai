@@ -1,0 +1,72 @@
+classDiagram
+    class UserProfile {
+        +UUID id
+        +String email
+        +String full_name
+        +String avatar_url
+        +String subscription_tier
+        +Integer trial_count
+        +Boolean is_admin
+        +DateTime pro_expires_at
+        +String assigned_gemini_slot
+        +Boolean is_banned
+        +Integer daily_limit_override
+        +Integer total_server_tokens
+        +hasAccessToFeature(featureKey) Boolean
+        +isProActive() Boolean
+    }
+
+    class SystemSettings {
+        +String id
+        +String auth_mode
+        +String api_key_mode
+        +String monetization_mode
+        +String ai_provider
+        +Integer trial_limit
+        +List gemini_slots
+        +String payment_gateway_mode
+        +String mpg_gateway_url
+        +String mpg_api_key
+        +String mpg_webhook_secret
+        +Json pricing_tiers
+        +resolveActiveKeys() List
+    }
+
+    class PRDDocument {
+        +UUID id
+        +UUID user_id
+        +String title
+        +String problem_statement
+        +String target_audience
+        +List user_stories
+        +List feature_breakdown
+        +List diagrams
+        +Object tech_stack
+        +Object database_schema
+        +List api_specification
+        +Object roadmap
+        +exportMarkdown() String
+        +exportStarterZip() Blob
+    }
+
+    class PaymentOrder {
+        +UUID id
+        +UUID user_id
+        +String order_code
+        +Integer amount
+        +Integer final_amount
+        +Integer unique_code
+        +String qr_string
+        +String checkout_url
+        +String payment_method
+        +String status
+        +String tier_id
+        +DateTime paid_at
+        +DateTime expired_at
+        +approveOrder() Void
+        +rejectOrder() Void
+    }
+
+    UserProfile "1" --> "*" PRDDocument : generates
+    UserProfile "1" --> "*" PaymentOrder : purchases
+    SystemSettings "1" --> "*" UserProfile : governs

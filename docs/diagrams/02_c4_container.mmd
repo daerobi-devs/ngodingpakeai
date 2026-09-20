@@ -1,0 +1,29 @@
+graph TB
+    User[Pengguna Browser]
+    Admin[Super Admin Browser]
+
+    subgraph AppContainer [Next.js 16 Application Server - Node.js 22 Slim]
+        Frontend[Frontend Single Page App<br/>React 19, TailwindCSS 4, Mermaid.js]
+        APIRoutes[Next.js API Route Handlers<br/>Edge & Node Runtime Handlers]
+        AuthHandler[Supabase SSR Auth Handler<br/>Cookie-based Session Exchange]
+    end
+
+    subgraph DatabaseContainer [Supabase Cloud Service]
+        Postgres[(PostgreSQL Relational DB<br/>Row Level Security & JSONB Storage)]
+        GoTrue[Supabase GoTrue Auth<br/>OAuth 2.0 & Magic Link]
+    end
+
+    subgraph ExternalGateways [External Gateways]
+        GeminiAI[Google Generative AI API<br/>Gemini 2.5 Flash, 3.5 Flash, etc.]
+        PaymentGW[Mandiri Private Gateway<br/>ASPI EMVCo Dynamic QRIS]
+    end
+
+    User -->|HTTPS / WSS| Frontend
+    Admin -->|HTTPS / Secret Passcode| Frontend
+    Frontend -->|Client State & API Calls| APIRoutes
+    Frontend -->|Session Cookie| AuthHandler
+    AuthHandler -->|JWT Validation| GoTrue
+    APIRoutes -->|Service Role & RLS Queries| Postgres
+    APIRoutes -->|REST API Key Pool| GeminiAI
+    APIRoutes -->|REST API & Signature HMAC| PaymentGW
+    PaymentGW -->|Webhook Callback POST| APIRoutes

@@ -1,0 +1,48 @@
+graph TD
+    subgraph ClientTier [Client Presentation Tier - Browser]
+        UI_Home[Landing Page & Blueprint Studio]
+        UI_Wizard[Wizard Hero Input & Discovery Step]
+        UI_Viewer[PRD Document Flow & 8-Diagram Viewer]
+        UI_Admin[Admin Switchboard & Orders Deck]
+        UI_Modals[Pricing Modal, Auth Modal, API Key Modal]
+    end
+
+    subgraph ServerTier [Server Application Tier - Next.js 16 App Router]
+        MW[Security Headers & Middleware]
+        Route_PRD[PRD Pipeline Engine]
+        Route_Pay[Payment & Webhook Engine]
+        Route_Admin[Administration & Audit Engine]
+        Route_Profile[User Profile & Usage Engine]
+    end
+
+    subgraph DataTier [Data & Persistence Tier - Supabase]
+        DB_Profiles[(profiles)]
+        DB_Settings[(system_settings)]
+        DB_History[(prd_history)]
+        DB_Orders[(payment_orders)]
+    end
+
+    subgraph ExternalTier [External Infrastructure Tier]
+        Ext_Gemini[Google AI Studio / Gemini API]
+        Ext_MPG[Mandiri Private Gateway Server]
+    end
+
+    ClientTier -->|HTTPS REST| MW
+    MW --> Route_PRD
+    MW --> Route_Pay
+    MW --> Route_Admin
+    MW --> Route_Profile
+
+    Route_PRD --> DB_Settings
+    Route_PRD --> DB_History
+    Route_PRD --> DB_Profiles
+    Route_PRD --> Ext_Gemini
+
+    Route_Pay --> DB_Orders
+    Route_Pay --> DB_Profiles
+    Route_Pay --> Ext_MPG
+
+    Route_Admin --> DB_Settings
+    Route_Admin --> DB_Orders
+    Route_Admin --> DB_Profiles
+    Route_Admin --> DB_History

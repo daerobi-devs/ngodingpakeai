@@ -1,0 +1,28 @@
+graph TB
+    subgraph Internet [Jaringan Publik Internet]
+        DNS[Cloudflare / DNS Provider<br/>ngodingpakeprd.com]
+        Client[Pengguna Web / Browser HTTPS]
+    end
+
+    subgraph HostServer [Virtual Private Server VPS / Coolify Host]
+        NginxProxy[Reverse Proxy / Ingress Caddy / Traefik<br/>SSL Termination Let's Encrypt]
+        
+        subgraph DockerNet [Docker Bridge Network]
+            AppContainer[Container: prd-architect<br/>Node.js 22 Slim Standalone Runtime<br/>Port 3000 Internal]
+        end
+    end
+
+    subgraph ManagedCloud [Layanan Cloud Terkelola]
+        SupaCloud[Supabase Cloud<br/>PostgreSQL 15, PgBouncer, Storage, GoTrue]
+        GoogleCloud[Google AI Cloud<br/>Generative Language Endpoint API]
+        MPGHost[Server Gateway MPG<br/>pyamentgateway.daeroom.my.id]
+    end
+
+    Client -->|HTTPS 443| DNS
+    DNS --> NginxProxy
+    NginxProxy -->|HTTP Proxy Pass| AppContainer
+
+    AppContainer -->|WSS / HTTPS Port 5432| SupaCloud
+    AppContainer -->|HTTPS REST| GoogleCloud
+    AppContainer -->|HTTPS REST| MPGHost
+    MPGHost -->|Webhook POST Callback| NginxProxy

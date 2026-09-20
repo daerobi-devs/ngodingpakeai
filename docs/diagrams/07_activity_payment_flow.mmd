@@ -1,0 +1,27 @@
+graph TD
+    Start([Mulai: Beli Akses Pro / Plus]) --> SelectTier[Pilih Paket Langganan di PricingModal]
+    SelectTier --> SelectMode{Pilih Jalur Pembayaran}
+    
+    SelectMode -- Opsi B: Headless Pop-up --> ReqOrderB[POST /api/orders: checkoutMode=headless]
+    ReqOrderB --> CallMPG_B[API Gateway MPG: Generate QRIS Dinamis ASPI]
+    CallMPG_B --> ShowQR[Tampilkan Modal QRIS Dinamis + Kode Unik + Timer 15 Menit]
+    ShowQR --> UserScans[Pengguna Scan QRIS via BCA / Mandiri / GoPay / ShopeePay]
+    
+    SelectMode -- Opsi A: Hosted Checkout --> ReqOrderA[POST /api/orders: checkoutMode=hosted]
+    ReqOrderA --> CallMPG_A[API Gateway MPG: Buat URL Tagihan]
+    CallMPG_A --> Redirect[Redirect ke URL Hosted Checkout MPG]
+    Redirect --> UserScans
+
+    SelectMode -- Opsi C: Manual GoBiz --> ShowManual[Tampilkan QRIS Statis GoBiz]
+    ShowManual --> UserTransferManual[Transfer Manual & Konfirmasi via WhatsApp] --> AdminReview[Admin Verifikasi Manual di Tab 4] --> AdminApprove[Admin Klik Approve] --> ActiveAccount[Akun Menjadi Pro 30 Hari] --> End([Selesai])
+
+    UserScans --> BankNotif[Sistem Bank Kirim Notifikasi Transaksi ke MPG]
+    BankNotif --> MPGWebhook[MPG Kirim Webhook POST /api/webhook/payment-success]
+    MPGWebhook --> VerifySig{Verifikasi Signature HMAC?}
+    VerifySig -- Salah --> Reject401[Tolak Request HTTP 401] --> End
+    VerifySig -- Benar --> CheckIdemp{Sudah Terbayar Sebelumnya?}
+    CheckIdemp -- Ya --> Return200[Kembalikan HTTP 200: Idempotent Skip] --> End
+    CheckIdemp -- Belum --> UpdateOrder[Update payment_orders: status=approved]
+    UpdateOrder --> UpgradeTier[Update profiles: subscription_tier=pro / plus + 30 Hari]
+    UpgradeTier --> PollingDetect[Polling Client Deteksi Status Lunas]
+    PollingDetect --> Confetti[Pemicu Selebrasi Confetti & Refresh Halaman] --> End

@@ -139,8 +139,16 @@ export async function createMpgInvoice(
     const qrString = data.qr_string || data.qris_string || '';
 
     let checkoutUrl = data.checkout_url || `${config.gatewayUrl}/checkout/${data.order_id || params.orderId}`;
-    if (checkoutUrl.startsWith('/')) {
-      checkoutUrl = `${config.gatewayUrl}${checkoutUrl}`;
+    if (checkoutUrl) {
+      try {
+        const parsed = new URL(checkoutUrl);
+        const gatewayOrigin = new URL(config.gatewayUrl).origin;
+        checkoutUrl = `${gatewayOrigin}${parsed.pathname}${parsed.search}`;
+      } catch {
+        if (checkoutUrl.startsWith('/')) {
+          checkoutUrl = `${config.gatewayUrl}${checkoutUrl}`;
+        }
+      }
     }
 
     return {

@@ -1,0 +1,28 @@
+sequenceDiagram
+    autonumber
+    actor User as Pengguna
+    participant FE as Frontend (Wizard / Generator)
+    participant API as Backend (/api/generate-prd)
+    participant DB as Supabase PostgreSQL
+    participant AI as Google Gemini API
+
+    User->>FE: Input Ide & Klik Lanjut
+    FE->>API: POST /api/generate-clarifications { userIdea }
+    API->>AI: Model Flash Generate Questions with Badges
+    AI-->>API: JSON Clarification Questions
+    API-->>FE: HTTP 200 Opsi Pertanyaan & Rekomendasi
+    FE-->>User: Tampilkan Chip Pilihan + Auto-Select
+
+    User->>FE: Pilih Konfigurasi & Klik Buat PRD
+    FE->>API: POST /api/generate-prd { idea, answers, templateId }
+    API->>DB: Query profiles (Cek Kuota & Tier)
+    DB-->>API: Data Profil & Kuota Tersedia
+
+    API->>AI: generateContent (Model Ladder: gemini-3.8 / 3.5 / Flash)
+    Note over API,AI: Payload Structured Schema (8 Diagram & Contracts)
+    AI-->>API: Full PRD Structured Output JSON
+
+    API->>DB: INSERT into prd_history (Record Audit & Token)
+    API->>DB: UPDATE profiles (Increment trial_count)
+    API-->>FE: HTTP 200 PRD JSON Data
+    FE-->>User: Render Dokumen PRD, Pohon Fitur & 8 Diagram

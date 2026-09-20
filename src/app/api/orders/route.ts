@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     const mpgConfig = getMpgConfig(settings);
-    const isManualRequested = checkoutMode === 'manual';
+    const isManualRequested = settings?.payment_gateway_mode === 'manual_qris' || checkoutMode === 'manual';
 
     let randomCode = Math.floor(1000 + Math.random() * 9000);
     let orderCode = 'PRD-' + randomCode;
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       checkoutUrl: finalOrder.checkout_url,
       checkout_url: finalOrder.checkout_url,
       qr_string: finalOrder.qr_string,
-      mode: isManualRequested ? 'manual' : (checkoutMode || (mpgConfig.isHosted ? 'hosted' : 'headless')),
+      mode: isManualRequested ? 'manual' : (mpgConfig.isHosted ? 'hosted' : 'headless'),
     });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Gagal membuat pesanan';

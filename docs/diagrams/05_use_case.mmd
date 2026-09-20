@@ -1,0 +1,38 @@
+graph LR
+    User([Pengguna Umum])
+    ProUser([Pengguna Pro / Unlimited])
+    Admin([Super Admin])
+
+    subgraph NgodingPakePRD [Sistem NgodingPakePRD]
+        UC1(Eksplorasi Ide Singkat)
+        UC2(Perkaya Ide Otomatis AI)
+        UC3(Jawab Pertanyaan Klarifikasi)
+        UC4(Generate PRD Lengkap)
+        UC5(Lihat 8 Diagram Arsitektur)
+        UC6(Download Starter Kit ZIP)
+        UC7(Beli Langganan Paket Pro / Plus)
+        UC8(Bayar via QRIS Dinamis MPG)
+        UC9(Konfigurasi Model AI & API Keys)
+        UC10(Kelola Antrean Pesanan & Approve)
+        UC11(Kelola Pengguna & Gating Fitur)
+        UC12(Audit Riwayat & Hapus Log PRD)
+    end
+
+    User --> UC1
+    User --> UC2
+    User --> UC3
+    User --> UC4
+    User --> UC7
+    User --> UC8
+
+    ProUser --> UC1
+    ProUser --> UC2
+    ProUser --> UC3
+    ProUser --> UC4
+    ProUser --> UC5
+    ProUser --> UC6
+
+    Admin --> UC9
+    Admin --> UC10
+    Admin --> UC11
+    Admin --> UC12

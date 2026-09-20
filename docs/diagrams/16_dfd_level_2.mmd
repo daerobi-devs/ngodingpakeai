@@ -1,0 +1,31 @@
+graph TD
+    User([Pengguna])
+    Gemini([Google Gemini API])
+    DS_Settings[(D2: system_settings)]
+    DS_Profiles[(D1: profiles)]
+    DS_History[(D3: prd_history)]
+
+    P3_1((3.1 Validasi Otorisasi & Kuota))
+    P3_2((3.2 Resolusi Kunci API & Model Ladder))
+    P3_3((3.3 Perakitan System Prompt & Arsitektur))
+    P3_4((3.4 Eksekusi AI & Validasi Zod Schema))
+    P3_5((3.5 Audit Trail & Pengurangan Kuota))
+    P3_6((3.6 Formatting & Rendering UI))
+
+    User -->|Submit Form Ide + Jawaban| P3_1
+    P3_1 <--> DS_Profiles
+    P3_1 <--> DS_Settings
+    P3_1 -->|Authorized Request| P3_2
+
+    P3_2 <--> DS_Settings
+    P3_2 -->|API Key & Model Selection| P3_3
+
+    P3_3 -->|System Prompt 8 Diagram + JSON Schema| P3_4
+    P3_4 <--> Gemini
+    P3_4 -->|Raw JSON Output| P3_5
+
+    P3_5 -->|Insert Record Audit & Token| DS_History
+    P3_5 -->|Increment trial_count| DS_Profiles
+    P3_5 -->|Validated PRD Data| P3_6
+
+    P3_6 -->|Render Dokumen, Pohon Fitur & Starter ZIP| User

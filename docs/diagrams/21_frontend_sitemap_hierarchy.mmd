@@ -1,0 +1,60 @@
+graph TD
+    Root[Root Layout: src/app/layout.tsx<br/>Navbar, AuthProvider, Global Theme]
+    
+    subgraph Routes [Halaman & Rute Aplikasi]
+        RouteHome[/ Landing Page]
+        RouteGen[/generator Workspace]
+        RouteAdmin[/admin Control Center]
+        RouteTerms[/terms Ketentuan Layanan]
+        RoutePriv[/privacy Kebijakan Privasi]
+    end
+
+    subgraph ComponentsHome [Komponen Landing Page]
+        HeroLanding[Hero Section & CTA]
+        BlueprintStudio[InteractiveBlueprintStudio]
+        TemplateShowcase[LandingTemplateShowcase]
+        WorkflowPipe[VisualWorkflowPipeline]
+    end
+
+    subgraph ComponentsGen [Komponen Generator Workspace]
+        HeroInput[WizardHeroInput<br/>Textarea, Template Menu, Auto-Enrich]
+        DiscoveryStep[WizardDiscoveryStep<br/>Clarification Question Chips & Badges]
+        CustomModal[CustomStackModal<br/>Stack Picker & Gating]
+        PRDDoc[PRDViewer<br/>Clean Flow Document & TOC]
+        FeatureTree[PhasedFeatureTree<br/>SVG Bezier Curve Node Flow]
+        MermaidView[MermaidRenderer<br/>8-Diagram Multi-Tab Zoom/Pan]
+    end
+
+    subgraph ComponentsAdmin [Komponen Admin Dashboard]
+        Tab1[Tab Overview & Live Deletion]
+        Tab2[Tab Kunci API & Slot Router]
+        Tab3[Tab Manajemen User & Gating]
+        Tab4[Tab Antrean GoBiz & MPG Orders]
+        Tab5[Tab Switchboard & Kuota]
+        Tab6[Tab Pengaturan QRIS & Harga]
+    end
+
+    Root --> RouteHome
+    Root --> RouteGen
+    Root --> RouteAdmin
+    Root --> RouteTerms
+    Root --> RoutePriv
+
+    RouteHome --> HeroLanding
+    RouteHome --> BlueprintStudio
+    RouteHome --> TemplateShowcase
+    RouteHome --> WorkflowPipe
+
+    RouteGen --> HeroInput
+    RouteGen --> DiscoveryStep
+    RouteGen --> CustomModal
+    RouteGen --> PRDDoc
+    RouteGen --> FeatureTree
+    RouteGen --> MermaidView
+
+    RouteAdmin --> Tab1
+    RouteAdmin --> Tab2
+    RouteAdmin --> Tab3
+    RouteAdmin --> Tab4
+    RouteAdmin --> Tab5
+    RouteAdmin --> Tab6

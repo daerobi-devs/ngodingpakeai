@@ -1,0 +1,26 @@
+sequenceDiagram
+    autonumber
+    actor User as Pengguna
+    participant FE as Client UI (AuthModal)
+    participant Callback as /auth/callback Route
+    participant GoTrue as Supabase Auth (GoTrue)
+    participant DB as Supabase PostgreSQL
+
+    alt Alur Google OAuth
+        User->>FE: Klik Masuk dengan Google
+        FE->>GoTrue: signInWithOAuth({ provider: "google", redirectTo })
+        GoTrue-->>User: Redirect ke Halaman Consent Akun Google
+        User->>GoTrue: Berikan Izin Akses
+        GoTrue-->>Callback: Redirect /auth/callback?code=AUTH_CODE
+        Callback->>GoTrue: exchangeCodeForSession(AUTH_CODE)
+        GoTrue-->>Callback: Access Token & Refresh Token (Set HTTP-Only Cookie)
+        Callback->>DB: Trigger public.handle_new_user() (Sync profiles)
+        Callback-->>FE: Redirect ke /generator?auth=success
+    else Alur Magic Link OTP
+        User->>FE: Masukkan Email & Submit
+        FE->>GoTrue: signInWithOtp({ email })
+        GoTrue-->>User: Kirim Email Berisi Link Autentikasi
+        User->>Callback: Klik Link di Email -> /auth/callback?code=...
+        Callback->>GoTrue: exchangeCodeForSession(...)
+        Callback-->>FE: Redirect ke /generator
+    end

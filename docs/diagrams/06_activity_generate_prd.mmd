@@ -1,0 +1,25 @@
+graph TD
+    Start([Mulai: Input Ide Pengguna]) --> CheckIdea{Ide Terisi?}
+    CheckIdea -- Tidak --> Warning[Tampilkan Peringatan Input Kosong] --> Start
+    CheckIdea -- Ya --> UserAction{Klik Perkaya Ide?}
+    
+    UserAction -- Ya --> CallEnrich[Panggil /api/enrich-idea]
+    CallEnrich --> GeminiEnrich[Gemini Flash: thinkingBudget 0]
+    GeminiEnrich --> FillTextarea[Tampilkan Konsep 4 Pilar Lengkap] --> ClickNext[Klik Lanjut: Analisis Kebutuhan]
+    UserAction -- Tidak --> ClickNext
+
+    ClickNext --> CallClarify[Panggil /api/generate-clarifications]
+    CallClarify --> GenQuestions[Generate 3-4 Pertanyaan Tajam + Rekomendasi Badge]
+    GenQuestions --> ShowDiscovery[Tampilkan Antarmuka Pertanyaan Interaktif]
+    ShowDiscovery --> UserSelect[Pengguna Memilih Opsi Jawaban]
+    UserSelect --> SubmitGen[Klik Buat PRD Lengkap]
+
+    SubmitGen --> CheckQuota{Cek Kuota User / Limit Server}
+    CheckQuota -- Habis --> PromptUpgrade[Tampilkan PricingModal: Upgrade Paket] --> End([Selesai])
+    CheckQuota -- Cukup --> RunGen[Eksekusi /api/generate-prd]
+    
+    RunGen --> ModelLadder[Iterasi Model Ladder: 3.8 -> 3.5 -> Flash]
+    ModelLadder --> GenSuccess{Berhasil?}
+    GenSuccess -- Tidak --> TryFallback[Eksekusi Fallback Generator Cepat] --> RenderPRD[Render Dokumen PRD & Diagram]
+    GenSuccess -- Ya --> DeductQuota[Potong 1 Kuota & Simpan ke prd_history] --> RenderPRD
+    RenderPRD --> End

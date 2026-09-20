@@ -1,0 +1,22 @@
+graph TB
+    subgraph Users [Pengguna Sistem]
+        U1[Pengguna Umum / Developer]
+        U2[Pengguna Pro / Unlimited]
+        U3[Super Administrator]
+    end
+
+    System[NgodingPakePRD System<br/>Platform Arsitektur & Generator PRD Otomatis]
+
+    subgraph ExternalServices [Layanan Eksternal]
+        Gemini[Google Gemini API<br/>Model LLM Flash & Pro Hierarchy]
+        MPG[Mandiri Private Gateway MPG<br/>QRIS Dinamis 0% MDR & Webhook]
+        Supabase[Supabase Platform<br/>Auth OAuth & PostgreSQL Database]
+    end
+
+    U1 -->|Eksplorasi Ide & Starter PRD| System
+    U2 -->|Akses Template Lanjutan & Multi-Diagram| System
+    U3 -->|Kelola Switchboard AI, Kuota & Transaksi| System
+
+    System -->|Prompting Rekayasa PRD & Arsitektur| Gemini
+    System -->|Inisiasi Tagihan & Verifikasi Pembayaran| MPG
+    System -->|Otentikasi Akun & Persistensi Data Relasional| Supabase

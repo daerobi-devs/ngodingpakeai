@@ -1,0 +1,31 @@
+graph TB
+    subgraph NextJSAPILayer [Next.js Route Handlers Component Layer]
+        EnrichAPI[/api/enrich-idea<br/>Transformasi Ide Mentah ke 4 Pilar]
+        ClarifyAPI[/api/generate-clarifications<br/>Domain Discovery & Sharp Questions]
+        GenPRDAPI[/api/generate-prd<br/>Core PRD Architecture Synthesis]
+        OrdersAPI[/api/orders<br/>Dynamic Order & QRIS Generation]
+        WebhookAPI[/api/webhook/payment-success<br/>Idempotent Payment Settlement]
+        AdminAPI[/api/admin<br/>Switchboard, Slots & User Controls]
+    end
+
+    subgraph CoreLibraryLayer [Core Shared Library Modules]
+        GeminiClient[src/lib/gemini/gemini-client.ts<br/>Model Ladder, Retries & Key Pool]
+        GeminiPrompts[src/lib/gemini/prompts.ts<br/>8-Diagram Prompt & Tech Contracts]
+        GeminiSchemas[src/lib/gemini/schemas.ts<br/>Zod Schemas & Response Sanitize]
+        MPGClient[src/lib/mpg/client.ts<br/>MPG API Integration & HMAC Verify]
+        SupabaseAdmin[src/lib/supabase/admin.ts<br/>Service Role Admin Supabase Client]
+    end
+
+    EnrichAPI --> GeminiClient
+    ClarifyAPI --> GeminiClient
+    ClarifyAPI --> GeminiSchemas
+    GenPRDAPI --> GeminiClient
+    GenPRDAPI --> GeminiPrompts
+    GenPRDAPI --> GeminiSchemas
+    GenPRDAPI --> SupabaseAdmin
+
+    OrdersAPI --> MPGClient
+    OrdersAPI --> SupabaseAdmin
+    WebhookAPI --> MPGClient
+    WebhookAPI --> SupabaseAdmin
+    AdminAPI --> SupabaseAdmin

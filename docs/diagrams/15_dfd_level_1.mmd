@@ -1,0 +1,44 @@
+graph TD
+    User([Pengguna])
+    Admin([Administrator])
+    Gemini([Google Gemini API])
+    MPG([Gateway MPG])
+
+    DS_Profiles[(D1: profiles)]
+    DS_Settings[(D2: system_settings)]
+    DS_History[(D3: prd_history)]
+    DS_Orders[(D4: payment_orders)]
+
+    P1((1.0 Manajemen Akun & Sesi))
+    P2((2.0 Generator Ide & Pertanyaan))
+    P3((3.0 Sintesis Arsitektur & PRD))
+    P4((4.0 Pemrosesan Pembayaran QRIS))
+    P5((5.0 Administrasi & Switchboard))
+
+    User -->|Login / Register| P1
+    P1 <--> DS_Profiles
+
+    User -->|Input Ide Mentah| P2
+    P2 -->|Prompt Elaborasi| Gemini
+    Gemini -->|Opsi Pertanyaan & Rekomendasi| P2
+    P2 -->|Pertanyaan Klarifikasi| User
+
+    User -->|Submit Konfigurasi Lengkap| P3
+    P3 <--> DS_Settings
+    P3 <--> DS_Profiles
+    P3 -->|Structured Payload Generation| Gemini
+    Gemini -->|Complete PRD Document| P3
+    P3 --> DS_History
+    P3 -->|PRD & 8 Diagram| User
+
+    User -->|Pilih Paket Pro/Plus| P4
+    P4 -->|Request Invoice QRIS| MPG
+    MPG -->|Webhook Notifikasi Lunas| P4
+    P4 <--> DS_Orders
+    P4 -->|Update Status Pro| DS_Profiles
+
+    Admin -->|Kelola Switchboard & Verifikasi Order| P5
+    P5 <--> DS_Settings
+    P5 <--> DS_Orders
+    P5 <--> DS_Profiles
+    P5 <--> DS_History

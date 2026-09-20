@@ -1,0 +1,16 @@
+graph TD
+    GitPush([Git Push: Branch main]) --> Stage1[Stage 1: Dependencies deps]
+    
+    subgraph DockerBuild [Dockerfile Multi-Stage Build]
+        Stage1 -->|Install ca-certificates & npm ci| CacheDeps[Cache Node Modules]
+        CacheDeps --> Stage2[Stage 2: Builder]
+        Stage2 -->|Inject ARG Env NEXT_PUBLIC| RunBuild[npm run build: Next.js Turbopack]
+        RunBuild --> OutStandalone[.next/standalone & .next/static]
+        OutStandalone --> Stage3[Stage 3: Runner node:22-slim]
+        Stage3 -->|Add Non-Root User nextjs:1001| FinalImage[Image Docker Produksi Minimal ~180MB]
+    end
+
+    FinalImage --> DeployCoolify[Deploy ke Coolify VPS Container]
+    DeployCoolify --> HealthCheck{Health Check 200 OK?}
+    HealthCheck -- Ya --> TrafficLive([Lalu Lintas Live Diarahkan ke Container Baru])
+    HealthCheck -- Tidak --> Rollback([Rollback ke Image Sebelumnya])

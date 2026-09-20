@@ -1,0 +1,22 @@
+graph TD
+    UserReq[Permintaan Akses Pengguna] --> CheckAuth{Terautentikasi?}
+    
+    CheckAuth -- Belum --> GuestRole[Role: Guest / Anonim]
+    CheckAuth -- Ya --> FetchProfile[Ambil Data profiles dari Database]
+    
+    FetchProfile --> CheckAdmin{is_admin == true?}
+    CheckAdmin -- Ya --> SuperAdminRole[Role: Super Administrator]
+    CheckAdmin -- Tidak --> CheckBanned{is_banned == true?}
+    
+    CheckBanned -- Ya --> BannedState[Akses Diblokir: Error 403 Forbidden]
+    CheckBanned -- Tidak --> CheckTier{subscription_tier}
+
+    CheckTier -- free --> FreeRole[Role: Free Tier Pengguna]
+    CheckTier -- pro --> ProRole[Role: Pro Tier Pengguna]
+    CheckTier -- unlimited --> UnlimitedRole[Role: Unlimited Tier Pengguna]
+
+    GuestRole --> Perm_Guest[Izin: 1x Free Trial PRD, Starter Template]
+    FreeRole --> Perm_Free[Izin: Kuota Harian Terbatas, Starter Template]
+    ProRole --> Perm_Pro[Izin: 30 PRD/Hari, Template Lanjutan, 8 Diagram, Starter ZIP]
+    UnlimitedRole --> Perm_Unlimited[Izin: Tanpa Batas Kuota, Akses Penuh Seluruh Fitur]
+    SuperAdminRole --> Perm_Admin[Izin: Akses Penuh /admin, Manajemen Slot, Bypass Transaksi]

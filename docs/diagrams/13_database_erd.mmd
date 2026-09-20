@@ -1,0 +1,81 @@
+erDiagram
+    auth_users ||--o| profiles : has_profile
+    profiles ||--o{ prd_history : generates
+    profiles ||--o{ payment_orders : places
+
+    profiles {
+        uuid id PK
+        text email
+        text full_name
+        text avatar_url
+        text subscription_tier
+        integer trial_count
+        boolean is_admin
+        timestamptz pro_expires_at
+        text assigned_gemini_slot
+        boolean is_banned
+        integer daily_limit_override
+        integer total_server_tokens
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    system_settings {
+        text id PK
+        text auth_mode
+        text api_key_mode
+        text monetization_mode
+        text ai_provider
+        jsonb gemini_slots
+        text payment_gateway_mode
+        text mpg_gateway_url
+        text mpg_api_key
+        text mpg_webhook_secret
+        integer trial_limit
+        text qris_merchant_name
+        text qris_gopay_number
+        text qris_image_url
+        integer pro_price_rp
+        text pro_price_formatted
+        text admin_passcode
+        text_array admin_emails
+        jsonb pricing_tiers
+        jsonb announcement_banner
+        timestamptz updated_at
+    }
+
+    prd_history {
+        uuid id PK
+        uuid user_id FK
+        text title
+        jsonb prd_data
+        text model_used
+        integer tokens_used
+        boolean is_server_key
+        text gemini_slot_used
+        timestamptz created_at
+    }
+
+    payment_orders {
+        uuid id PK
+        uuid user_id FK
+        text user_email
+        text user_name
+        text order_code UK
+        integer amount
+        integer final_amount
+        integer unique_code
+        text qr_string
+        text checkout_url
+        text payment_method
+        text status
+        text admin_notes
+        text tier_id
+        text gateway_order_id
+        text detected_bank
+        timestamptz paid_at
+        timestamptz expired_at
+        jsonb gateway_payload
+        timestamptz created_at
+        timestamptz updated_at
+    }
