@@ -18,6 +18,7 @@ import {
   QrCode,
   Check,
   LayoutDashboard,
+  Layers,
   Cpu,
   Sliders,
   Wallet,
@@ -47,6 +48,7 @@ import {
   Sun,
   Moon,
   Search,
+  GitFork,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -137,6 +139,7 @@ export default function AdminDashboard() {
     mpg_webhook_secret: 'mandiri-private-gateway-secret-key-change-in-prod',
     pro_price_rp: 49000,
     pro_price_formatted: 'Rp 49.000 / Lifetime Access',
+    studio_access_tier: 'paid_only',
   });
 
   const [usersList, setUsersList] = useState<Profile[]>([]);
@@ -1952,6 +1955,108 @@ export default function AdminDashboard() {
                         Misal 1 = User hanya bisa 1x generate gratis dari server key kamu.
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Studio Mode Access Policy */}
+                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                    <Layers className="h-4 w-4" />
+                    <span>Studio Mode Policy</span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Atur hak akses ke Tab Studio PRD dan fitur revisi AI untuk pengguna.
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    {[
+                      {
+                        id: 'paid_only',
+                        title: 'Pelanggan Berbayar (Disarankan)',
+                        desc: 'Khusus user Plus, Pro, & Unlimited. Free user diarahkan upgrade.',
+                      },
+                      {
+                        id: 'pro_only',
+                        title: 'Khusus PRO & Unlimited',
+                        desc: 'Hanya user paket Pro & Unlimited yang dapat mengakses Studio.',
+                      },
+                      {
+                        id: 'all',
+                        title: 'Semua Pengguna (Termasuk Free)',
+                        desc: 'Semua user dapat mengakses Studio (kuota harian tetap berlaku).',
+                      },
+                    ].map((m) => (
+                      <label
+                        key={m.id}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                          (settings.studio_access_tier || 'paid_only') === m.id
+                            ? 'border-indigo-500/50 bg-indigo-500/10 text-white font-semibold'
+                            : 'border-zinc-800/80 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="studio_access_tier"
+                          checked={(settings.studio_access_tier || 'paid_only') === m.id}
+                          onChange={() => setSettings({ ...settings, studio_access_tier: m.id as any })}
+                          className="mt-0.5 text-indigo-500 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <div className="font-semibold text-white">{m.title}</div>
+                          <div className="text-[11px] text-zinc-400">{m.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Roadmap Pintar Access Policy */}
+                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    <GitFork className="h-4 w-4" />
+                    <span>Roadmap Pintar Policy</span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Atur hak akses ke Tab Roadmap Pintar AI (Pohon Karier & Skill Tree) untuk pengguna.
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    {[
+                      {
+                        id: 'paid_only',
+                        title: 'Pelanggan Berbayar (Disarankan)',
+                        desc: 'Khusus user Plus, Pro, & Unlimited. Free user diarahkan upgrade.',
+                      },
+                      {
+                        id: 'pro_only',
+                        title: 'Khusus PRO & Unlimited',
+                        desc: 'Hanya user paket Pro & Unlimited yang dapat mengakses Roadmap Pintar.',
+                      },
+                      {
+                        id: 'all',
+                        title: 'Semua Pengguna (Termasuk Free)',
+                        desc: 'Semua user dapat membuat Roadmap (kuota harian tetap berlaku).',
+                      },
+                    ].map((m) => (
+                      <label
+                        key={m.id}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                          (settings.roadmap_access_tier || 'paid_only') === m.id
+                            ? 'border-amber-500/50 bg-amber-500/10 text-white font-semibold'
+                            : 'border-zinc-800/80 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="roadmap_access_tier"
+                          checked={(settings.roadmap_access_tier || 'paid_only') === m.id}
+                          onChange={() => setSettings({ ...settings, roadmap_access_tier: m.id as any })}
+                          className="mt-0.5 text-amber-500 focus:ring-amber-500"
+                        />
+                        <div>
+                          <div className="font-semibold text-white">{m.title}</div>
+                          <div className="text-[11px] text-zinc-400">{m.desc}</div>
+                        </div>
+                      </label>
+                    ))}
                   </div>
                 </div>
 

@@ -18,26 +18,51 @@ import {
   Layers,
   Search,
   Zap,
-  Wand2,
-  SlidersHorizontal,
+  Eye,
+  EyeOff,
+  Compass,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PRDOutput } from '@/types/prd';
+
+export type ProjectHistoryType = 'prd' | 'studio' | 'roadmap';
 
 export interface PrdHistorySummary {
   id: string;
   title: string;
   created_at: string;
   model_used?: string;
-  prd_data?: PRDOutput;
+  prd_data?: PRDOutput | any;
+  project_type?: ProjectHistoryType;
 }
+
+export const getHistoryItemType = (item: PrdHistorySummary): ProjectHistoryType => {
+  if (
+    item.project_type === 'roadmap' ||
+    item.prd_data?.type === 'roadmap' ||
+    item.id?.startsWith('roadmap') ||
+    (item.title && item.title.toLowerCase().startsWith('roadmap:'))
+  ) {
+    return 'roadmap';
+  }
+  if (
+    item.project_type === 'studio' ||
+    item.prd_data?.isStudio ||
+    item.id?.startsWith('studio') ||
+    (item.title && item.title.toLowerCase().startsWith('studio:'))
+  ) {
+    return 'studio';
+  }
+  return 'prd';
+};
 
 interface GeneratorSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   activePrdId: string | null;
   historyItems: PrdHistorySummary[];
-  onSelectPrd: (prd: PRDOutput, id: string) => void;
+  onSelectPrd: (prd: PRDOutput | any, id: string, type?: ProjectHistoryType) => void;
   onNewPrd: () => void;
   onDeletePrd?: (id: string) => void;
   onOpenSettings: () => void;
@@ -48,8 +73,8 @@ interface GeneratorSidebarProps {
   onToggleTheme: () => void;
   isLoadingHistory?: boolean;
   onRefreshHistory?: () => void;
-  creationMode: 'wizard' | 'manual';
-  onSetCreationMode: (mode: 'wizard' | 'manual') => void;
+  creationMode: 'wizard' | 'studio' | 'roadmap';
+  onSetCreationMode: (mode: 'wizard' | 'studio' | 'roadmap') => void;
 }
 
 export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
@@ -86,10 +111,28 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isHistoryHidden, setIsHistoryHidden] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'prd' | 'studio' | 'roadmap'>('all');
 
-  const filteredHistory = historyItems.filter((item) =>
-    (item.title || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const counts = React.useMemo(() => {
+    let prd = 0;
+    let studio = 0;
+    let roadmap = 0;
+    historyItems.forEach((item) => {
+      const type = getHistoryItemType(item);
+      if (type === 'roadmap') roadmap++;
+      else if (type === 'studio') studio++;
+      else prd++;
+    });
+    return { all: historyItems.length, prd, studio, roadmap };
+  }, [historyItems]);
+
+  const filteredHistory = historyItems.filter((item) => {
+    const matchesSearch = (item.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (historyFilter === 'all') return true;
+    return getHistoryItemType(item) === historyFilter;
+  });
 
   const formatTimeAgo = (dateStr: string) => {
     try {
@@ -210,28 +253,38 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
           <button
             type="button"
             onClick={() => onSetCreationMode('wizard')}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all ${
+            className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
               creationMode === 'wizard'
                 ? 'bg-amber-500 text-zinc-950 shadow-sm shadow-amber-500/30'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
             }`}
             title="Mode Terpandu (Wizard)"
           >
-            <Wand2 className="h-3 w-3 shrink-0" />
-            <span>Terpandu</span>
+            <span className="truncate">Terpandu</span>
           </button>
           <button
             type="button"
-            onClick={() => onSetCreationMode('manual')}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all ${
-              creationMode === 'manual'
-                ? 'bg-zinc-700 text-white shadow-sm'
+            onClick={() => onSetCreationMode('studio')}
+            className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
+              creationMode === 'studio'
+                ? 'bg-amber-500 text-zinc-950 shadow-sm shadow-amber-500/30'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
             }`}
-            title="Form Manual (7 Kategori)"
+            title="Mode Studio (Dokumen & Chat AI)"
           >
-            <SlidersHorizontal className="h-3 w-3 shrink-0" />
-            <span>Manual</span>
+            <span className="truncate">Studio</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onSetCreationMode('roadmap')}
+            className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
+              creationMode === 'roadmap'
+                ? 'bg-amber-500 text-zinc-950 shadow-sm shadow-amber-500/30'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+            title="Mode Roadmap Pintar (AI Skill & Career Tree)"
+          >
+            <span className="truncate">Roadmap</span>
           </button>
         </div>
       </div>
@@ -244,85 +297,234 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
             <span>Riwayat Proyek</span>
           </span>
 
-          {onRefreshHistory && (
+          <div className="flex items-center gap-1">
+            {/* Hide / Show Riwayat Proyek Toggle */}
             <button
               type="button"
-              onClick={onRefreshHistory}
-              disabled={isLoadingHistory}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50"
-              title="Segarkan Riwayat"
+              onClick={() => setIsHistoryHidden(!isHistoryHidden)}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              title={isHistoryHidden ? 'Tampilkan Riwayat Proyek' : 'Sembunyikan Riwayat Proyek'}
             >
-              <RefreshCw className={`h-3 w-3 ${isLoadingHistory ? 'animate-spin text-amber-400' : ''}`} />
+              {isHistoryHidden ? (
+                <Eye className="h-3.5 w-3.5 text-amber-400" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-200" />
+              )}
             </button>
-          )}
+
+            {onRefreshHistory && !isHistoryHidden && (
+              <button
+                type="button"
+                onClick={onRefreshHistory}
+                disabled={isLoadingHistory}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50 cursor-pointer"
+                title="Segarkan Riwayat"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoadingHistory ? 'animate-spin text-amber-400' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Search input if history > 3 */}
-        {historyItems.length > 3 && (
-          <div className="relative mb-2">
-            <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-2.5 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari judul proyek..."
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950/80 pl-8 pr-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-400 focus:border-amber-500/50 focus:outline-none"
-            />
-          </div>
-        )}
-
-        {/* List of projects */}
-        {filteredHistory.length > 0 ? (
-          <div className="space-y-1">
-            {filteredHistory.map((item) => {
-              const isActive = activePrdId === item.id;
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => item.prd_data && onSelectPrd(item.prd_data, item.id)}
-                  className={`group relative flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    isActive
-                      ? 'bg-amber-500/10 border-amber-500/40 text-white shadow-xs'
-                      : 'bg-zinc-900/30 border-transparent hover:bg-zinc-900/70 hover:border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-1 mb-1">
-                    <p
-                      className={`text-xs font-semibold line-clamp-1 ${
-                        isActive ? 'text-amber-300 font-bold' : 'text-zinc-300'
-                      }`}
-                    >
-                      {item.title || 'Untitled PRD'}
-                    </p>
-
-                    {onDeletePrd && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDelete(e, item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 transition-all"
-                        title="Hapus dokumen ini"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
-                    <span>Dokumen PRD</span>
-                    <span>{formatTimeAgo(item.created_at)}</span>
-                  </div>
-                </div>
-              );
-            })}
+        {/* Collapsed view when hidden */}
+        {isHistoryHidden ? (
+          <div className="py-3 px-3 text-center rounded-xl border border-zinc-800/80 bg-zinc-950/40">
+            <p className="text-[11px] text-zinc-400 font-medium">Riwayat Proyek Disembunyikan</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">{historyItems.length} proyek tersimpan</p>
+            <button
+              type="button"
+              onClick={() => setIsHistoryHidden(false)}
+              className="mt-2 inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-semibold cursor-pointer"
+            >
+              <Eye className="h-3 w-3" />
+              <span>Tampilkan Riwayat</span>
+            </button>
           </div>
         ) : (
-          <div className="py-6 px-2 text-center rounded-xl border border-dashed border-zinc-800/80 bg-zinc-950/40">
-            <Layers className="h-6 w-6 text-zinc-500 mx-auto mb-2 opacity-50" />
-            <p className="text-xs text-zinc-400 font-medium">Belum ada PRD aktif</p>
-            <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
-              Ketik ide produk Anda pada formulir untuk mulai membuat dokumen PRD.
-            </p>
-          </div>
+          <>
+            {/* Category Filter Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-zinc-950/90 rounded-xl border border-zinc-800/80 mb-2.5 text-[10px] font-bold">
+              <button
+                type="button"
+                onClick={() => setHistoryFilter('all')}
+                className={`py-1 rounded-lg transition-all text-center cursor-pointer ${
+                  historyFilter === 'all'
+                    ? 'bg-zinc-800 text-white shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+                title="Tampilkan Semua Proyek"
+              >
+                <span>Semua</span>
+                <span className="opacity-70 font-mono ml-0.5">({counts.all})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryFilter('prd')}
+                className={`py-1 rounded-lg transition-all text-center cursor-pointer ${
+                  historyFilter === 'prd'
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+                title="Hanya Dokumen PRD"
+              >
+                <span>PRD</span>
+                <span className="opacity-70 font-mono ml-0.5">({counts.prd})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryFilter('studio')}
+                className={`py-1 rounded-lg transition-all text-center cursor-pointer ${
+                  historyFilter === 'studio'
+                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30 shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+                title="Hanya Sesi Studio AI"
+              >
+                <span>Studio</span>
+                <span className="opacity-70 font-mono ml-0.5">({counts.studio})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryFilter('roadmap')}
+                className={`py-1 rounded-lg transition-all text-center cursor-pointer ${
+                  historyFilter === 'roadmap'
+                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+                title="Hanya Pohon Roadmap Pintar"
+              >
+                <span>Roadmap</span>
+                <span className="opacity-70 font-mono ml-0.5">({counts.roadmap})</span>
+              </button>
+            </div>
+
+            {/* Search input if history > 2 */}
+            {historyItems.length > 2 && (
+              <div className="relative mb-2">
+                <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-2.5 top-2.5" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari judul proyek..."
+                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950/80 pl-8 pr-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-400 focus:border-amber-500/50 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {/* List of projects */}
+            {filteredHistory.length > 0 ? (
+              <div className="space-y-1.5">
+                {filteredHistory.map((item) => {
+                  const isActive = activePrdId === item.id;
+                  const itemType = getHistoryItemType(item);
+
+                  // Clean title for display
+                  let displayTitle = item.title || 'Untitled';
+                  if (itemType === 'roadmap' && displayTitle.toLowerCase().startsWith('roadmap:')) {
+                    displayTitle = displayTitle.slice(8).trim();
+                  } else if (itemType === 'studio' && displayTitle.toLowerCase().startsWith('studio:')) {
+                    displayTitle = displayTitle.slice(7).trim();
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => item.prd_data && onSelectPrd(item.prd_data, item.id, itemType)}
+                      className={`group relative flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        isActive
+                          ? itemType === 'roadmap'
+                            ? 'bg-orange-500/10 border-orange-500/40 text-white shadow-xs'
+                            : itemType === 'studio'
+                            ? 'bg-sky-500/10 border-sky-500/40 text-white shadow-xs'
+                            : 'bg-amber-500/10 border-amber-500/40 text-white shadow-xs'
+                          : 'bg-zinc-900/30 border-transparent hover:bg-zinc-900/70 hover:border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1.5 mb-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          {itemType === 'roadmap' ? (
+                            <Compass className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+                          ) : itemType === 'studio' ? (
+                            <Layers className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                          ) : (
+                            <FileText className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                          )}
+                          <p
+                            className={`text-xs font-semibold truncate ${
+                              isActive
+                                ? itemType === 'roadmap'
+                                  ? 'text-orange-300 font-bold'
+                                  : itemType === 'studio'
+                                  ? 'text-sky-300 font-bold'
+                                  : 'text-amber-300 font-bold'
+                                : 'text-zinc-200'
+                            }`}
+                          >
+                            {displayTitle}
+                          </p>
+                        </div>
+
+                        {onDeletePrd && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDelete(e, item.id)}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition-all shrink-0 cursor-pointer"
+                            title="Hapus proyek ini"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            itemType === 'roadmap'
+                              ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                              : itemType === 'studio'
+                              ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}
+                        >
+                          {itemType === 'roadmap'
+                            ? 'Roadmap Pintar'
+                            : itemType === 'studio'
+                            ? 'Studio AI'
+                            : 'Dokumen PRD'}
+                        </span>
+                        <span className="text-zinc-500">{formatTimeAgo(item.created_at)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-6 px-2 text-center rounded-xl border border-dashed border-zinc-800/80 bg-zinc-950/40">
+                {historyFilter === 'roadmap' ? (
+                  <Compass className="h-6 w-6 text-orange-400/50 mx-auto mb-2" />
+                ) : historyFilter === 'studio' ? (
+                  <Layers className="h-6 w-6 text-sky-400/50 mx-auto mb-2" />
+                ) : (
+                  <FileText className="h-6 w-6 text-amber-400/50 mx-auto mb-2" />
+                )}
+                <p className="text-xs text-zinc-400 font-medium">
+                  {historyFilter === 'roadmap'
+                    ? 'Belum ada Roadmap tersimpan'
+                    : historyFilter === 'studio'
+                    ? 'Belum ada proyek Studio tersimpan'
+                    : historyFilter === 'prd'
+                    ? 'Belum ada Dokumen PRD tersimpan'
+                    : 'Belum ada proyek aktif'}
+                </p>
+                <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                  {historyFilter === 'roadmap'
+                    ? 'Gunakan tab Roadmap Pintar untuk menyusun kurikulum belajar baru.'
+                    : 'Mulai buat PRD baru menggunakan formulir atau Studio.'}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

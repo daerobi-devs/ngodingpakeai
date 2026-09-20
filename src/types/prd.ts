@@ -112,6 +112,17 @@ export interface PRDOutput {
     rbac_permission_matrix?: string;  // Mermaid flowchart TD - RBAC roles & permissions
     data_pipeline_flow?: string;      // Mermaid flowchart LR - Data input, queue, worker, storage
   };
+  tech_stack?: {
+    name?: string;
+    version?: string;
+    description?: string;
+    frontend?: string;
+    backend?: string;
+    database?: string;
+    deployment?: string;
+    templateId?: string;
+    language?: string;
+  };
   metadata?: {
     modelUsed: string;
     generatedAt: string;

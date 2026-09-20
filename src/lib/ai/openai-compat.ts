@@ -153,17 +153,15 @@ export function repairAndParseJSON(rawText: string): any {
     } catch {}
   }
 
-  // 4. Fourth attempt: Automatic Stack Balancer for Truncated JSON
-  // If model hit max_tokens, it stopped mid-stream.
-  // We close open strings, arrays, and objects.
-  try {
+  // Helper: Try balancing brackets and fixing cut-off key-values on a candidate string
+  const attemptBalanceAndParse = (cand: string): any => {
     let inString = false;
     let escaped = false;
     const stack: ('{' | '[')[] = [];
     let repaired = '';
 
-    for (let i = 0; i < candidate.length; i++) {
-      const char = candidate[i];
+    for (let i = 0; i < cand.length; i++) {
+      const char = cand[i];
 
       if (escaped) {
         escaped = false;
@@ -184,7 +182,6 @@ export function repairAndParseJSON(rawText: string): any {
       }
 
       if (inString) {
-        // Normalize literal newlines inside strings which break JSON.parse
         if (char === '\n') {
           repaired += '\\n';
         } else if (char === '\r') {
@@ -212,16 +209,23 @@ export function repairAndParseJSON(rawText: string): any {
       repaired += char;
     }
 
-    // If stream cut off while inside a string, close the string
+    // 1. If cut off inside a string, close the string
     if (inString) {
       repaired += '"';
     }
 
-    // Remove any trailing comma before closing brackets
-    repaired = repaired.replace(/,\s*([\}\]])/g, '$1');
+    // 2. Clean dangling tokens before bracket closing
+    // Dangling key with colon: e.g. ,"key": or {"key":
+    repaired = repaired.replace(/,\s*"[^"]*"\s*:\s*$/, '');
+    repaired = repaired.replace(/\{\s*"[^"]*"\s*:\s*$/, '{');
+    // Dangling key without colon: e.g. ,"key"
+    repaired = repaired.replace(/,\s*"[^"]*"\s*$/, '');
+    // Colon at the very end
+    repaired = repaired.replace(/:\s*$/, ': null');
+    // Trailing comma at the end
     repaired = repaired.replace(/,\s*$/, '');
 
-    // Close all open brackets in reverse order
+    // 3. Close open brackets in reverse order
     while (stack.length > 0) {
       const open = stack.pop();
       if (open === '{') {
@@ -231,11 +235,33 @@ export function repairAndParseJSON(rawText: string): any {
       }
     }
 
-    // Clean any lingering trailing commas
+    // 4. Fix any colon directly followed by a closing bracket (empty value bug e.g. "keyTopics":}]}]})
+    repaired = repaired.replace(/:\s*\}/g, ': null}');
+    repaired = repaired.replace(/:\s*\]/g, ': []]');
+    // Fix dangling key right before a closing brace: e.g. ,"key"} -> }
+    repaired = repaired.replace(/,\s*"[^"]+"\s*\}/g, '}');
+    // Clean trailing commas before closing brackets
     repaired = repaired.replace(/,\s*([\}\]])/g, '$1');
 
     return JSON.parse(repaired);
+  };
+
+  // 4. Fourth attempt: Balanced repair on candidate
+  try {
+    return attemptBalanceAndParse(candidate);
   } catch (err: any) {
+    // 5. Fifth attempt: Progressive slice backwards to the last valid completed object
+    let cutIdx = candidate.lastIndexOf('}');
+    while (cutIdx > 10) {
+      const sub = candidate.slice(0, cutIdx + 1);
+      try {
+        return attemptBalanceAndParse(sub);
+      } catch {
+        cutIdx = candidate.lastIndexOf('}', cutIdx - 1);
+      }
+    }
+
     throw new Error(`Format JSON dari AI terpotong atau tidak lengkap: ${err?.message || 'Sintaks tidak valid'}`);
   }
 }
+

@@ -61,6 +61,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({
           startOnLoad: false,
+          suppressErrorRendering: true,
           theme: isLight ? "default" : "dark",
           securityLevel: "loose",
           themeVariables: isLight
@@ -102,10 +103,16 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
       } catch (err: unknown) {
         if (isMounted) {
           console.warn("Mermaid render error:", err);
+          // Hapus paksa elemen error DOM yang disuntikkan secara otomatis oleh Mermaid
+          try {
+            if (typeof document !== "undefined") {
+              document.querySelectorAll('[id^="dmermaid_"], [id^="d_"], .error-icon').forEach((el) => el.remove());
+            }
+          } catch {}
           setError(
             err instanceof Error
               ? err.message
-              : "Sintaks diagram Mermaid tidak valid"
+              : "Sintaks diagram Mermaid sedang disesuaikan"
           );
           setLoading(false);
         }
@@ -216,23 +223,13 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
         )}
 
         {!loading && error && (
-          <div className="flex flex-col items-center text-center p-6 space-y-3 max-w-md">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
-              <AlertTriangle className="h-5 w-5" />
+          <div className="w-full">
+            <div className="text-[11px] text-zinc-500 font-mono mb-1.5 px-1">
+              Spesifikasi Diagram Mermaid:
             </div>
-            <div>
-              <h5 className="text-xs font-semibold text-rose-400">
-                Gagal Merender Grafik
-              </h5>
-              <p className="text-[11px] text-zinc-400 mt-1">{error}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowRaw(true)}
-              className="text-xs text-amber-400 underline hover:text-amber-300"
-            >
-              Lihat kode Mermaid mentah
-            </button>
+            <pre className="w-full rounded-lg border border-zinc-800 bg-[#09090b] p-4 text-xs font-mono text-zinc-300 overflow-x-auto leading-relaxed">
+              {chart}
+            </pre>
           </div>
         )}
 

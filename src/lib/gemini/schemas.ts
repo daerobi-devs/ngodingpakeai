@@ -267,6 +267,33 @@ export const PRDOutputZodSchema = z.object({
       data_pipeline_flow: z.string().optional(),
     })
     .optional(),
+  tech_stack: z
+    .object({
+      name: z.string().optional(),
+      version: z.string().optional(),
+      description: z.string().optional(),
+      frontend: z.any().optional(),
+      backend: z.any().optional(),
+      database: z.any().optional(),
+      deployment: z.any().optional(),
+      templateId: z.string().optional(),
+      language: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
+  metadata: z
+    .object({
+      modelUsed: z.string().optional(),
+      generatedAt: z.string().optional(),
+      tokenUsage: z.number().optional(),
+      tokensUsed: z.number().optional(),
+      retries: z.number().optional(),
+      fallbackCount: z.number().optional(),
+      geminiSlotUsed: z.string().nullable().optional(),
+      isServerKey: z.boolean().optional(),
+      costEstimateRp: z.number().optional(),
+    })
+    .optional(),
 });
 
 export const clarificationResponseSchema = {
@@ -493,6 +520,34 @@ export function normalizeAndSanitizePRDOutput(raw: any): z.infer<typeof PRDOutpu
   const roadmap_tree = Array.isArray(raw.roadmap_tree) ? raw.roadmap_tree : undefined;
   const architecture_diagrams = typeof raw.architecture_diagrams === "object" && raw.architecture_diagrams !== null ? raw.architecture_diagrams : undefined;
 
+  // 12. Tech Stack & Metadata preservation with robust extraction
+  let tech_stack: any = undefined;
+  if (raw.tech_stack && typeof raw.tech_stack === "object") {
+    const rawTs = raw.tech_stack;
+    const extractName = (val: any): string | undefined => {
+      if (!val) return undefined;
+      if (typeof val === 'string') return val.trim();
+      if (typeof val === 'object') {
+        const candidate = val.name || val.title || val.label || val.value;
+        if (candidate && typeof candidate === 'string') return candidate.trim();
+      }
+      return undefined;
+    };
+
+    tech_stack = {
+      name: typeof rawTs.name === 'string' ? rawTs.name : undefined,
+      version: typeof rawTs.version === 'string' ? rawTs.version : undefined,
+      description: typeof rawTs.description === 'string' ? rawTs.description : undefined,
+      templateId: typeof rawTs.templateId === 'string' ? rawTs.templateId : undefined,
+      language: typeof rawTs.language === 'string' ? rawTs.language : undefined,
+      frontend: extractName(rawTs.frontend) || (typeof rawTs.frontend === 'string' ? rawTs.frontend : undefined),
+      backend: extractName(rawTs.backend) || (typeof rawTs.backend === 'string' ? rawTs.backend : undefined),
+      database: extractName(rawTs.database) || (typeof rawTs.database === 'string' ? rawTs.database : undefined),
+      deployment: extractName(rawTs.deployment) || (typeof rawTs.deployment === 'string' ? rawTs.deployment : undefined),
+    };
+  }
+  const metadata = raw.metadata && typeof raw.metadata === "object" ? raw.metadata : undefined;
+
   const normalizedPayload = {
     title,
     archetype_detection,
@@ -507,9 +562,16 @@ export function normalizeAndSanitizePRDOutput(raw: any): z.infer<typeof PRDOutpu
     task_breakdown,
     roadmap_tree,
     architecture_diagrams,
+    tech_stack,
+    metadata,
   };
 
-  return PRDOutputZodSchema.parse(normalizedPayload);
+  try {
+    return PRDOutputZodSchema.parse(normalizedPayload);
+  } catch (zodErr) {
+    console.warn("PRDOutputZodSchema parse warning, applying sanitized payload fallback:", zodErr);
+    return normalizedPayload as any;
+  }
 }
 
 /**

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PRDFormData, PRDOutput, SectionKey } from '@/types/prd';
 import { GeneratorSidebar, PrdHistorySummary } from '@/components/GeneratorSidebar';
-import { PRDForm } from '@/components/PRDForm';
 import { PRDViewer } from '@/components/PRDViewer';
 import { ApiKeyModal } from '@/components/ApiKeyModal';
 import { SectionAssistantModal } from '@/components/SectionAssistantModal';
@@ -18,6 +17,11 @@ import { WizardHeroInput, TechStackConfig, DEFAULT_TECH_STACK } from '@/componen
 import { WizardDiscoveryStep } from '@/components/wizard/WizardDiscoveryStep';
 import { ClarificationQuestion } from '@/types/prd';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { StudioWorkspace } from '@/components/studio/StudioWorkspace';
+import { StudioHeroInput } from '@/components/studio/StudioHeroInput';
+import { RoadmapOutput } from '@/types/roadmap';
+import { RoadmapHeroInput } from '@/components/roadmap/RoadmapHeroInput';
+import { RoadmapTreeView } from '@/components/roadmap/RoadmapTreeView';
 import confetti from 'canvas-confetti';
 import {
   AlertCircle,
@@ -41,6 +45,8 @@ import {
   X,
   ExternalLink,
   MessageCircle,
+  Sparkles,
+  Compass,
 } from 'lucide-react';
 
 const INITIAL_FORM_DATA: PRDFormData = {
@@ -147,7 +153,9 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const [statusStep, setStatusStep] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [creationMode, setCreationMode] = useState<'wizard' | 'manual'>('wizard');
+  const [creationMode, setCreationMode] = useState<'wizard' | 'studio' | 'roadmap'>('wizard');
+  const [activeRoadmap, setActiveRoadmap] = useState<RoadmapOutput | null>(null);
+  const [loadingRoadmap, setLoadingRoadmap] = useState(false);
   const [wizardStep, setWizardStep] = useState<'input' | 'discovery'>('input');
   const [wizardIdea, setWizardIdea] = useState('');
   const [wizardStack, setWizardStack] = useState<TechStackConfig>(DEFAULT_TECH_STACK);
@@ -158,6 +166,40 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
   const isStrictLogin = systemSettings?.auth_mode === 'strict_login';
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+
+  const isStudioAllowed = () => {
+    const policy = systemSettings?.studio_access_tier || 'paid_only';
+    if (policy === 'pro_only') {
+      return isPro || isAdmin;
+    }
+    if (policy === 'paid_only') {
+      return isPaid || isPro || isPlus || isAdmin;
+    }
+    return true; // 'all'
+  };
+
+  const isRoadmapAllowed = () => {
+    const policy = systemSettings?.roadmap_access_tier || 'paid_only';
+    if (policy === 'pro_only') {
+      return isPro || isAdmin;
+    }
+    if (policy === 'paid_only') {
+      return isPaid || isPro || isPlus || isAdmin;
+    }
+    return true; // 'all'
+  };
+
+  const handleSelectCreationMode = (mode: 'wizard' | 'studio' | 'roadmap') => {
+    if (mode === 'studio' && !isStudioAllowed()) {
+      setIsPricingModalOpen(true);
+      return;
+    }
+    if (mode === 'roadmap' && !isRoadmapAllowed()) {
+      setIsPricingModalOpen(true);
+      return;
+    }
+    setCreationMode(mode);
+  };
 
   // Handle redirect return from Mandiri Private Gateway (payment=success)
   useEffect(() => {
@@ -193,7 +235,14 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       if (local) {
         const parsed = JSON.parse(local);
         if (Array.isArray(parsed)) {
-          combined = parsed;
+          combined = parsed.map((item: any) => {
+            const isRoadmap = item.project_type === 'roadmap' || item.prd_data?.type === 'roadmap' || item.id?.startsWith('roadmap') || (item.title && item.title.toLowerCase().startsWith('roadmap:'));
+            const isStudio = item.project_type === 'studio' || item.prd_data?.isStudio || item.id?.startsWith('studio') || (item.title && item.title.toLowerCase().startsWith('studio:'));
+            return {
+              ...item,
+              project_type: isRoadmap ? 'roadmap' : isStudio ? 'studio' : 'prd',
+            };
+          });
         }
       }
     } catch {
@@ -208,18 +257,49 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.prds)) {
-            const cloudItems: PrdHistorySummary[] = data.prds.map((p: any) => ({
-              id: p.id,
-              title: p.title,
-              created_at: p.created_at,
-              model_used: p.model_used,
-              prd_data: p.prd_data,
-            }));
+            const cloudItems: PrdHistorySummary[] = data.prds.map((p: any) => {
+              const isRoadmap = p.prd_data?.type === 'roadmap' || p.id?.startsWith('roadmap') || (p.title && p.title.toLowerCase().startsWith('roadmap:'));
+              const isStudio = p.prd_data?.isStudio || p.id?.startsWith('studio') || (p.title && p.title.toLowerCase().startsWith('studio:'));
+              return {
+                id: p.id,
+                title: p.title,
+                created_at: p.created_at,
+                model_used: p.model_used,
+                prd_data: p.prd_data,
+                project_type: isRoadmap ? 'roadmap' : isStudio ? 'studio' : 'prd',
+              };
+            });
 
-            // Merge avoiding duplicates by id
-            const existingIds = new Set(cloudItems.map((c) => c.id));
-            const uniqueLocal = combined.filter((l) => !existingIds.has(l.id));
-            combined = [...cloudItems, ...uniqueLocal];
+            // Deduplicate cloud items: jika ada item dengan tipe dan judul identik, pertahankan yang paling baru
+            const seenKeys = new Map<string, PrdHistorySummary>();
+            const deduplicatedCloud: PrdHistorySummary[] = [];
+            for (const item of cloudItems) {
+              const normKey = `${item.project_type || 'prd'}::${(item.title || '').trim().toLowerCase()}`;
+              if (seenKeys.has(normKey)) {
+                const existing = seenKeys.get(normKey)!;
+                // Hapus duplikat yang lebih usang di latar belakang dari Supabase
+                const toDeleteId = (item.prd_data?.roadmap?.updatedAt && !existing.prd_data?.roadmap?.updatedAt)
+                  ? existing.id
+                  : item.id;
+                fetch(`/api/user-prds?id=${encodeURIComponent(toDeleteId)}&userId=${encodeURIComponent(user.id)}`, { method: 'DELETE' }).catch(() => {});
+                if (toDeleteId === existing.id) {
+                  seenKeys.set(normKey, item);
+                  const idx = deduplicatedCloud.findIndex(d => d.id === existing.id);
+                  if (idx !== -1) deduplicatedCloud[idx] = item;
+                }
+                continue;
+              }
+              seenKeys.set(normKey, item);
+              deduplicatedCloud.push(item);
+            }
+
+            // Merge avoiding duplicates by id and key
+            const existingIds = new Set(deduplicatedCloud.map((c) => c.id));
+            const uniqueLocal = combined.filter((l) => {
+              const normKey = `${l.project_type || 'prd'}::${(l.title || '').trim().toLowerCase()}`;
+              return !existingIds.has(l.id) && !seenKeys.has(normKey);
+            });
+            combined = [...deduplicatedCloud, ...uniqueLocal];
           }
         }
       } catch (err) {
@@ -294,6 +374,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const handleNewPrd = () => {
     setActivePrdId(null);
     setGeneratedPRD(null);
+    setActiveRoadmap(null);
     setFormData(INITIAL_FORM_DATA);
     setWizardStep('input');
     setWizardIdea('');
@@ -304,20 +385,152 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     }
   };
 
-  const handleSelectHistoryPrd = (prd: PRDOutput, id: string) => {
-    setGeneratedPRD(prd);
-    setActivePrdId(id);
+  const handleSelectHistoryPrd = (
+    prd: PRDOutput | any,
+    id: string,
+    itemType?: 'prd' | 'studio' | 'roadmap'
+  ) => {
+    if (itemType === 'roadmap' || prd?.type === 'roadmap' || prd?.roadmap || (prd?.nodes && prd?.goal)) {
+      setCreationMode('roadmap');
+      setActiveRoadmap(prd?.roadmap || prd);
+      setGeneratedPRD(null);
+      setActivePrdId(id);
+    } else if (itemType === 'studio' || prd?.isStudio) {
+      setCreationMode('studio');
+      setGeneratedPRD(prd);
+      setActiveRoadmap(null);
+      setActivePrdId(id);
+    } else {
+      if (creationMode === 'roadmap') {
+        setCreationMode('wizard');
+      }
+      setGeneratedPRD(prd);
+      setActiveRoadmap(null);
+      setActivePrdId(id);
+    }
     setErrorMessage(null);
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
   };
 
+  const handleUpdateStudioPrd = (updatedPrd: PRDOutput) => {
+    setGeneratedPRD(updatedPrd);
+
+    // Update in history state
+    setHistoryItems((prev) =>
+      prev.map((item) =>
+        activePrdId && item.id === activePrdId
+          ? { ...item, title: updatedPrd.title, prd_data: updatedPrd }
+          : item
+      )
+    );
+
+    // Update in local_prd_history
+    try {
+      const local = localStorage.getItem('local_prd_history');
+      if (local) {
+        const parsed: PrdHistorySummary[] = JSON.parse(local);
+        const updated = parsed.map((item) =>
+          activePrdId && item.id === activePrdId
+            ? { ...item, title: updatedPrd.title, prd_data: updatedPrd }
+            : item
+        );
+        localStorage.setItem('local_prd_history', JSON.stringify(updated));
+      }
+    } catch {
+      // ignore
+    }
+
+    // Update in cloud if authenticated
+    if (user?.id && activePrdId) {
+      try {
+        fetch('/api/user-prds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: activePrdId,
+            userId: user.id,
+            title: updatedPrd.title,
+            prdData: updatedPrd,
+          }),
+        }).catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+
+    // Refresh profile to sync remaining daily quota and accumulated token usage
+    refreshProfile();
+  };
+
+  const handleUpdateRoadmap = (updatedRoadmap: RoadmapOutput) => {
+    setActiveRoadmap(updatedRoadmap);
+
+    const targetId = activePrdId || updatedRoadmap.id;
+    if (!targetId) return;
+
+    if (!activePrdId) {
+      setActivePrdId(targetId);
+    }
+
+    // Update in history state in place
+    setHistoryItems((prev) =>
+      prev.map((item) =>
+        item.id === targetId
+          ? {
+              ...item,
+              title: `Roadmap: ${updatedRoadmap.title}`,
+              prd_data: { type: 'roadmap', roadmap: updatedRoadmap } as any,
+            }
+          : item
+      )
+    );
+
+    // Update in local_prd_history in place
+    try {
+      const local = localStorage.getItem('local_prd_history');
+      if (local) {
+        const parsed: PrdHistorySummary[] = JSON.parse(local);
+        const updated = parsed.map((item) =>
+          item.id === targetId
+            ? {
+                ...item,
+                title: `Roadmap: ${updatedRoadmap.title}`,
+                prd_data: { type: 'roadmap', roadmap: updatedRoadmap },
+              }
+            : item
+        );
+        localStorage.setItem('local_prd_history', JSON.stringify(updated));
+      }
+    } catch {
+      // ignore
+    }
+
+    // Update in cloud if authenticated
+    if (user?.id && targetId) {
+      try {
+        fetch('/api/user-prds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: targetId,
+            userId: user.id,
+            title: `Roadmap: ${updatedRoadmap.title}`,
+            prdData: { type: 'roadmap', roadmap: updatedRoadmap },
+          }),
+        }).catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   const handleDeleteHistoryPrd = async (id: string) => {
-    // Remove from state
+    // 1. Remove from state
     setHistoryItems((prev) => prev.filter((item) => item.id !== id));
 
-    // Remove from local storage
+    // 2. Remove from local storage (including studio snapshots & chats)
     try {
       const local = localStorage.getItem('local_prd_history');
       if (local) {
@@ -325,20 +538,22 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         const updated = parsed.filter((item: any) => item.id !== id);
         localStorage.setItem('local_prd_history', JSON.stringify(updated));
       }
+      localStorage.removeItem(`ngodingpakeprd_studio_versions_${id}`);
+      localStorage.removeItem(`ngodingpakeprd_studio_chat_${id}`);
     } catch {
       // ignore
     }
 
-    // If active, reset view
+    // 3. If active, reset view
     if (activePrdId === id) {
       setActivePrdId(null);
       setGeneratedPRD(null);
     }
 
-    // Call server delete if user is logged in
+    // 4. Call server delete to permanently wipe from Supabase database
     if (user?.id) {
       try {
-        await fetch(`/api/user-prds?id=${id}&userId=${user.id}`, {
+        await fetch(`/api/user-prds?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(user.id)}`, {
           method: 'DELETE',
         });
       } catch {
@@ -388,13 +603,54 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     }
   };
 
-  const handleDiscoverySubmit = async (compiledFormData: PRDFormData) => {
-    setFormData(compiledFormData);
-    await handleGenerate(compiledFormData);
+  const handleStudioSubmit = async (idea: string, stack: TechStackConfig) => {
+    if (isStrictLogin && !user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    if (!isStudioAllowed()) {
+      setIsPricingModalOpen(true);
+      return;
+    }
+
+    setWizardStack(stack);
+    setLoading(true);
+    setErrorMessage(null);
+    setStatusStep('Menyusun kerangka arsitektur Studio...');
+
+    try {
+      const autofillRes = await fetch('/api/autofill-prd', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-api-key': keys.join(','),
+          'x-gemini-preferred-model': preferredModel,
+        },
+        body: JSON.stringify({ idea }),
+      });
+
+      const autofillJson = await autofillRes.json();
+      if (!autofillRes.ok || !autofillJson) {
+        throw new Error(autofillJson?.error || 'Gagal memproses konsep ide produk');
+      }
+
+      setStatusStep('Merancang PRD mendalam dengan diagram arsitektur...');
+      await handleGenerate(autofillJson, stack);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Gagal memproses Studio PRD');
+      setLoading(false);
+    }
   };
 
-  const handleGenerate = async (overrideFormData?: PRDFormData) => {
+  const handleDiscoverySubmit = async (compiledFormData: PRDFormData) => {
+    setFormData(compiledFormData);
+    await handleGenerate(compiledFormData, wizardStack);
+  };
+
+  const handleGenerate = async (overrideFormData?: PRDFormData, overrideTechStack?: TechStackConfig) => {
     const targetFormData = overrideFormData || formData;
+    const targetTechStack = overrideTechStack || wizardStack;
 
     if (isStrictLogin && !user) {
       setIsAuthModalOpen(true);
@@ -431,8 +687,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         body: JSON.stringify({
           formData: targetFormData,
           userId: user?.id,
-          techStack: wizardStack,
-          language: wizardStack.language || 'id',
+          techStack: targetTechStack,
+          language: targetTechStack.language || 'id',
         }),
       });
 
@@ -454,6 +710,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         created_at: new Date().toISOString(),
         model_used: json.data?.metadata?.modelUsed || preferredModel,
         prd_data: json.data,
+        project_type: creationMode === 'studio' ? 'studio' : 'prd',
       };
 
       setHistoryItems((prev) => [newHistoryItem, ...prev]);
@@ -471,6 +728,85 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     } finally {
       setLoading(false);
       setStatusStep('');
+    }
+  };
+
+  const handleRoadmapGenerate = async (goal: string, context?: string) => {
+    if (isStrictLogin && !user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    if (!isRoadmapAllowed()) {
+      setIsPricingModalOpen(true);
+      return;
+    }
+
+    if (!isServerManaged && keys.length === 0) {
+      setIsKeyModalOpen(true);
+      return;
+    }
+
+    setLoadingRoadmap(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch('/api/generate-roadmap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-api-key': keys.join(','),
+          'x-gemini-preferred-model': preferredModel,
+        },
+        body: JSON.stringify({
+          goal,
+          additionalContext: context,
+          userId: user?.id,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        if (json.featureLocked || json.dailyLimitReached || json.trialExpired) {
+          setIsPricingModalOpen(true);
+        }
+        throw new Error(json.error || 'Gagal merancang Roadmap Pintar');
+      }
+
+      const roadmapData: RoadmapOutput = json.data;
+      const targetId = json.prdId || roadmapData.id || `roadmap_${Date.now()}`;
+      roadmapData.id = targetId;
+      setActiveRoadmap(roadmapData);
+
+      const newHistoryItem: PrdHistorySummary = {
+        id: targetId,
+        title: `Roadmap: ${roadmapData.title}`,
+        created_at: new Date().toISOString(),
+        model_used: json.modelUsed || preferredModel,
+        prd_data: { type: 'roadmap', roadmap: roadmapData } as any,
+        project_type: 'roadmap',
+      };
+
+      setHistoryItems((prev) => [newHistoryItem, ...prev.filter((p) => p.id !== targetId)]);
+      setActivePrdId(targetId);
+
+      try {
+        const local = localStorage.getItem('local_prd_history');
+        const parsed = local ? JSON.parse(local) : [];
+        const filtered = Array.isArray(parsed) ? parsed.filter((p: any) => p.id !== targetId) : [];
+        localStorage.setItem('local_prd_history', JSON.stringify([newHistoryItem, ...filtered].slice(0, 30)));
+      } catch {
+        // ignore
+      }
+
+      if (user?.id) {
+        refreshProfile();
+      }
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Gagal merancang Roadmap Pintar');
+    } finally {
+      setLoadingRoadmap(false);
     }
   };
 
@@ -508,7 +844,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           isLoadingHistory={loadingHistory}
           onRefreshHistory={fetchUserHistory}
           creationMode={creationMode}
-          onSetCreationMode={setCreationMode}
+          onSetCreationMode={handleSelectCreationMode}
         />
       </div>
 
@@ -545,8 +881,9 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           </div>
         )}
 
-        {/* Top Workspace Header */}
-        <header className="h-14 shrink-0 border-b border-zinc-800/80 bg-[#09090b]/90 backdrop-blur-md px-4 flex items-center justify-between z-20">
+        {/* Top Workspace Header (Hidden in Studio Mode with PRD to prevent double header) */}
+        {!(creationMode === 'studio' && generatedPRD) && (
+          <header className="h-14 shrink-0 border-b border-zinc-800/80 bg-[#09090b]/90 backdrop-blur-md px-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3 min-w-0">
             {/* Sidebar toggle button */}
             <button
@@ -564,13 +901,57 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 Home
               </Link>
               <ChevronRight className="h-3 w-3 hidden sm:inline" />
-              <span className="text-zinc-300 font-medium">Studio</span>
+              <span className="text-zinc-300 font-medium">
+                {creationMode === 'roadmap' ? 'Roadmap Pintar' : 'Studio'}
+              </span>
               <ChevronRight className="h-3 w-3" />
               <span className="text-amber-400 font-semibold truncate max-w-[200px] sm:max-w-[320px]">
-                {generatedPRD
+                {creationMode === 'roadmap' && activeRoadmap
+                  ? activeRoadmap.title
+                  : generatedPRD
                   ? generatedPRD.title || 'Dokumen PRD'
                   : formData.title?.trim() || 'Draf Produk Baru'}
               </span>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div className="hidden sm:flex items-center rounded-xl border border-zinc-800 bg-zinc-950/70 p-0.5 gap-0.5 ml-2">
+              <button
+                type="button"
+                onClick={() => handleSelectCreationMode('wizard')}
+                className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  creationMode === 'wizard'
+                    ? 'bg-amber-500 text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                }`}
+                title="Mode Terpandu (Wizard)"
+              >
+                <span>Terpandu</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectCreationMode('studio')}
+                className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  creationMode === 'studio'
+                    ? 'bg-amber-500 text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                }`}
+                title="Mode Studio AI (Dokumen & Chat)"
+              >
+                <span>Studio AI</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectCreationMode('roadmap')}
+                className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  creationMode === 'roadmap'
+                    ? 'bg-amber-500 text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                }`}
+                title="Mode Roadmap Pintar (AI Skill & Career Tree)"
+              >
+                <span>Roadmap</span>
+              </button>
             </div>
           </div>
 
@@ -740,9 +1121,16 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
             )}
           </div>
         </header>
+      )}
 
-        {/* Scrollable Canvas Body */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-8">
+        {/* Canvas Body */}
+        <div
+          className={
+            (creationMode === 'studio' && generatedPRD) || (creationMode === 'roadmap' && activeRoadmap)
+              ? 'flex-1 overflow-hidden flex flex-col w-full h-full p-0 m-0'
+              : 'flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-8'
+          }
+        >
           {errorMessage && (
             <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400 max-w-4xl mx-auto">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -780,21 +1168,68 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 </Link>
               </div>
             </div>
+          ) : creationMode === 'roadmap' ? (
+            /* Condition: Roadmap Pintar Mode */
+            activeRoadmap ? (
+              <div id="roadmap-tree-section" className="w-full h-full flex-1 flex flex-col overflow-hidden">
+                <RoadmapTreeView
+                  roadmap={activeRoadmap}
+                  onReset={() => setActiveRoadmap(null)}
+                  onUpdateRoadmap={handleUpdateRoadmap}
+                  theme={theme}
+                />
+              </div>
+            ) : (
+              <div id="roadmap-hero-section" className="w-full">
+                <RoadmapHeroInput
+                  onGenerate={handleRoadmapGenerate}
+                  isLoading={loadingRoadmap}
+                />
+              </div>
+            )
           ) : generatedPRD ? (
-            /* Condition 1: PRD Viewer Mode (Expanded Canvas) */
-            <div id="prd-viewer-section" className="w-full max-w-6xl mx-auto">
-              <PRDViewer
-                prd={generatedPRD}
-                onBackToEdit={() => setGeneratedPRD(null)}
-                theme={theme}
-                onRequireUpgrade={() => setIsPricingModalOpen(true)}
-              />
-            </div>
+            creationMode === 'studio' ? (
+              /* Studio Mode Workspace (Full-height 3-column AI Canvas) */
+              <div id="studio-workspace-section" className="w-full h-full">
+                <StudioWorkspace
+                  initialPrd={generatedPRD}
+                  prdId={activePrdId || undefined}
+                  apiKeyHeader={keys.join(',')}
+                  userId={user?.id}
+                  onBackToEdit={() => setGeneratedPRD(null)}
+                  onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                  onUpdatePrd={handleUpdateStudioPrd}
+                  onRequireUpgrade={() => setIsPricingModalOpen(true)}
+                  theme={theme}
+                />
+              </div>
+            ) : (
+              /* Condition 1: Standard PRD Viewer Mode */
+              <div id="prd-viewer-section" className="w-full max-w-6xl mx-auto">
+                <PRDViewer
+                  prd={generatedPRD}
+                  onBackToEdit={() => setGeneratedPRD(null)}
+                  theme={theme}
+                  onRequireUpgrade={() => setIsPricingModalOpen(true)}
+                />
+              </div>
+            )
           ) : (
-            /* Condition 2: PRD Input Studio (Mode Terpandu vs Mode Form Manual) */
+            /* Condition 2: PRD Input Phase */
             <div className="w-full">
-              {creationMode === 'wizard' ? (
-                /* Sub-condition A: Wizard Mode */
+              {creationMode === 'studio' ? (
+                /* Studio Hero Input */
+                <div id="studio-hero-container" className="w-full">
+                  <StudioHeroInput
+                    initialIdea={wizardIdea}
+                    userName={user ? displayName : undefined}
+                    onSubmitIdea={handleStudioSubmit}
+                    isLoading={loading}
+                    theme={theme}
+                  />
+                </div>
+              ) : (
+                /* Sub-condition: Wizard Mode (Terpandu) */
                 <div id="wizard-container" className="w-full">
                   {wizardStep === 'input' ? (
                     <WizardHeroInput
@@ -817,21 +1252,6 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                       theme={theme}
                     />
                   )}
-                </div>
-              ) : (
-                /* Sub-condition B: Manual Form Mode (100% Preserved) */
-                <div id="prd-input-form" className="max-w-4xl mx-auto">
-                  <PRDForm
-                    formData={formData}
-                    onChange={setFormData}
-                    onSubmit={handleGenerate}
-                    loading={loading}
-                    statusStep={statusStep}
-                    onOpenAssistant={(section) => setAssistantSection(section)}
-                    apiKeyHeader={keys.join(',')}
-                    preferredModel={preferredModel}
-                    theme={theme}
-                  />
                 </div>
               )}
             </div>

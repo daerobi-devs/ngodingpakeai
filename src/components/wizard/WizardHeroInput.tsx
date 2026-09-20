@@ -273,47 +273,47 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   };
 
   // SMART SVG ICON MATCHING (Akut & Tidak Ada yang Miss)
-  const renderSmartIcon = (text: string, category: 'frontend' | 'backend' | 'database' | 'deployment') => {
+  const renderSmartIcon = (text: string, category: 'frontend' | 'backend' | 'database' | 'deployment', sizeClass = 'h-5 w-5') => {
     const t = (text || '').toLowerCase();
 
     if (category === 'frontend') {
-      if (t.includes('vue') || t.includes('nuxt')) return <VueLogo className="h-5 w-5" />;
-      if (t.includes('svelte')) return <SvelteLogo className="h-5 w-5" />;
-      if (t.includes('astro')) return <AstroLogo className="h-5 w-5" />;
-      if (t.includes('flutter')) return <FlutterLogo className="h-5 w-5" />;
+      if (t.includes('vue') || t.includes('nuxt')) return <VueLogo className={sizeClass} />;
+      if (t.includes('svelte')) return <SvelteLogo className={sizeClass} />;
+      if (t.includes('astro')) return <AstroLogo className={sizeClass} />;
+      if (t.includes('flutter')) return <FlutterLogo className={sizeClass} />;
       if (t.includes('react native') || t.includes('expo') || t.includes('vite') || t.includes('react'))
-        return <ReactLogo className="h-5 w-5" />;
-      return <NextJsLogo className="h-5 w-5" />;
+        return <ReactLogo className={sizeClass} />;
+      return <NextJsLogo className={sizeClass} />;
     }
 
     if (category === 'backend') {
-      if (t.includes('go') || t.includes('gin') || t.includes('fiber')) return <GoLogo className="h-5 w-5" />;
-      if (t.includes('fastapi')) return <FastApiLogo className="h-5 w-5" />;
-      if (t.includes('python') || t.includes('django')) return <PythonLogo className="h-5 w-5" />;
-      if (t.includes('laravel') || t.includes('php')) return <LaravelLogo className="h-5 w-5" />;
-      if (t.includes('supabase') || t.includes('deno')) return <SupabaseLogo className="h-5 w-5" />;
-      if (t.includes('next.js') || t.includes('server action')) return <NextJsLogo className="h-5 w-5" />;
-      return <NodeJsLogo className="h-5 w-5" />;
+      if (t.includes('go') || t.includes('gin') || t.includes('fiber')) return <GoLogo className={sizeClass} />;
+      if (t.includes('fastapi')) return <FastApiLogo className={sizeClass} />;
+      if (t.includes('python') || t.includes('django')) return <PythonLogo className={sizeClass} />;
+      if (t.includes('laravel') || t.includes('php')) return <LaravelLogo className={sizeClass} />;
+      if (t.includes('supabase') || t.includes('deno')) return <SupabaseLogo className={sizeClass} />;
+      if (t.includes('next.js') || t.includes('server action')) return <NextJsLogo className={sizeClass} />;
+      return <NodeJsLogo className={sizeClass} />;
     }
 
     if (category === 'database') {
-      if (t.includes('postgres') || t.includes('neon') || t.includes('rds')) return <PostgresLogo className="h-5 w-5" />;
-      if (t.includes('mysql') || t.includes('mariadb')) return <MySqlLogo className="h-5 w-5" />;
-      if (t.includes('mongo')) return <MongoLogo className="h-5 w-5" />;
-      if (t.includes('sqlite') || t.includes('turso')) return <SqliteLogo className="h-5 w-5" />;
-      if (t.includes('redis') || t.includes('upstash')) return <RedisLogo className="h-5 w-5" />;
-      return <SupabaseLogo className="h-5 w-5" />;
+      if (t.includes('postgres') || t.includes('neon') || t.includes('rds')) return <PostgresLogo className={sizeClass} />;
+      if (t.includes('mysql') || t.includes('mariadb')) return <MySqlLogo className={sizeClass} />;
+      if (t.includes('mongo')) return <MongoLogo className={sizeClass} />;
+      if (t.includes('sqlite') || t.includes('turso')) return <SqliteLogo className={sizeClass} />;
+      if (t.includes('redis') || t.includes('upstash')) return <RedisLogo className={sizeClass} />;
+      return <SupabaseLogo className={sizeClass} />;
     }
 
     if (category === 'deployment') {
-      if (t.includes('cloudflare')) return <CloudflareLogo className="h-5 w-5" />;
-      if (t.includes('aws') || t.includes('amazon')) return <AwsLogo className="h-5 w-5" />;
-      if (t.includes('eas') || t.includes('app store') || t.includes('play store')) return <EasLogo className="h-5 w-5" />;
-      if (t.includes('vercel')) return <NextJsLogo className="h-5 w-5" />;
-      return <DockerLogo className="h-5 w-5" />;
+      if (t.includes('cloudflare')) return <CloudflareLogo className={sizeClass} />;
+      if (t.includes('aws') || t.includes('amazon')) return <AwsLogo className={sizeClass} />;
+      if (t.includes('eas') || t.includes('app store') || t.includes('play store')) return <EasLogo className={sizeClass} />;
+      if (t.includes('vercel')) return <NextJsLogo className={sizeClass} />;
+      return <DockerLogo className={sizeClass} />;
     }
 
-    return <Box className="h-5 w-5 text-amber-400" />;
+    return <Box className={`${sizeClass} text-amber-400`} />;
   };
 
   return (
@@ -656,119 +656,94 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
           <p className="text-xs text-red-400 px-2 font-medium">{customError}</p>
         )}
 
-        {/* 4. Tech Stack Card with Official Vector Logos */}
-        <div className={`rounded-2xl border p-5 transition-all shadow-md ${
+        {/* 4. Sleek Compact Tech Stack Strip & Action Button */}
+        <div className={`rounded-xl border p-3 sm:p-3.5 transition-all shadow-xs ${
           isLight
-            ? 'bg-zinc-50 border-zinc-300 shadow-xs'
-            : 'bg-[#12151D] border-zinc-800/80'
+            ? 'bg-zinc-50 border-zinc-300'
+            : 'bg-[#12151D] border-zinc-800/90'
         }`}>
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
-                <Box className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> {isCustomActive ? 'Custom Stack Aktif' : 'Template Terpilih'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <h3 className={`text-base font-bold ${isLight ? 'text-zinc-900' : 'text-white'}`}>
-                    {techStack.name}
-                  </h3>
-                  {isCustomActive && (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomModalOpen(true)}
-                      className="text-[11px] text-amber-400 hover:text-amber-300 hover:underline font-semibold cursor-pointer"
-                    >
-                      (Ubah Pilihan)
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400">{techStack.version} — {techStack.description}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-zinc-800/60 pt-4">
-            <span className="text-xs font-semibold text-zinc-400 mb-3 block">
-              Teknologi bawaan yang akan dipersiapkan untuk PRD:
-            </span>
-
-            {/* Official Dynamic Logo Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-              {/* Frontend */}
-              <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
-                isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
-              }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/80 border border-zinc-700/80 shadow-xs">
-                  {renderSmartIcon(effectiveFrontend, 'frontend')}
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-zinc-500 block uppercase font-mono">Frontend</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{effectiveFrontend}</span>
-                </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            {/* Left: Template badge & 4 Compact SVG Pills */}
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 mr-1">
+                <span className="text-[10px] font-mono uppercase font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                  {techStack.name}
+                </span>
+                {isCustomActive && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomModalOpen(true)}
+                    className="text-[10px] text-amber-400 hover:underline font-medium cursor-pointer"
+                  >
+                    (Ubah)
+                  </button>
+                )}
               </div>
 
-              {/* Backend */}
-              <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
-                isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
-              }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900/90 border border-zinc-800 shadow-xs">
-                  {renderSmartIcon(effectiveBackend, 'backend')}
+              {/* 4 Mini SVG Tech Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                {/* Frontend */}
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] ${
+                    isLight ? 'bg-white border-zinc-200 text-zinc-700' : 'bg-zinc-900/90 border-zinc-800 text-zinc-300'
+                  }`}
+                  title={`Frontend: ${effectiveFrontend}`}
+                >
+                  <div className="shrink-0">{renderSmartIcon(effectiveFrontend, 'frontend', 'h-3.5 w-3.5')}</div>
+                  <span className="truncate max-w-[130px] font-medium">{effectiveFrontend}</span>
                 </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-zinc-500 block uppercase font-mono">Backend</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{effectiveBackend}</span>
-                </div>
-              </div>
 
-              {/* Database */}
-              <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
-                isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
-              }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900/90 border border-zinc-800 shadow-xs">
-                  {renderSmartIcon(effectiveDatabase, 'database')}
+                {/* Backend */}
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] ${
+                    isLight ? 'bg-white border-zinc-200 text-zinc-700' : 'bg-zinc-900/90 border-zinc-800 text-zinc-300'
+                  }`}
+                  title={`Backend: ${effectiveBackend}`}
+                >
+                  <div className="shrink-0">{renderSmartIcon(effectiveBackend, 'backend', 'h-3.5 w-3.5')}</div>
+                  <span className="truncate max-w-[130px] font-medium">{effectiveBackend}</span>
                 </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-zinc-500 block uppercase font-mono">Database</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{effectiveDatabase}</span>
-                </div>
-              </div>
 
-              {/* Deployment */}
-              <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${
-                isLight ? 'bg-white border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
-              }`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900/90 border border-zinc-800 shadow-xs">
-                  {renderSmartIcon(effectiveDeployment, 'deployment')}
+                {/* Database */}
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] ${
+                    isLight ? 'bg-white border-zinc-200 text-zinc-700' : 'bg-zinc-900/90 border-zinc-800 text-zinc-300'
+                  }`}
+                  title={`Database: ${effectiveDatabase}`}
+                >
+                  <div className="shrink-0">{renderSmartIcon(effectiveDatabase, 'database', 'h-3.5 w-3.5')}</div>
+                  <span className="truncate max-w-[130px] font-medium">{effectiveDatabase}</span>
                 </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-zinc-500 block uppercase font-mono">Deployment</span>
-                  <span className="font-semibold text-zinc-200 truncate block">{effectiveDeployment}</span>
+
+                {/* Deployment */}
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] ${
+                    isLight ? 'bg-white border-zinc-200 text-zinc-700' : 'bg-zinc-900/90 border-zinc-800 text-zinc-300'
+                  }`}
+                  title={`Deployment: ${effectiveDeployment}`}
+                >
+                  <div className="shrink-0">{renderSmartIcon(effectiveDeployment, 'deployment', 'h-3.5 w-3.5')}</div>
+                  <span className="truncate max-w-[130px] font-medium">{effectiveDeployment}</span>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-5 pt-3 border-t border-zinc-800/40 flex justify-end">
+            {/* Right: Action Submit Button */}
             <button
               type="button"
               onClick={handleSubmit}
               disabled={isLoading || !idea.trim()}
-              className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-6 py-2.5 text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-5 py-2.5 text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Menganalisis kebutuhan...</span>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Menganalisis...</span>
                 </>
               ) : (
                 <>
                   <span>Lanjut ke Pertanyaan Kebutuhan</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </>
               )}
             </button>

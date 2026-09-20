@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   pro_price_formatted: 'Rp 49.000 / Lifetime Access',
   admin_passcode: 'prdadmin99',
   admin_emails: ['daerobi.devs@gmail.com'],
+  studio_access_tier: 'paid_only',
+  roadmap_access_tier: 'paid_only',
 };
 
 export async function GET() {
@@ -121,6 +123,7 @@ export async function PUT(req: NextRequest) {
       delete coreUpdates.mpg_gateway_url;
       delete coreUpdates.mpg_api_key;
       delete coreUpdates.mpg_webhook_secret;
+      delete coreUpdates.studio_access_tier;
 
       const retry = await adminSupabase
         .from('system_settings')

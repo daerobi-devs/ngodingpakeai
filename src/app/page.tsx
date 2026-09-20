@@ -9,6 +9,15 @@ import { BeginnerRoadmap } from "@/components/BeginnerRoadmap";
 import { InteractiveBlueprintStudio } from "@/components/landing/InteractiveBlueprintStudio";
 import { VisualWorkflowPipeline } from "@/components/landing/VisualWorkflowPipeline";
 import { LandingTemplateShowcase } from "@/components/landing/LandingTemplateShowcase";
+import { StudioFeatureShowcase } from "@/components/landing/StudioFeatureShowcase";
+import { LandingFAQ } from "@/components/landing/LandingFAQ";
+import {
+  CursorLogo,
+  AntigravityLogo,
+  ClaudeLogo,
+  WindsurfLogo,
+  VsCodeLogo,
+} from "@/components/icons/AgentIcons";
 import { AuthModal } from "@/components/AuthModal";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -156,7 +165,7 @@ export default function LandingPage() {
               <p className={`mx-auto max-w-2xl text-base sm:text-lg leading-relaxed ${
                 isLight ? "text-slate-600" : "text-zinc-400"
               }`}>
-                Ubah 1 kalimat ide menjadi PRD terstruktur, 5 blueprint arsitektur visual, dan starter kit (<code>.ZIP</code>) siap lempar ke AI coding agent Anda.
+                Ubah 1 kalimat ide menjadi PRD terstruktur, 5 blueprint arsitektur visual, papan Kanban, dan server MCP yang terhubung langsung ke AI coding agent Anda.
               </p>
             </div>
 
@@ -171,141 +180,94 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
+
+            {/* AI Agent Compatibility Badges with Authentic SVGs */}
+            <div className="pt-8 space-y-3">
+              <span className={`text-[11px] font-mono tracking-wider uppercase font-semibold block ${
+                isLight ? "text-slate-500" : "text-zinc-500"
+              }`}>
+                Didesain Khusus untuk Ekosistem AI Coding Agent
+              </span>
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  isLight ? "bg-white border-slate-200 text-slate-800 shadow-xs" : "bg-zinc-900/80 border-zinc-800 text-zinc-200"
+                }`}>
+                  <CursorLogo className="h-3.5 w-3.5 text-white" />
+                  <span>Cursor IDE</span>
+                </span>
+
+                <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  isLight ? "bg-white border-slate-200 text-slate-800 shadow-xs" : "bg-zinc-900/80 border-zinc-800 text-zinc-200"
+                }`}>
+                  <AntigravityLogo className="h-4 w-4" />
+                  <span>Google Antigravity</span>
+                </span>
+
+                <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  isLight ? "bg-white border-slate-200 text-slate-800 shadow-xs" : "bg-zinc-900/80 border-zinc-800 text-zinc-200"
+                }`}>
+                  <ClaudeLogo className="h-3.5 w-3.5" />
+                  <span>Anthropic Claude Code</span>
+                </span>
+
+                <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  isLight ? "bg-white border-slate-200 text-slate-800 shadow-xs" : "bg-zinc-900/80 border-zinc-800 text-zinc-200"
+                }`}>
+                  <WindsurfLogo className="h-3.5 w-3.5" />
+                  <span>Windsurf Editor</span>
+                </span>
+
+                <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  isLight ? "bg-white border-slate-200 text-slate-800 shadow-xs" : "bg-zinc-900/80 border-zinc-800 text-zinc-200"
+                }`}>
+                  <VsCodeLogo className="h-3.5 w-3.5" />
+                  <span>VS Code (Cline / Roo)</span>
+                </span>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* ================= PRESET ARCHITECTURE TEMPLATES SHOWCASE ================= */}
-        <section className="mx-auto max-w-6xl px-4 sm:px-6 pb-24">
-          <LandingTemplateShowcase theme={theme} />
+        {/* ================= SECTION 1: STUDIO & MCP AGENTIC ECOSYSTEM ================= */}
+        <section id="studio-features" className={`mx-auto max-w-6xl px-4 sm:px-6 py-20 border-t transition-colors ${
+          isLight ? "border-slate-200" : "border-zinc-800/80"
+        }`}>
+          <StudioFeatureShowcase theme={theme} />
         </section>
 
-        {/* ================= SECTION: 5 BLUEPRINT MERMAID ================= */}
+        {/* ================= SECTION 2: 5 BLUEPRINT MERMAID ================= */}
         <section id="diagrams" className={`mx-auto max-w-6xl px-4 sm:px-6 py-20 border-t transition-colors ${
           isLight ? "border-slate-200" : "border-zinc-800/80"
         }`}>
           <InteractiveBlueprintStudio theme={theme} />
         </section>
 
-        {/* ================= SECTION: DESIGN.MD ANTI-SLOP ================= */}
-        <section id="design" className={`mx-auto max-w-6xl px-4 sm:px-6 py-16 border-t transition-colors ${
-          isLight ? "border-slate-200" : "border-zinc-800/80"
-        }`}>
-          <div className="text-center space-y-3 mb-12">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-              <Palette className="h-3.5 w-3.5" /> Frontend Standard Guard
-            </span>
-            <h2 className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${isLight ? "text-slate-900" : "text-white"}`}>
-              DESIGN.md Anti-AI Slop: Desain Sekelas Linear & Vercel
-            </h2>
-            <p className={`max-w-2xl mx-auto text-sm ${isLight ? "text-slate-600" : "text-zinc-400"}`}>
-              AI sering menghasilkan UI membosankan dengan rounded aneh, warna norak, dan animasi kaku. Dokumen <code>DESIGN.md</code> mengunci aturan estetika ketat.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div className="space-y-4">
-              <div className={`p-4 rounded-xl border flex items-start gap-3.5 ${
-                isLight ? "bg-white border-slate-200 shadow-sm" : "bg-zinc-900/50 border-zinc-800"
-              }`}>
-                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className={`font-bold text-sm ${isLight ? "text-slate-900" : "text-white"}`}>Palet Warna Dark/Light Berkelas</h4>
-                  <p className={`text-xs mt-1 ${isLight ? "text-slate-600" : "text-zinc-400"}`}>
-                    Menggunakan semantic token Tailwind CSS (Zinc/Slate base) dengan aksen amber/emerald yang terukur.
-                  </p>
-                </div>
-              </div>
-
-              <div className={`p-4 rounded-xl border flex items-start gap-3.5 ${
-                isLight ? "bg-white border-slate-200 shadow-sm" : "bg-zinc-900/50 border-zinc-800"
-              }`}>
-                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className={`font-bold text-sm ${isLight ? "text-slate-900" : "text-white"}`}>Micro-Interactions & Feedback State</h4>
-                  <p className={`text-xs mt-1 ${isLight ? "text-slate-600" : "text-zinc-400"}`}>
-                    Mengharuskan skeleton loader, transisi hover 150ms, dan active scale feedback di setiap tombol.
-                  </p>
-                </div>
-              </div>
-
-              <div className={`p-4 rounded-xl border flex items-start gap-3.5 ${
-                isLight ? "bg-white border-slate-200 shadow-sm" : "bg-zinc-900/50 border-zinc-800"
-              }`}>
-                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className={`font-bold text-sm ${isLight ? "text-slate-900" : "text-white"}`}>Zero Generic Template Look</h4>
-                  <p className={`text-xs mt-1 ${isLight ? "text-slate-600" : "text-zinc-400"}`}>
-                    Memaksa AI menghindari card layout membosankan dan menerapkan visual hierarchy ala aplikasi modern.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className={`rounded-2xl border p-5 font-mono text-xs overflow-hidden ${
-              isLight ? "bg-slate-900 text-zinc-300 border-slate-700" : "bg-black/80 text-zinc-300 border-zinc-800"
-            }`}>
-              <div className="flex items-center justify-between text-zinc-500 pb-3 border-b border-zinc-800 text-[11px]">
-                <span className="text-amber-400 font-bold">docs/DESIGN.md Guidelines</span>
-                <span>ANTI-SLOP ENFORCED</span>
-              </div>
-              <pre className="pt-3 leading-relaxed text-[11px] text-zinc-300 overflow-x-auto whitespace-pre">
-                {`## 1. Design Principles
-- Aesthetic: Linear/Vercel minimalist polish
-- Radius: rounded-xl (inputs, cards), rounded-lg (buttons)
-- Transitions: duration-150 ease-out with active:scale-[0.98]
-- Contrast: High semantic WCAG AA compliant
-
-## 2. Component Hierarchy
-- Primary CTA: Solid Amber-500 with dark zinc text
-- Secondary: Ghost with subtle border border-zinc-800
-- Danger: Subtle red wash bg-red-500/10 text-red-400`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* ================= SECTION: CARA KERJA ================= */}
+        {/* ================= SECTION 3: CARA KERJA ================= */}
         <section id="workflow" className={`mx-auto max-w-6xl px-4 sm:px-6 py-20 border-t transition-colors ${
           isLight ? "border-slate-200" : "border-zinc-800/80"
         }`}>
           <VisualWorkflowPipeline theme={theme} />
         </section>
 
-        {/* ================= SECTION: ROADMAP PEMULA ================= */}
-        <section id="roadmap" className={`mx-auto max-w-6xl px-4 sm:px-6 py-16 border-t transition-colors ${isLight ? "border-slate-200" : "border-zinc-800/80"}`}>
+        {/* ================= SECTION 4: PRESET ARCHITECTURE TEMPLATES SHOWCASE ================= */}
+        <section id="templates" className={`mx-auto max-w-6xl px-4 sm:px-6 py-20 border-t transition-colors ${
+          isLight ? "border-slate-200" : "border-zinc-800/80"
+        }`}>
+          <LandingTemplateShowcase theme={theme} />
+        </section>
+
+        {/* ================= SECTION 5: ROADMAP PEMULA & STARTER PROMPT ================= */}
+        <section id="roadmap" className={`mx-auto max-w-6xl px-4 sm:px-6 py-16 border-t transition-colors ${
+          isLight ? "border-slate-200" : "border-zinc-800/80"
+        }`}>
           <BeginnerRoadmap theme={theme} />
         </section>
 
-        {/* ================= FINAL CTA BANNER ================= */}
-        <section className="mx-auto max-w-6xl px-4 sm:px-6 py-16 pb-28">
-          <div className={`rounded-3xl border p-8 sm:p-14 text-center space-y-6 relative overflow-hidden transition-all ${
-            isLight
-              ? "border-amber-500/30 bg-gradient-to-br from-amber-500/15 via-white to-amber-50/60 shadow-xl shadow-amber-500/10 text-slate-900"
-              : "border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-[#121215] to-[#09090b] shadow-2xl text-white"
-          }`}>
-            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-transparent to-amber-500/10 pointer-events-none" />
-            
-            <h2 className={`text-3xl sm:text-5xl font-black tracking-tight max-w-2xl mx-auto ${
-              isLight ? "text-slate-900" : "text-white"
-            }`}>
-              Siap Bikin PRD & Blueprint Arsitektur Pertama Kamu?
-            </h2>
-            <p className={`text-sm sm:text-base max-w-xl mx-auto leading-relaxed ${
-              isLight ? "text-slate-600" : "text-zinc-400"
-            }`}>
-              Mulai sekarang tanpa ribet. Terstandarisasi untuk tim engineer serta AI coding agents.
-            </p>
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleStartGenerator}
-                className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-8 py-4 text-base font-extrabold text-zinc-950 shadow-xl shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              >
-                <span>Buka Generator PRD Sekarang</span>
-                <ArrowRight className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
+        {/* ================= SECTION 6: FAQ ACCORDION ================= */}
+        <section id="faq" className={`mx-auto max-w-6xl px-4 sm:px-6 py-16 pb-24 border-t transition-colors ${
+          isLight ? "border-slate-200" : "border-zinc-800/80"
+        }`}>
+          <LandingFAQ theme={theme} />
         </section>
       </main>
 

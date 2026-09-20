@@ -195,6 +195,8 @@ export interface SystemSettings {
   pro_price_formatted: string;
   admin_passcode?: string;
   admin_emails?: string[];
+  studio_access_tier?: 'all' | 'paid_only' | 'pro_only';
+  roadmap_access_tier?: 'all' | 'paid_only' | 'pro_only';
   updated_at?: string;
 }
 
