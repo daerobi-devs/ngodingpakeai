@@ -46,6 +46,9 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Batasi alokasi memori Node.js agar hemat RAM & mencegah Linux OOM Killer di VPS/Coolify
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
 RUN npm run build
 
 # ============================================================

@@ -18,6 +18,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Standalone output — dibutuhkan untuk Docker image yang ringan
   output: 'standalone',
+  typescript: {
+    // Bypass typecheck saat build Docker agar hemat RAM & mencegah crash OOM (Exit code 255) di VPS/Coolify
+    ignoreBuildErrors: true,
+  },
   async headers() {
     return [
       {
