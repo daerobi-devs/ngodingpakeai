@@ -53,36 +53,6 @@ export default function LandingPage() {
 
   const isStrictLogin = systemSettings?.auth_mode === "strict_login";
 
-  // Typewriter Animation Logic for Headline
-  const FULL_HEADLINE = "Stop Ngoding Tanpa Arah. Rancang Arsitektur & Task AI dalam Hitungan Detik.";
-  const SPLIT_INDEX = 25; // length of "Stop Ngoding Tanpa Arah. "
-  const [typedLength, setTypedLength] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-
-    if (!isDeleting && typedLength < FULL_HEADLINE.length) {
-      timer = setTimeout(() => {
-        setTypedLength((prev) => prev + 1);
-      }, 55);
-    } else if (!isDeleting && typedLength === FULL_HEADLINE.length) {
-      timer = setTimeout(() => {
-        setIsDeleting(true);
-      }, 3800);
-    } else if (isDeleting && typedLength > 0) {
-      timer = setTimeout(() => {
-        setTypedLength((prev) => prev - 1);
-      }, 25);
-    } else if (isDeleting && typedLength === 0) {
-      timer = setTimeout(() => {
-        setIsDeleting(false);
-      }, 600);
-    }
-
-    return () => clearTimeout(timer);
-  }, [typedLength, isDeleting]);
-
   useEffect(() => {
     try {
       const storedTheme = localStorage.getItem("prd_preferred_theme") as "dark" | "light" | null;
@@ -140,26 +110,14 @@ export default function LandingPage() {
 
           <div className="mx-auto max-w-6xl px-4 sm:px-6 text-center space-y-8">
 
-            {/* Punchy Hero Headline with Typewriter Animation */}
+            {/* Punchy Hero Headline - Solid, No Layout Shift */}
             <div className="space-y-4 max-w-4xl mx-auto">
-              <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.15] min-h-[105px] sm:min-h-[145px] flex items-center justify-center">
-                <span>
-                  {typedLength <= SPLIT_INDEX ? (
-                    <span className={isLight ? "text-slate-900" : "text-white"}>
-                      {FULL_HEADLINE.slice(0, typedLength)}
-                    </span>
-                  ) : (
-                    <>
-                      <span className={isLight ? "text-slate-900" : "text-white"}>
-                        {FULL_HEADLINE.slice(0, SPLIT_INDEX)}
-                      </span>
-                      <span className="text-amber-500">
-                        {FULL_HEADLINE.slice(SPLIT_INDEX, typedLength)}
-                      </span>
-                    </>
-                  )}
-                  {/* Blinking Amber Terminal Cursor */}
-                  <span className="inline-block w-1.5 sm:w-2 h-[0.85em] align-baseline ml-1.5 bg-amber-500 animate-pulse rounded-xs" />
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.15] text-balance">
+                <span className={isLight ? "text-slate-900" : "text-white"}>
+                  Stop Ngoding Tanpa Arah.{" "}
+                </span>
+                <span className="text-amber-500">
+                  Rancang Arsitektur &amp; Task AI dalam Hitungan Detik.
                 </span>
               </h1>
               <p className={`mx-auto max-w-2xl text-base sm:text-lg leading-relaxed ${
