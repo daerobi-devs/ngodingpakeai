@@ -155,27 +155,139 @@ export function generateDesignDoc(prd: PRDOutput, customPalette?: DesignPalette)
 *Project: ${prd.title}*
 *Archetype: ${prd.archetype_detection?.archetype || "Modern Digital Product"}*
 *Target Audience: ${prd.archetype_detection?.target_audience || "End Users & Operators"}*
-*Standard: Awesome-Design-MD & Taste-Skill Anti-Slop Specification*
+*Standard: Vercel Web Interface Guidelines & Linear App Taste System*
 
 > [!IMPORTANT]
-> **Mandatory Frontend Enforcement for AI Coding Agents (Cursor, Claude Code, Windsurf):**
+> **Mandatory Frontend Enforcement for AI Coding Agents (Cursor, Claude Code, Antigravity, Windsurf):**
 > When writing HTML, CSS, Tailwind, or React/Vue components for this project, you MUST strictly adhere to this DESIGN.md.
-> Generic clichés (neon purple gradients, unbranded components, arbitrary padding) are STRICTLY FORBIDDEN.
+> Generic clichés (sparkles, emojis, neon purple gradients, floating cards without borders, arbitrary padding) are STRICTLY FORBIDDEN.
 
 ---
 
-## 🚫 1. THE ANTI-AI-SLOP BANNED LIST (STRICTLY PROHIBITED)
+## 1. THE ANTI-AI-SLOP BANNED LIST (STRICTLY PROHIBITED)
 Coding agents are expressly forbidden from introducing the following visual clichés:
-1. **NO Neon Purple / Cyan Glow Gradients**: Do NOT combine indigo-500 with cyan-400 for hero text, cards, or background blooms.
-2. **NO Floating Glass Dots / Particle Orbs**: Do NOT inject background radial dot grids or fuzzy blur balls behind text.
-3. **NO Floating Flat Cards Without Borders**: Cards must NOT rely merely on heavy shadows; every surface must have crisp, subtle border definition.
-4. **NO Emoji Clichés for Feature Icons**: Do NOT use raw emojis (🚀, 💡, 🤖, ⚡) inside feature card headers. Use minimalist SVG icon sets (Lucide, Radix, Heroicons).
-5. **NO Arbitrary Padding / Spacing**: Never invent arbitrary spacing like \`p-[23px]\`. Stick exclusively to the 4px / 8px scale (\`p-4\`, \`p-6\`, \`gap-4\`).
-6. **NO SaaS-Washing on Non-SaaS Products**: If this product is an institutional/school website or local catalog, NEVER render SaaS subscription pricing cards or hacker-style dark modes.
+1. **ABSOLUTE ZERO EMOJI POLICY**:
+   - NEVER use raw emojis (such as ✨, 🚀, 🌟, 🔥, 💡, 🤖, 📈, 🎉) in any component, button, card header, page title, or label.
+   - Feature icons MUST use pure monochrome vector SVGs (Lucide React, Radix, or Heroicons) with controlled sizing (16px to 20px).
+2. **NO Neon Purple / Cyan Glow Gradients**:
+   - Do NOT combine indigo-500 with cyan-400 for hero text, cards, or background blooms.
+3. **NO Floating Glass Dots / Particle Orbs**:
+   - Do NOT inject background radial dot grids or fuzzy blur balls behind text.
+4. **NO Floating Flat Cards Without Borders**:
+   - Cards must NOT rely merely on heavy drop shadows; every surface must have crisp, subtle 1px border definition (\`border-zinc-800\` in dark mode, \`border-slate-200\` in light mode).
+5. **NO Arbitrary Padding / Spacing**:
+   - Never invent arbitrary spacing like \`p-[23px]\`. Stick exclusively to the 4px / 8px scale (\`p-4\`, \`p-6\`, \`gap-4\`).
+6. **NO SaaS-Washing on Non-SaaS Products**:
+   - If this product is an institutional/school website or local catalog, NEVER render SaaS subscription pricing cards or hacker-style dark modes.
 
 ---
 
-## 🎨 2. ADAPTIVE COLOR PALETTE & DESIGN TOKENS
+## 2. MULTI-SURFACE APP SHELL ARCHITECTURE CONTRACT
+*When building modern web applications with landing pages, user dashboards, and admin panels, AI agents MUST organize code into separated Route Groups:*
+
+### A. Surface Structure & Route Groups
+1. **Public Marketing Surface (\`app/(marketing)/page.tsx\`)**:
+   - Clean top navigation bar with logo, navigation links, and Login/Get Started CTA.
+   - High-conversion Hero section, Feature grid, Social proof / Testimonials, FAQ accordion, and Footer.
+2. **User Dashboard Surface (\`app/(dashboard)/layout.tsx\`)**:
+   - **MANDATORY Left Collapsible Sidebar** (\`w-64\` on desktop, collapsible to \`w-16\` icon-only mode).
+   - Sidebar includes: Brand Logo, Active Navigation Links (with distinct active styling), Workspace/Team Switcher, and User Profile Footer with Logout.
+   - Sticky Topbar (\`h-16\`) with Breadcrumbs, Global Search (\`⌘K\`), Notifications, and Quick Action buttons.
+   - Mobile responsive drawer sheet triggered by a hamburger button on screens \`< md\`.
+3. **Admin / Operator Surface (\`app/(admin)/layout.tsx\`)**:
+   - Dedicated Admin Sidebar with administrative links (Overview, User Management, Analytics, System Settings).
+   - Role-Based Access Guard middleware (redirecting unauthorized users).
+   - Dense data tables with sorting, filtering, pagination, and status badges.
+
+### B. Sample Production-Grade App Shell Component (Tailwind + React)
+\`\`\`tsx
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { Home, BarChart2, Settings, Users, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+
+export function DashboardAppShell({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <div className="flex min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      {/* 1. Desktop Collapsible Sidebar */}
+      <aside className={"hidden md:flex flex-col border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 backdrop-blur-md justify-between transition-all duration-200 " + (collapsed ? "w-16 p-2" : "w-64 p-4")}>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between px-2">
+            {!collapsed && (
+              <div className="flex items-center gap-2.5">
+                <div className="h-7 w-7 rounded-lg bg-[${primaryHex}] flex items-center justify-center text-white font-bold text-xs">
+                  ${prd.title.charAt(0) || 'P'}
+                </div>
+                <span className="font-bold text-sm tracking-tight truncate">${prd.title}</span>
+              </div>
+            )}
+            <button 
+              type="button" 
+              onClick={() => setCollapsed(!collapsed)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+          </div>
+
+          <nav className="space-y-1">
+            <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[${primaryHex}]/10 text-[${primaryHex}] font-semibold text-xs transition-colors">
+              <Home className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Overview</span>}
+            </Link>
+            <Link href="/dashboard/analytics" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-medium text-xs transition-colors">
+              <BarChart2 className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Analytics</span>}
+            </Link>
+          </nav>
+        </div>
+
+        {/* Sidebar Footer User Info */}
+        <div className="border-t border-slate-200 dark:border-zinc-800 pt-3 flex items-center gap-3 px-1">
+          <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-zinc-700 shrink-0" />
+          {!collapsed && (
+            <div className="text-xs truncate">
+              <p className="font-bold text-slate-900 dark:text-zinc-100 truncate">Operator User</p>
+              <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">user@domain.com</p>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* 2. Main Content Canvas with Sticky Header */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-20 h-16 border-b border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden p-2 rounded-lg text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="text-xs text-slate-500 dark:text-zinc-400 font-medium">Dashboard &gt; Overview</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] bg-slate-100 dark:bg-zinc-800 px-2.5 py-1 rounded-md font-mono text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700">
+              ⌘K Search
+            </span>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+\`\`\`
+
+---
+
+## 3. ADAPTIVE COLOR PALETTE & DESIGN TOKENS
 **Domain Context**: *${domain.toUpperCase()}* — *${moodDescription}*
 
 ### Color Roles
@@ -195,8 +307,8 @@ Coding agents are expressly forbidden from introducing the following visual clic
 - **Typography - Body**: \`#334155\` (\`slate-700\`).
 - **Typography - Muted / Subtext**: \`#64748b\` (\`slate-500\`).
 
-### Dark Mode (For Tech SaaS, Night Dashboards, Terminal Views)
-- **Background Base**: \`#09090b\` (\`zinc-950\`) — Deep neutral black, non-murky.
+### Dark Mode (For Tech SaaS, Night Dashboards, Developer Tools)
+- **Background Base**: \`#09090b\` (\`zinc-950\`) — Deep neutral black, non-murky (Linear style).
 - **Card / Surface**: \`#121215\` or \`#18181b\` (\`zinc-900\`) with \`border-zinc-800\`.
 - **Borders & Dividers**: \`#27272a\` (\`zinc-800\`) / \`border-white/10\`.
 - **Typography - Heading**: \`#f4f4f5\` (\`zinc-100\`).
@@ -205,7 +317,7 @@ Coding agents are expressly forbidden from introducing the following visual clic
 
 ---
 
-## 📐 3. LAYOUT & GEOMETRIC RULES
+## 4. VERCEL & LINEAR DESIGN ENGINEERING RULES
 
 ### A. Concentric Radius Formula
 Whenever rounded elements are nested inside another rounded container, the radii MUST be optically balanced:
@@ -214,27 +326,37 @@ outer_radius = inner_radius + padding
 \`\`\`
 *Example:* Card with \`rounded-xl\` (12px) and \`p-2\` (8px) must contain buttons with \`rounded-sm\` or \`rounded-md\` (4-6px), never conflicting outer curves.
 
-### B. Typography Rules
+### B. Typography & Font Smoothing
+- **Font Smoothing**: Apply \`-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;\` on the root HTML.
 - **Headlines**: Use \`font-extrabold\` or \`font-bold\` with \`tracking-tight\` and \`text-wrap: balance\`.
 - **Body & Paragraphs**: Use \`leading-relaxed\` with \`text-wrap: pretty\` to eliminate single-word orphan lines.
 - **Metrics, Counters & Currency**: ALWAYS use \`font-mono\` or \`tabular-nums\` to avoid layout jitter during updates.
 - **Category Badges & Labels**: Small uppercase text with expanded tracking (\`text-[11px] font-bold uppercase tracking-wider\`).
 
----
+### C. URL State Persistence & Information Density
+- **State in URLs**: For tabs, pagination, search queries, and view toggles, store state in URL search parameters (\`useSearchParams\`) so users can share or reload exact views.
+- **Information Density**: Deliver compact, highly scannable layouts with subtle 1px dividers rather than huge empty gaps.
+- **Loading Skeletons**: Never leave screens blank white/black during data fetching. Render pulse skeletons matching exact card geometry.
 
-## ⚡ 4. MICRO-INTERACTIONS & MOTION GUIDELINES
+### D. Micro-Interactions & Tactile Polish
 - **Hover Transitions**: Apply \`transition-colors duration-150\` or \`transition-all duration-200 ease-out\`.
 - **Interactive Cards**: Subtle lift on hover (\`hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-zinc-700\`).
 - **Buttons Active State**: Tactile press feel using \`active:scale-[0.98]\`.
-- **Real-Time Indicators**: Subtle pulsing dots for active statuses (\`<span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>\`).
+- **Real-Time Indicators**: Subtle pulsing dots for active statuses without emojis:
+\`\`\`tsx
+<span className="relative flex h-2 w-2">
+  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+</span>
+\`\`\`
 
 ---
 
-## 🧩 5. CORE COMPONENT BLUEPRINTS
+## 5. CORE COMPONENT BLUEPRINTS
 
 ### Primary Action Button
 \`\`\`html
-<button class="flex items-center justify-center gap-2 rounded-lg bg-[${primaryHex}] px-5 py-2.5 text-xs font-bold text-white hover:brightness-110 active:scale-[0.98] transition-all shadow-sm">
+<button class="flex items-center justify-center gap-2 rounded-lg bg-[${primaryHex}] px-4 py-2.5 text-xs font-bold text-white hover:brightness-110 active:scale-[0.98] transition-all shadow-sm">
   <span>Aksi Utama</span>
   <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
 </button>
@@ -251,105 +373,8 @@ outer_radius = inner_radius + padding
   </div>
   <h3 class="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Judul Elemen / Fitur</h3>
   <p class="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">Penjelasan ringkas, padat, dan terstruktur tanpa kata-kata klise.</p>
-</div>
+  </div>
 \`\`\`
-
-${
-  hasDashboard
-    ? `
----
-
-## 🖥️ 6. MODERN DASHBOARD & APP SHELL BLUEPRINT (COLLAPSIBLE SIDEBAR)
-*Because this application includes a Dashboard, Portal, or Admin Workspace, follow this 4-part App Shell layout:*
-
-### A. App Shell Architecture
-\`\`\`text
-┌────────────────────────────────────────────────────────────────────────┐
-│  SIDEBAR (w-64 desktop, collapsible) │ TOP HEADER (Sticky, h-16)       │
-│  ├─ Logo & Brand                     │ ├─ Breadcrumbs: App > Page      │
-│  ├─ Workspace / Role Switcher        │ ├─ Search Bar (Cmd + K)         │
-│  ├─ Nav Items (Active indicator)     │ ├─ Notifications & User Menu    │
-│  └─ User Profile Footer              ├─────────────────────────────────┤
-│                                      │ MAIN CONTENT (p-6, max-w-7xl)   │
-│                                      │ ├─ Page Header & Action CTA     │
-│                                      │ ├─ KPI 4-Card Stats Grid        │
-│                                      │ └─ Data Table / Interactive View│
-└────────────────────────────────────────────────────────────────────────┘
-\`\`\`
-
-### B. Implementation Guidelines for Coding Agents
-1. **Sidebar Navigation**:
-   - Fixed width \`w-64\` on desktop, collapsible to \`w-16\` with icon-only mode.
-   - Active link styling: \`bg-[${primaryHex}]/10 text-[${primaryHex}] border-r-2 border-[${primaryHex}] font-semibold\`.
-   - Inactive link styling: \`text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800/60\`.
-2. **Top Header Bar**:
-   - \`sticky top-0 z-30 h-16 border-b border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md\`.
-   - Includes quick search box with \`kbd\` badge (\`⌘K\` or \`Ctrl+K\`).
-3. **Mobile Drawer (Responsive)**:
-   - On screens \`< md\` (mobile/tablet), hide desktop sidebar.
-   - Use hamburger menu icon triggering a slide-over Sheet/Drawer with backdrop blur.
-
-### C. Sample App Shell Component (Tailwind + React)
-\`\`\`tsx
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div class="flex min-h-screen bg-slate-50 dark:bg-zinc-950">
-      {/* 1. Collapsible Sidebar */}
-      <aside class="hidden md:flex flex-col w-64 border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 justify-between p-4">
-        <div class="space-y-6">
-          <div class="flex items-center gap-2 px-2">
-            <div class="h-7 w-7 rounded-lg bg-[${primaryHex}] flex items-center justify-center text-white font-bold text-xs">P</div>
-            <span class="font-bold text-sm text-slate-900 dark:text-white tracking-tight">${prd.title}</span>
-          </div>
-          <nav class="space-y-1">
-            <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-[${primaryHex}]/10 text-[${primaryHex}] font-medium text-xs">
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-              <span>Overview</span>
-            </a>
-          </nav>
-        </div>
-        <div class="border-t border-slate-100 dark:border-zinc-800 pt-3 flex items-center gap-3 px-2">
-          <div class="h-8 w-8 rounded-full bg-slate-200 dark:bg-zinc-700" />
-          <div class="text-xs">
-            <p class="font-bold text-slate-900 dark:text-white">Operator</p>
-            <p class="text-slate-400 text-[10px]">admin@domain.com</p>
-          </div>
-        </div>
-      </aside>
-
-      {/* 2. Main Content Canvas */}
-      <div class="flex-1 flex flex-col min-w-0">
-        <header class="sticky top-0 z-20 h-16 border-b border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md px-6 flex items-center justify-between">
-          <div class="text-xs text-slate-500">Dashboard &gt; Overview</div>
-          <div class="flex items-center gap-3">
-            <span class="text-[11px] bg-slate-100 dark:bg-zinc-800 px-2 py-1 rounded font-mono text-slate-500">⌘K Search</span>
-          </div>
-        </header>
-        <main class="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-\`\`\`
-`
-    : ""
-}
-
-${
-  isStaticSite
-    ? `
----
-
-## 🌐 7. STATIC SITE & LANDING PAGE POLISH CONTRACT
-*Because this project includes static/landing page components:*
-1. **Core Web Vitals**: Target LCP < 1.2s, CLS 0, and FID < 50ms.
-2. **Above-the-Fold Hero**: Clean single headline, value proposition subheadline, 1 primary action, 1 secondary action, social proof badges.
-3. **Asset Formats**: Use inline SVGs for crisp icons and WebP/AVIF for photographic assets.
-`
-    : ""
-}
 `;
 }
 

@@ -546,19 +546,50 @@ ${defaultSequence}
     return `# .cursorrules / CLAUDE.md for: ${prd.title}
 *Product Archetype: ${prd.archetype_detection?.archetype || "Modern Web Application"}*
 *Target Audience: ${prd.archetype_detection?.target_audience || "End Users & Operators"}*
+*Design Standards: Vercel Web Interface Guidelines & Linear App Taste System*
 
 ## Role & Mission
-You are an expert fullstack software architect implementing: "${prd.title}".
-Strictly follow the Behavior Contract, Guardrails, and Deep Feature Architecture below.
+You are an expert fullstack software architect and senior UI engineer implementing: "${prd.title}".
+Your single source of truth for features is \`docs/PRD.md\` and visual system is \`docs/DESIGN.md\`.
 
-## Behavior Contract (Strict Enforcement)
+## 1. MANDATORY DESIGN SYSTEM & STRICT ZERO-EMOJI POLICY
+1. **READ AND ENFORCE \`docs/DESIGN.md\` FIRST**: Before generating any UI component, page, or layout, you MUST read \`docs/DESIGN.md\` and adhere strictly to its color tokens, layout contracts, and component blueprints.
+2. **ABSOLUTE ZERO EMOJI POLICY**:
+   - NEVER use raw emojis (such as ✨, 🚀, 🌟, 🔥, 💡, 🤖, 📈, 🎉) anywhere in JSX/HTML, page headings, button text, feature cards, or badges.
+   - ALL icons must strictly use monochrome vector SVGs from **Lucide React** (\`lucide-react\`) sized precisely between 16px and 20px.
+   - No sparkles, no particle orbs, no floating fuzzy dots.
+3. **VERCEL & LINEAR TASTE ENGINEERING**:
+   - **Deep Dark Mode**: Never use pure \`#000000\`. Use deep zinc \`#09090b\` for canvas and \`#121215\` for cards with crisp 1px \`border-zinc-800\`.
+   - **Concentric Radius**: Optical radius formula: outer_radius = inner_radius + padding.
+   - **Tabular Numbers**: Apply \`tabular-nums\` or \`font-mono\` on all counters, metrics, tables, currency, and IDs to eliminate layout jitter.
+   - **Tactile Press Feedback**: Interactive buttons must use \`active:scale-[0.98]\` and smooth CSS transitions.
+
+## 2. MULTI-SURFACE APP SHELL ARCHITECTURE CONTRACT
+If this project involves public visitors, authenticated users, and administrators, you MUST organize code into separated Next.js App Router Route Groups. DO NOT merge everything into a single flat page!
+1. **Public Marketing Surface (\`app/(marketing)/page.tsx\`)**:
+   - Navbar with brand logo, nav links, and Login/CTA.
+   - High-conversion Hero, Feature cards, Social proof / Testimonials, FAQ, and Footer.
+2. **User Dashboard Surface (\`app/(dashboard)/layout.tsx\`)**:
+   - **MANDATORY Left Collapsible Sidebar**: \`w-64\` on desktop, collapsible to \`w-16\` icon-only mode with active indicator and user profile footer.
+   - Sticky Header (\`h-16\`) with Breadcrumbs, Global Search (\`⌘K\`), and notifications.
+   - Mobile Sheet Drawer triggered by a hamburger button on screens < md.
+3. **Admin Panel Surface (\`app/(admin)/layout.tsx\`)**:
+   - Dedicated Admin Sidebar with administrative links and Role-Based Access Guard.
+   - Dense data tables with sorting, filtering, and status badges.
+
+## 3. Autonomous Execution & Frontend-First Strategy
+- Work continuously through tasks without stopping to ask permission for routine development decisions.
+- Build the comprehensive responsive frontend, layout shell, and complete user navigation flow first with realistic mock data before connecting backend databases.
+- Proactively architect necessary database tables, RLS policies, indexes, and Zod validations even if omitted from the initial PRD text.
+
+## 4. Behavior Contract (Strict Enforcement)
 ### GOOD (Always Do):
 ${prd.ai_specific.behavior_contract.good.map((g) => `- ${g}`).join("\n")}
 
 ### REJECT (Never Do):
 ${prd.ai_specific.behavior_contract.reject.map((r) => `- ${r}`).join("\n")}
 
-## Core MVP Features to Implement:
+## 5. Core MVP Features to Implement:
 ${
   prd.feature_breakdown && prd.feature_breakdown.length > 0
     ? prd.feature_breakdown
@@ -574,16 +605,13 @@ ${
     : prd.boundaries.scope.map((s) => `- ${s}`).join("\n")
 }
 
-## Non-Goals (DO NOT IMPLEMENT / AVOID SCOPE CREEP):
+## 6. Non-Goals (DO NOT IMPLEMENT / AVOID SCOPE CREEP):
 ${prd.boundaries.non_goals.map((ng) => `- ${ng}`).join("\n")}
 
-## Guardrails:
+## 7. Guardrails:
 ${prd.ai_specific.guardrails.map((gr) => `- ${gr}`).join("\n")}
 
-## Database Strategy:
-Generate clean database migration tables, indexes, and models dynamically as needed based on the specifications in docs/PRD.md and architecture diagrams.
-
-## Implementation Tasks (Execute in Order):
+## 8. Implementation Tasks (Execute in Order):
 ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
 `;
   };

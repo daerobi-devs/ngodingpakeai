@@ -59,8 +59,12 @@ Tetap lengkapi 7 Kategori berikut secara mendalam:
 7. AI-SPECIFIC ADDITIONS (Behavior Contract: GOOD minimal 3 poin, REJECT minimal 3 poin; Guardrails)
 8. ACTIONABLE TASK BREAKDOWN (10-14 task atomic berurutan dengan format Phased Execution Contract):
    - Wajib gunakan prefix fase:
-     - [FASE 1 - FRONTEND] 3-4 task pembuatan komponen UI, layout responsif, dan mock data
-     - [FASE 2 - BACKEND & DB] 3-4 task pembuatan skema tabel, RLS, validasi Zod, dan API routes
+     - [FASE 1 - FRONTEND & APP SHELL LAYOUT]:
+       * Task 1 WAJIB: Bangun kerangka Layout App Shell dengan Collapsible Sidebar kiri (w-64 desktop -> w-16 collapsed, mobile sheet drawer) dan Sticky Topbar navigasi (app/(dashboard)/layout.tsx).
+       * Task 2 WAJIB: Bangun Marketing Landing Page responsif (Hero, Feature grid, Social proof, FAQ, Footer) di app/(marketing)/page.tsx.
+       * Task 3 WAJIB jika ada admin/operator: Bangun kerangka Admin Panel Layout dengan Admin Sidebar dan Role Guard di app/(admin)/layout.tsx.
+       * 1-2 task komponen UI fitur inti dengan mock data interaktif.
+     - [FASE 2 - BACKEND & DB] 3-4 task pembuatan skema tabel relasional, RLS, validasi Zod, dan API routes
      - [FASE 3 - INTEGRASI] 2-3 task menghubungkan frontend ke API backend, penanganan state & error
      - [FASE 4 - DEPLOY & TEST] 2-3 task testing end-to-end, setup CI/CD, dan deployment
 9. ARCHITECTURE DIAGRAMS (Mermaid.js murni tanpa backticks — WAJIB 8 BLUEPRINT LENGKAP):
@@ -81,8 +85,9 @@ Tetap lengkapi 7 Kategori berikut secara mendalam:
      - 'status': 'Direncanakan'
      - 'sub_features': Array 3-5 sub-fitur fungsional nyata (contoh: ['Formulir Pendaftaran Siswa', 'Unggah Dokumen Berkas', 'Verifikasi Data Otomatis', 'Notifikasi Status via Email/WA'])
 
-ATURAN OUTPUT:
+ATURAN OUTPUT & DESAIN:
 - 100% Valid JSON murni tanpa markdown wrapper (\`\`\`json).
+- ZERO EMOJI POLICY: Dilarang keras menyelipkan emoji apa pun di dalam kode UI, nama komponen, judul fitur, tombol, atau teks deskripsi. Semua ikon wajib menggunakan Lucide React SVG.
 - Gunakan Bahasa Indonesia profesional dan istilah engineering modern.`;
 
 export function buildPRDUserPrompt(
