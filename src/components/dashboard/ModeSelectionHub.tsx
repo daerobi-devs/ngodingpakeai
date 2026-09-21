@@ -32,7 +32,7 @@ export function ModeSelectionHub({
   const isLight = theme === 'light';
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-2 sm:py-6 px-2 sm:px-4 animate-in fade-in duration-200">
+    <div className="w-full max-w-5xl mx-auto my-auto py-4 sm:py-8 px-2 sm:px-4 animate-in fade-in duration-200">
       {/* Top Header - Compact, No Unnecessary Tagline Pills */}
       <div className="text-center mb-5 sm:mb-7 space-y-1.5">
         <h1 className={`text-xl sm:text-3xl font-extrabold tracking-tight ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>

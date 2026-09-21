@@ -1172,6 +1172,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           className={
             (creationMode === 'studio' && generatedPRD) || (creationMode === 'roadmap' && activeRoadmap)
               ? 'flex-1 overflow-hidden flex flex-col w-full h-full p-0 m-0'
+              : showModeHub && !generatedPRD && !activeRoadmap
+              ? 'flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col justify-center items-center min-h-0'
               : 'flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-8'
           }
         >
