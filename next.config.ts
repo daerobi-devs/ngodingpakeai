@@ -16,10 +16,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Standalone output — dibutuhkan untuk Docker image yang ringan
-  output: 'standalone',
+  // Gunakan standalone hanya untuk Docker/Coolify; biarkan undefined di Vercel agar memakai serverless native
+  output: process.env.VERCEL ? undefined : 'standalone',
   typescript: {
-    // Bypass typecheck saat build Docker agar hemat RAM & mencegah crash OOM (Exit code 255) di VPS/Coolify
+    // Bypass typecheck saat build agar hemat RAM & mencegah crash OOM di VPS/Coolify/Vercel
     ignoreBuildErrors: true,
   },
   async headers() {
