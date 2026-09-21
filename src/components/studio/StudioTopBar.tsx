@@ -12,6 +12,8 @@ import {
   MessageSquare,
   ChevronDown,
   Menu,
+  Package,
+  FileText,
 } from 'lucide-react';
 
 export interface DocumentVersionInfo {
@@ -27,7 +29,7 @@ interface StudioTopBarProps {
   onSelectVersion: (versionNumber: number) => void;
   viewMode: 'preview' | 'raw' | 'kanban';
   onToggleViewMode: (mode: 'preview' | 'raw' | 'kanban') => void;
-  onExportZip: () => void;
+  onExportZip: (mode?: 'full_starter' | 'docs_only') => void;
   onCopyMarkdown: () => void;
   isCopiedMarkdown: boolean;
   isExportingZip: boolean;
@@ -58,13 +60,18 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
   theme = 'dark',
 }) => {
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+  const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const downloadDropdownRef = useRef<HTMLDivElement>(null);
   const isLight = theme === 'light';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsVersionDropdownOpen(false);
+      }
+      if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
+        setIsDownloadDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -214,16 +221,73 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           </button>
         )}
 
-        {/* Download ZIP button */}
-        <button
-          type="button"
-          onClick={onExportZip}
-          disabled={isExportingZip}
-          className="p-1.5 rounded-lg border border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
-          title="Download Starter Kit ZIP"
-        >
-          <Download className={`h-4 w-4 ${isExportingZip ? 'animate-bounce text-[#f97316]' : ''}`} />
-        </button>
+        {/* Download ZIP with Starter Repo vs Docs options */}
+        <div className="relative" ref={downloadDropdownRef}>
+          <div className="inline-flex items-center">
+            <button
+              type="button"
+              onClick={() => onExportZip('full_starter')}
+              disabled={isExportingZip}
+              className="p-1.5 rounded-l-lg border border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
+              title="Download Starter Proyek (.zip) - Repo Koding Utuh"
+            >
+              <Download className={`h-4 w-4 ${isExportingZip ? 'animate-bounce text-[#f97316]' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
+              disabled={isExportingZip}
+              className="p-1.5 rounded-r-lg border-y border-r border-l-0 border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
+              title="Opsi Download ZIP"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${isDownloadDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {isDownloadDropdownOpen && (
+            <div
+              className={`absolute right-0 top-full mt-1.5 w-64 rounded-xl border shadow-2xl z-50 overflow-hidden text-left p-1.5 ${
+                isLight
+                  ? 'border-zinc-200 bg-white text-zinc-800'
+                  : 'border-zinc-800 bg-[#161b22] text-zinc-200'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDownloadDropdownOpen(false);
+                  onExportZip('full_starter');
+                }}
+                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition cursor-pointer"
+              >
+                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5 text-emerald-400" />
+                  Starter Proyek (.ZIP)
+                </span>
+                <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
+                  Repo koding utuh siap jalankan dev server + PRD + rules + diagram
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDownloadDropdownOpen(false);
+                  onExportZip('docs_only');
+                }}
+                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition border-t border-zinc-800/80 mt-1 cursor-pointer"
+              >
+                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-blue-400" />
+                  Dokumen Saja (.ZIP)
+                </span>
+                <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
+                  Hanya berkas PRD.md, DESIGN.md, diagram .mmd, dan rules
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Copy Markdown button */}
         <button

@@ -10,6 +10,7 @@ import { StudioKanbanView, KanbanTask, generateComprehensiveKanbanTasks } from '
 import { StudioMcpModal } from './StudioMcpModal';
 import { generateStudioFullMarkdown } from './studio-markdown';
 import { generateDesignDoc, getDesignPalette } from '@/lib/design-template';
+import { generateStarterCodebaseZip } from '@/lib/scaffolder/codebase-scaffolder';
 
 interface StudioSnapshot {
   versionNumber: number;
@@ -364,105 +365,17 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     [prdId, currentPrd, fullMarkdown, liveKanbanTasks]
   );
 
-  const handleExportZip = async () => {
+  const handleExportZip = async (mode: 'full_starter' | 'docs_only' = 'full_starter') => {
     setIsExportingZip(true);
     try {
-      const JSZip = (await import('jszip')).default;
-      const zip = new JSZip();
-
-      const folderName = `${currentPrd.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-studio-kit`;
-      const rootFolder = zip.folder(folderName) || zip;
-
-      // 1. .cursorrules & CLAUDE.md with Autonomous Execution Protocol
-      const autonomousRules = `# Autonomous Agent Protocol: ${currentPrd.title}
-*Product Archetype: ${currentPrd.archetype_detection?.archetype || 'Modern Web Application'}*
-*Design Standards: Vercel Web Interface Guidelines & Linear App Taste System*
-
-## 1. Core Mission & Persona
-You are an expert autonomous software engineer and principal UI architect building this product to production grade. 
-Your authoritative feature specification is located in \`docs/PRD.md\` and visual system in \`docs/DESIGN.md\`.
-
-## 2. MANDATORY DESIGN SYSTEM & STRICT ZERO-EMOJI POLICY
-1. **READ AND ENFORCE \`docs/DESIGN.md\` FIRST**: Before generating any UI component, page, or layout, you MUST read \`docs/DESIGN.md\` and adhere strictly to its color tokens, layout contracts, and component blueprints.
-2. **ABSOLUTE ZERO EMOJI POLICY**:
-   - NEVER use raw emojis (such as ✨, 🚀, 🌟, 🔥, 💡, 🤖, 📈, 🎉) anywhere in JSX/HTML, page headings, button text, feature cards, or badges.
-   - ALL icons must strictly use monochrome vector SVGs from **Lucide React** (\`lucide-react\`) sized precisely between 16px and 20px.
-   - No sparkles, no particle orbs, no floating fuzzy dots.
-3. **VERCEL & LINEAR TASTE ENGINEERING**:
-   - **Deep Dark Mode**: Never use pure \`#000000\`. Use deep zinc \`#09090b\` for canvas and \`#121215\` for cards with crisp 1px \`border-zinc-800\`.
-   - **Concentric Radius**: Optical radius formula: outer_radius = inner_radius + padding.
-   - **Tabular Numbers**: Apply \`tabular-nums\` or \`font-mono\` on all counters, metrics, tables, currency, and IDs to eliminate layout jitter.
-   - **Tactile Press Feedback**: Interactive buttons must use \`active:scale-[0.98]\` and smooth CSS transitions.
-
-## 3. MULTI-SURFACE APP SHELL ARCHITECTURE CONTRACT
-If this project involves public visitors, authenticated users, and administrators, you MUST organize code into separated Next.js App Router Route Groups. DO NOT merge everything into a single flat page!
-1. **Public Marketing Surface (\`app/(marketing)/page.tsx\`)**:
-   - Navbar with brand logo, nav links, and Login/CTA.
-   - High-conversion Hero, Feature cards, Social proof / Testimonials, FAQ, and Footer.
-2. **User Dashboard Surface (\`app/(dashboard)/layout.tsx\`)**:
-   - **MANDATORY Left Collapsible Sidebar**: \`w-64\` on desktop, collapsible to \`w-16\` icon-only mode with active indicator and user profile footer.
-   - Sticky Header (\`h-16\`) with Breadcrumbs, Global Search (\`⌘K\`), and notifications.
-   - Mobile Sheet Drawer triggered by a hamburger button on screens < md.
-3. **Admin Panel Surface (\`app/(admin)/layout.tsx\`)**:
-   - Dedicated Admin Sidebar with administrative links and Role-Based Access Guard.
-   - Dense data tables with sorting, filtering, and status badges.
-
-## 4. Autonomous Execution Directive (Zero Micro-Permission Halts)
-- Execute implementation continuously without stopping to ask permission for routine development decisions (e.g. creating helper modules, choosing standard libraries, styling details, adding migrations, or writing tests).
-- Work autonomously through milestones. Stop only if a fundamental business conflict occurs.
-
-## 5. Frontend-First Implementation Strategy
-- Build out the comprehensive, responsive frontend interface, layout shell, and complete user journey first with realistic mock data and interactive state handlers before connecting live databases.
-- Ensure all screens, navigation routes, forms, modals, and error boundaries render cleanly and interactively.
-
-## 6. Architectural Initiative & Database Proactivity
-- Do NOT restrict yourself solely to the surface-level text of the PRD.
-- If the PRD omits necessary database columns, foreign keys, index optimizations, audit timestamps, enum constraints, or edge-case API error handlers, you are EXPLICITLY AUTHORIZED and REQUIRED to proactively architect, expand, and design production-grade schemas and endpoints.
-- Ensure database schemas are robust, normalized, and secured with Row-Level Security (RLS).
-
-## 7. Model Context Protocol (MCP) Kanban Loop
-- If connected to the ngodingpakeprd MCP server, retrieve active tasks using tool \`get_next_task\`.
-- Update task status to \`in_progress\` via \`update_task_status\` when you start coding.
-- Verify your code compiles and passes checks, then update status to \`done\` with implementation notes.
-
-## 8. Coding Standards & Behavior Contract
-1. Use TypeScript with strict mode.
-2. Adhere to the behavior contract:
-${(currentPrd.ai_specific?.behavior_contract?.good || []).map((g) => `- [GOOD] ${g}`).join('\n')}
-${(currentPrd.ai_specific?.behavior_contract?.reject || []).map((r) => `- [REJECT] ${r}`).join('\n')}
-`;
-
-      rootFolder.file('.cursorrules', autonomousRules);
-      rootFolder.file('CLAUDE.md', autonomousRules);
-
-      // 2. docs/PRD.md & docs/DESIGN.md
-      const docsFolder = rootFolder.folder('docs');
-      if (docsFolder) {
-        docsFolder.file('PRD.md', fullMarkdown);
-        const palette = getDesignPalette(currentPrd);
-        docsFolder.file('DESIGN.md', generateDesignDoc(currentPrd, palette));
-      }
-
-      // 3. README.md
-      rootFolder.file(
-        'README.md',
-        `# ${currentPrd.title} — Studio Kit (Versi ${activeVersionNumber})
-
-Paket starter kit instruksi arsitektur koding dari Studio AI Workspace dengan protokol eksekusi otonom.
-
-## Struktur Folder:
-- \`.cursorrules\` : Aturan koding otonom frontend-first & inisiatif arsitektur untuk Cursor.
-- \`CLAUDE.md\` : Protokol autonomous execution untuk Claude Code CLI.
-- \`docs/PRD.md\` : Dokumen PRD mengalir lengkap dengan diagram Mermaid.
-- \`docs/DESIGN.md\` : Standar visual & desain interface.
-`
-      );
-
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(content);
+      const { blob, filename } = await generateStarterCodebaseZip(currentPrd, {
+        mode,
+        versionNumber: activeVersionNumber,
+      });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${folderName}-v${activeVersionNumber}.zip`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {

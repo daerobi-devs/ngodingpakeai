@@ -6,6 +6,7 @@ import { MindmapViewer } from "./MindmapViewer";
 import { PhasedFeatureTree } from "./PhasedFeatureTree";
 import { MermaidRenderer } from "./MermaidRenderer";
 import { generateDesignDoc, getDesignPalette, generateAIHarmonicPalette, DesignPalette } from "@/lib/design-template";
+import { generateStarterCodebaseZip, detectStackFromPrd } from "@/lib/scaffolder/codebase-scaffolder";
 import { BeginnerRoadmap } from "./BeginnerRoadmap";
 import { CustomPaletteModal } from "./CustomPaletteModal";
 import {
@@ -79,7 +80,10 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
   );
   const [copiedFeatureId, setCopiedFeatureId] = useState<string | null>(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isZipMenuOpen, setIsZipMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const zipMenuRef = useRef<HTMLDivElement>(null);
+  const detectedStack = useMemo(() => detectStackFromPrd(prd), [prd]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -88,6 +92,12 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
         !exportMenuRef.current.contains(event.target as Node)
       ) {
         setIsExportMenuOpen(false);
+      }
+      if (
+        zipMenuRef.current &&
+        !zipMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsZipMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -331,7 +341,7 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
   }, [prd.architecture_diagrams?.data_pipeline_flow]);
 
 
-  const handleDownloadBundleZip = async () => {
+  const handleDownloadBundleZip = async (mode: "full_starter" | "docs_only" = "full_starter") => {
     if (!canExportZip) {
       if (onRequireUpgrade) onRequireUpgrade();
       return;
@@ -339,50 +349,11 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
 
     setDownloadingZip(true);
     try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-
-      const folderName = `${prd.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-starter-kit`;
-      const rootFolder = zip.folder(folderName) || zip;
-
-      // 1. .cursorrules
-      rootFolder.file(".cursorrules", generateCursorRulesSnippet());
-
-      // 2. CLAUDE.md
-      rootFolder.file("CLAUDE.md", generateCursorRulesSnippet());
-
-      // 3. docs/PRD.md & docs/DESIGN.md
-      const docsFolder = rootFolder.folder("docs");
-      if (docsFolder) {
-        docsFolder.file("PRD.md", formatAsMarkdown());
-        docsFolder.file("DESIGN.md", designMarkdown);
-      }
-
-      // 4. README.md
-      rootFolder.file(
-        "README.md",
-        `# ${prd.title} — Starter Kit
-
-Paket instruksi koding lengkap untuk AI Coding Agents (Cursor, Claude Code, Windsurf, Antigravity).
-
-## Struktur File:
-- \`.cursorrules\` : Pagar pembatas koding ketat, kontrak GOOD vs REJECT, dan task breakdown.
-- \`CLAUDE.md\` : Instruksi untuk Claude Code CLI.
-- \`docs/PRD.md\` : Spesifikasi produk 7 kategori lengkap + 8 diagram Mermaid.
-- \`docs/DESIGN.md\` : Standar desain frontend anti-AI slop (Dark Zinc 950, 8pt grid, micro-interactions).
-
-## Cara Pakai:
-1. Buka folder ini di Cursor / VS Code / Antigravity.
-2. Di chat AI, ketik:
-   > *"Baca docs/PRD.md, patuhi .cursorrules, dan terapkan standar visual di docs/DESIGN.md. Mulai dari Step 1."*
-`
-      );
-
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
+      const { blob, filename } = await generateStarterCodebaseZip(prd, { mode });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${folderName}.zip`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -720,32 +691,86 @@ ${prd.task_breakdown.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
 
         {/* Action Toolbar */}
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-          {/* 1. Primary CTA: Unduh Starter Kit */}
-          <button
-            type="button"
-            onClick={handleDownloadBundleZip}
-            disabled={downloadingZip}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs ${
-              !canExportZip
-                ? "bg-zinc-900 border border-amber-500/40 text-zinc-200 hover:border-amber-400 hover:text-white"
-                : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20"
-            }`}
-            title={canExportZip ? "Unduh paket lengkap (.ZIP): .cursorrules, CLAUDE.md, docs/PRD.md, docs/DESIGN.md" : "Fitur unduh Starter Kit (.ZIP) memerlukan paket langganan"}
-          >
-            {downloadingZip ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : !canExportZip ? (
-              <Lock className="h-3.5 w-3.5 text-amber-400" />
-            ) : (
-              <Package className="h-3.5 w-3.5" />
+          {/* 1. Primary CTA: Unduh Starter Proyek (Split Button) */}
+          <div className="relative inline-flex items-center" ref={zipMenuRef}>
+            <button
+              type="button"
+              onClick={() => handleDownloadBundleZip("full_starter")}
+              disabled={downloadingZip}
+              className={`inline-flex items-center gap-1.5 rounded-l-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs ${
+                !canExportZip
+                  ? "bg-zinc-900 border border-amber-500/40 text-zinc-200 hover:border-amber-400 hover:text-white"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20"
+              }`}
+              title={canExportZip ? `Unduh Starter Proyek (${detectedStack.name}) lengkap dengan kode sumber, PRD, dan rules` : "Fitur unduh Starter Proyek (.ZIP) memerlukan paket langganan"}
+            >
+              {downloadingZip ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : !canExportZip ? (
+                <Lock className="h-3.5 w-3.5 text-amber-400" />
+              ) : (
+                <Package className="h-3.5 w-3.5" />
+              )}
+              <span>{downloadingZip ? "Membuat ZIP..." : "Starter Proyek (.ZIP)"}</span>
+              {!canExportZip && (
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  PRO
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsZipMenuOpen(!isZipMenuOpen)}
+              disabled={downloadingZip}
+              className={`border-l border-emerald-600/30 rounded-r-xl px-1.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                !canExportZip
+                  ? "bg-zinc-900 border-amber-500/40 text-zinc-200 hover:text-white"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
+              }`}
+              title="Opsi Unduh Kode / Dokumen"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${isZipMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isZipMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 rounded-xl border border-zinc-800 bg-[#0c0c0e]/95 backdrop-blur-md p-1.5 text-xs shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsZipMenuOpen(false);
+                    handleDownloadBundleZip("full_starter");
+                  }}
+                  className="w-full text-left p-2 rounded-lg hover:bg-zinc-800/80 transition cursor-pointer flex flex-col items-start"
+                >
+                  <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                    <Package className="h-3.5 w-3.5 text-emerald-400" />
+                    Starter Proyek (.ZIP)
+                  </span>
+                  <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
+                    Repo koding utuh ({detectedStack.name}) + rules + PRD + diagram
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsZipMenuOpen(false);
+                    handleDownloadBundleZip("docs_only");
+                  }}
+                  className="w-full text-left p-2 rounded-lg hover:bg-zinc-800/80 transition cursor-pointer border-t border-zinc-800/80 mt-1 flex flex-col items-start"
+                >
+                  <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-blue-400" />
+                    Dokumen Saja (.ZIP)
+                  </span>
+                  <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
+                    Hanya berkas PRD.md, DESIGN.md, diagram .mmd, dan rules
+                  </span>
+                </button>
+              </div>
             )}
-            <span>{downloadingZip ? "Membuat ZIP..." : "Starter Kit (.ZIP)"}</span>
-            {!canExportZip && (
-              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                PRO
-              </span>
-            )}
-          </button>
+          </div>
 
           {/* 3. Salin PRD Markdown */}
           <button
