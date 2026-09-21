@@ -22,6 +22,7 @@ import { StudioHeroInput } from '@/components/studio/StudioHeroInput';
 import { RoadmapOutput } from '@/types/roadmap';
 import { RoadmapHeroInput } from '@/components/roadmap/RoadmapHeroInput';
 import { RoadmapTreeView } from '@/components/roadmap/RoadmapTreeView';
+import { ModeSelectionHub } from '@/components/dashboard/ModeSelectionHub';
 import confetti from 'canvas-confetti';
 import {
   AlertCircle,
@@ -154,6 +155,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [creationMode, setCreationMode] = useState<'wizard' | 'studio' | 'roadmap'>('wizard');
+  const [showModeHub, setShowModeHub] = useState<boolean>(!urlTemplate);
   const [activeRoadmap, setActiveRoadmap] = useState<RoadmapOutput | null>(null);
   const [loadingRoadmap, setLoadingRoadmap] = useState(false);
   const [wizardStep, setWizardStep] = useState<'input' | 'discovery'>('input');
@@ -199,6 +201,11 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       return;
     }
     setCreationMode(mode);
+    setShowModeHub(false);
+  };
+
+  const handleSelectModeFromHub = (mode: 'wizard' | 'studio' | 'roadmap') => {
+    handleSelectCreationMode(mode);
   };
 
   // Handle redirect return from Mandiri Private Gateway (payment=success)
@@ -380,6 +387,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     setWizardIdea('');
     setDiscoveryQuestions([]);
     setErrorMessage(null);
+    setShowModeHub(true);
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
@@ -390,6 +398,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     id: string,
     itemType?: 'prd' | 'studio' | 'roadmap'
   ) => {
+    setShowModeHub(false);
     if (itemType === 'roadmap' || prd?.type === 'roadmap' || prd?.roadmap || (prd?.nodes && prd?.goal)) {
       setCreationMode('roadmap');
       setActiveRoadmap(prd?.roadmap || prd);
@@ -901,26 +910,61 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 Home
               </Link>
               <ChevronRight className="h-3 w-3 hidden sm:inline" />
-              <span className="text-zinc-300 font-medium">
-                {creationMode === 'roadmap' ? 'Roadmap Pintar' : 'Studio'}
-              </span>
-              <ChevronRight className="h-3 w-3" />
-              <span className="text-amber-400 font-semibold truncate max-w-[200px] sm:max-w-[320px]">
-                {creationMode === 'roadmap' && activeRoadmap
-                  ? activeRoadmap.title
-                  : generatedPRD
-                  ? generatedPRD.title || 'Dokumen PRD'
-                  : formData.title?.trim() || 'Draf Produk Baru'}
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratedPRD(null);
+                  setActiveRoadmap(null);
+                  setShowModeHub(true);
+                }}
+                className={`hover:text-amber-400 transition-colors cursor-pointer ${
+                  showModeHub && !generatedPRD && !activeRoadmap ? 'text-amber-400 font-semibold' : 'text-zinc-300 font-medium'
+                }`}
+                title="Buka Pilihan Alur Kerja (Hub)"
+              >
+                Pilihan Alur
+              </button>
+              {!(showModeHub && !generatedPRD && !activeRoadmap) && (
+                <>
+                  <ChevronRight className="h-3 w-3" />
+                  <span className="text-amber-400 font-semibold truncate max-w-[200px] sm:max-w-[320px]">
+                    {creationMode === 'roadmap' && activeRoadmap
+                      ? activeRoadmap.title
+                      : creationMode === 'roadmap'
+                      ? 'Roadmap Pintar'
+                      : generatedPRD
+                      ? generatedPRD.title || 'Dokumen PRD'
+                      : creationMode === 'studio'
+                      ? 'Studio AI'
+                      : formData.title?.trim() || 'Draf Produk Baru'}
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Mode Switcher Tabs */}
             <div className="hidden sm:flex items-center rounded-xl border border-zinc-800 bg-zinc-950/70 p-0.5 gap-0.5 ml-2">
               <button
                 type="button"
+                onClick={() => {
+                  setGeneratedPRD(null);
+                  setActiveRoadmap(null);
+                  setShowModeHub(true);
+                }}
+                className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  showModeHub && !generatedPRD && !activeRoadmap
+                    ? 'bg-amber-500 text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                }`}
+                title="Portal Pilihan Alur Kerja (Hub)"
+              >
+                <span>Pilih Alur</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => handleSelectCreationMode('wizard')}
                 className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  creationMode === 'wizard'
+                  !showModeHub && creationMode === 'wizard'
                     ? 'bg-amber-500 text-zinc-950 shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
@@ -932,7 +976,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 type="button"
                 onClick={() => handleSelectCreationMode('studio')}
                 className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  creationMode === 'studio'
+                  !showModeHub && creationMode === 'studio'
                     ? 'bg-amber-500 text-zinc-950 shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
@@ -944,7 +988,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 type="button"
                 onClick={() => handleSelectCreationMode('roadmap')}
                 className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  creationMode === 'roadmap'
+                  !showModeHub && creationMode === 'roadmap'
                     ? 'bg-amber-500 text-zinc-950 shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
@@ -1168,6 +1212,16 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 </Link>
               </div>
             </div>
+          ) : showModeHub && !generatedPRD && !activeRoadmap ? (
+            /* Condition: Mode Selection Portal Hub */
+            <ModeSelectionHub
+              onSelectMode={handleSelectModeFromHub}
+              userName={user ? displayName : undefined}
+              theme={theme}
+              isStudioLocked={!isStudioAllowed()}
+              isRoadmapLocked={!isRoadmapAllowed()}
+              onOpenPricing={() => setIsPricingModalOpen(true)}
+            />
           ) : creationMode === 'roadmap' ? (
             /* Condition: Roadmap Pintar Mode */
             activeRoadmap ? (
@@ -1181,6 +1235,16 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               </div>
             ) : (
               <div id="roadmap-hero-section" className="w-full">
+                <div className="max-w-4xl mx-auto mb-2 flex items-center justify-start">
+                  <button
+                    type="button"
+                    onClick={() => setShowModeHub(true)}
+                    className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-amber-400 transition-colors py-1 px-2.5 rounded-lg hover:bg-zinc-900/80 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Kembali ke Pilihan Alur</span>
+                  </button>
+                </div>
                 <RoadmapHeroInput
                   onGenerate={handleRoadmapGenerate}
                   isLoading={loadingRoadmap}
@@ -1217,6 +1281,16 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           ) : (
             /* Condition 2: PRD Input Phase */
             <div className="w-full">
+              <div className="max-w-4xl mx-auto mb-2 flex items-center justify-start">
+                <button
+                  type="button"
+                  onClick={() => setShowModeHub(true)}
+                  className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-amber-400 transition-colors py-1 px-2.5 rounded-lg hover:bg-zinc-900/80 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Kembali ke Pilihan Alur</span>
+                </button>
+              </div>
               {creationMode === 'studio' ? (
                 /* Studio Hero Input */
                 <div id="studio-hero-container" className="w-full">
