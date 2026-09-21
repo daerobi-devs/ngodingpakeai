@@ -192,32 +192,66 @@ ${routerIncludes.join("\n")}
   // 8. app/api/v1/endpoints/*.py
   for (const feat of features) {
     const featSlug = slugify(feat.name);
+    const pascalName = featSlug
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join("");
+
     targetFolder.file(
       `app/api/v1/endpoints/${featSlug}.py`,
-      `from typing import List
+      `"""
+=========================================================================
+MODUL: ${feat.name} [${feat.priority}]
+=========================================================================
+User Story:
+${feat.user_story}
+
+Alur Kerja (Happy Path):
+${(feat.happy_path || []).map((step, sIdx) => `${sIdx + 1}. ${step}`).join("\n")}
+
+Aturan Bisnis & Validasi:
+${(feat.business_rules || []).map((rule) => `- ${rule}`).join("\n")}
+
+Tech Mapping:
+- Endpoints: ${(feat.tech_mapping?.api_endpoints || []).join(", ") || "-"}
+- Tables: ${(feat.tech_mapping?.db_tables || []).join(", ") || "-"}
+=========================================================================
+"""
+
+from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
-class ${featSlug.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("")}Schema(BaseModel):
-    id: str
-    name: str
-    status: str = "active"
+class ${pascalName}Payload(BaseModel):
+    id: Optional[str] = Field(None, description="Identifier entitas")
+    name: Optional[str] = Field(None, description="Nama atau deskripsi")
+    status: str = Field("active", description="Status modul")
 
-@router.get("/", response_model=List[${featSlug.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("")}Schema])
-async def list_items():
+@router.get("/", response_model=Dict[str, Any])
+async def get_status():
     """
-    ${feat.name} - ${feat.user_story.replace(/"/g, '\\"')}
-    Priority: ${feat.priority}
+    Status modul ${feat.name} [${feat.priority}]
+    Siap dihubungkan ke database oleh AI Coding Agent sesuai docs/PRD.md.
     """
-    return [
-        {"id": "demo-1", "name": "${feat.name} Demo Record", "status": "active"}
-    ]
+    return {
+        "module": "${feat.name}",
+        "priority": "${feat.priority}",
+        "status": "ready",
+        "description": "${feat.user_story.replace(/"/g, '\\"')}"
+    }
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_item(payload: ${featSlug.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("")}Schema):
-    return {"message": "Data successfully created", "payload": payload}
+async def create_record(payload: ${pascalName}Payload):
+    """
+    Handler pembuatan data untuk modul ${feat.name}.
+    TODO: Sambungkan ke model database oleh AI Agent.
+    """
+    return {
+        "message": "Data diterima untuk diproses",
+        "payload": payload.model_dump()
+    }
 `
     );
   }

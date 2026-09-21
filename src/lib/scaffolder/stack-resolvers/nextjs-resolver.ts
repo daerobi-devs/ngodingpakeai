@@ -554,15 +554,29 @@ export default function OverviewPage() {
       const fSlug = slugify(feat.name);
       targetFolder.file(
         `src/app/${fSlug}/page.tsx`,
-        `"use client";
+        `/**
+ * =========================================================================
+ * MODUL: ${feat.name} [${feat.priority}]
+ * =========================================================================
+ * User Story:
+ * ${feat.user_story}
+ *
+ * Alur Kerja (Happy Path):
+${(feat.happy_path || []).map((step, sIdx) => ` *   ${sIdx + 1}. ${step}`).join("\n")}
+ *
+ * Aturan Bisnis & Validasi:
+${(feat.business_rules || []).map((rule) => ` *   - ${rule}`).join("\n")}
+ *
+ * Tech Mapping:
+ * - Endpoints: ${(feat.tech_mapping?.api_endpoints || []).join(", ") || "-"}
+ * - Tables: ${(feat.tech_mapping?.db_tables || []).join(", ") || "-"}
+ * =========================================================================
+ */
 
-import { useState } from "react";
-import { CheckCircle2, ArrowLeft } from "lucide-react";
+import { CheckCircle2, ArrowLeft, Layers, Database, Globe } from "lucide-react";
 import Link from "next/link";
 
 export default function ${fSlug.replace(/-/g, "_")}_Page() {
-  const [activeTab, setActiveTab] = useState<"flow" | "rules" | "tech">("flow");
-
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
@@ -588,38 +602,13 @@ export default function ${fSlug.replace(/-/g, "_")}_Page() {
         </Link>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-zinc-800">
-        <button
-          onClick={() => setActiveTab("flow")}
-          className={\`border-b-2 px-3 pb-2 text-xs font-medium transition \${
-            activeTab === "flow" ? "border-blue-500 text-white font-semibold" : "border-transparent text-zinc-400 hover:text-zinc-200"
-          }\`}
-        >
-          Alur Kerja
-        </button>
-        <button
-          onClick={() => setActiveTab("rules")}
-          className={\`border-b-2 px-3 pb-2 text-xs font-medium transition \${
-            activeTab === "rules" ? "border-blue-500 text-white font-semibold" : "border-transparent text-zinc-400 hover:text-zinc-200"
-          }\`}
-        >
-          Aturan Bisnis (${(feat.business_rules || []).length})
-        </button>
-        <button
-          onClick={() => setActiveTab("tech")}
-          className={\`border-b-2 px-3 pb-2 text-xs font-medium transition \${
-            activeTab === "tech" ? "border-blue-500 text-white font-semibold" : "border-transparent text-zinc-400 hover:text-zinc-200"
-          }\`}
-        >
-          Tech Mapping
-        </button>
-      </div>
-
-      {/* Tab 1: Flow */}
-      {activeTab === "flow" && (
+      {/* Alur Kerja & Aturan Bisnis */}
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
-          <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">Langkah Eksekusi</h3>
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">
+            <Layers className="h-4 w-4 text-blue-400" />
+            <span>Alur Kerja (Happy Path)</span>
+          </div>
           <div className="space-y-2">
             ${(feat.happy_path || ["Inisialisasi modul", "Validasi parameter input", "Eksekusi proses utama"])
               .map(
@@ -634,53 +623,57 @@ export default function ${fSlug.replace(/-/g, "_")}_Page() {
               .join("")}
           </div>
         </div>
-      )}
 
-      {/* Tab 2: Rules */}
-      {activeTab === "rules" && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
-          <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">Business Rules</h3>
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span>Aturan Bisnis & Validasi</span>
+          </div>
           <div className="space-y-2">
             ${(feat.business_rules || ["Parameter wajib tervalidasi sebelum pemrosesan."])
               .map(
                 (rule, idx) => `
-            <div key={${idx}} className="flex items-start gap-2.5 text-xs text-zinc-300">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
-              <span>${rule.replace(/"/g, '\\"')}</span>
+            <div key={${idx}} className="flex items-start gap-2.5 text-xs text-zinc-300 rounded-lg border border-zinc-800/60 bg-zinc-900/60 p-3">
+              <span className="font-mono text-emerald-400 text-xs mt-0.5">•</span>
+              <span className="leading-relaxed">${rule.replace(/"/g, '\\"')}</span>
             </div>`
               )
               .join("")}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Tab 3: Tech */}
-      {activeTab === "tech" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
-            <span className="text-xs font-semibold text-zinc-300">Endpoint API</span>
-            <div className="space-y-1 font-mono text-[11px] text-blue-400">
-              ${((feat.tech_mapping?.api_endpoints || []).length > 0
-                ? feat.tech_mapping!.api_endpoints!
-                : [`/api/v1/${fSlug}`]
-              )
-                .map((ep) => `<div>${ep}</div>`)
-                .join("")}
-            </div>
+      {/* Tech Mapping */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 font-mono">
+            <Globe className="h-3.5 w-3.5 text-blue-400" />
+            <span>Endpoint API Terkait</span>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
-            <span className="text-xs font-semibold text-zinc-300">Tabel Database</span>
-            <div className="space-y-1 font-mono text-[11px] text-emerald-400">
-              ${((feat.tech_mapping?.db_tables || []).length > 0
-                ? feat.tech_mapping!.db_tables!
-                : [fSlug.replace(/-/g, "_")]
-              )
-                .map((tb) => `<div>${tb}</div>`)
-                .join("")}
-            </div>
+          <div className="space-y-1 font-mono text-[11px] text-blue-400">
+            ${((feat.tech_mapping?.api_endpoints || []).length > 0
+              ? feat.tech_mapping!.api_endpoints!
+              : [`/api/v1/${fSlug}`]
+            )
+              .map((ep) => `<div className="bg-zinc-950 px-2.5 py-1.5 rounded border border-zinc-800/80">${ep}</div>`)
+              .join("")}
           </div>
         </div>
-      )}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 font-mono">
+            <Database className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Tabel Database</span>
+          </div>
+          <div className="space-y-1 font-mono text-[11px] text-emerald-400">
+            ${((feat.tech_mapping?.db_tables || []).length > 0
+              ? feat.tech_mapping!.db_tables!
+              : [fSlug.replace(/-/g, "_")]
+            )
+              .map((tb) => `<div className="bg-zinc-950 px-2.5 py-1.5 rounded border border-zinc-800/80">${tb}</div>`)
+              .join("")}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
