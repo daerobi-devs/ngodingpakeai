@@ -7,6 +7,7 @@ import {
 } from "./schemas";
 import { PRDOutput, ClarificationQuestion } from "@/types/prd";
 import { getDomainDiscoveryQuestions } from "./domain-discovery";
+import { repairAndParseJSON } from "@/lib/ai/openai-compat";
 
 // Active high-performance model hierarchy ladder proven on Google AI Studio
 export const MODEL_LADDER = [
@@ -272,7 +273,7 @@ export async function generateStructuredPRD(
           .replace(/^```\s*/i, "")
           .replace(/\s*```$/i, "");
 
-        const parsedJson = JSON.parse(cleanedText);
+        const parsedJson = repairAndParseJSON(cleanedText);
 
         // Validate with Zod
         const validatedPRD = PRDOutputZodSchema.parse(parsedJson);
@@ -352,9 +353,7 @@ export async function generateClarifications(options: {
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!rawText) continue;
 
-      const parsed = JSON.parse(
-        rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "")
-      );
+      const parsed = repairAndParseJSON(rawText);
       return normalizeAndSanitizeClarifications(parsed);
     } catch (e: unknown) {
       errorsCollected.push(e instanceof Error ? e.message : String(e));

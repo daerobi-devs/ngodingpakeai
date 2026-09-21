@@ -130,6 +130,12 @@ export function repairAndParseJSON(rawText: string): any {
   }
   text = text.slice(firstBrace);
 
+  // Normalize smart quotes and remove BOM
+  text = text
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/^\uFEFF/, '');
+
   // 1. First attempt: standard JSON.parse
   try {
     return JSON.parse(text);
@@ -137,31 +143,38 @@ export function repairAndParseJSON(rawText: string): any {
     // Expected to continue to repair logic
   }
 
-  // 2. Second attempt: Clean control characters
+  // 2. Second attempt: Clean control characters and trailing commas
   try {
-    const cleaned = text.replace(/[\u0000-\u001F]+/g, ' ');
+    const cleaned = text
+      .replace(/[\u0000-\u001F]+/g, ' ')
+      .replace(/,\s*([\}\]])/g, '$1');
     return JSON.parse(cleaned);
   } catch {}
 
   // 3. Third attempt: Trim dangling uncompleted tokens at end
-  // If ended with uncompleted property or trailing comma:
   let candidate = text;
   const lastBrace = candidate.lastIndexOf('}');
   if (lastBrace !== -1 && lastBrace > 0) {
     try {
-      return JSON.parse(candidate.slice(0, lastBrace + 1));
+      const sliced = candidate.slice(0, lastBrace + 1).replace(/,\s*([\}\]])/g, '$1');
+      return JSON.parse(sliced);
     } catch {}
   }
 
   // Helper: Try balancing brackets and fixing cut-off key-values on a candidate string
   const attemptBalanceAndParse = (cand: string): any => {
+    // Pre-repair: fix unquoted keys e.g. { id: "1" } -> { "id": "1" }
+    let preRepaired = cand
+      .replace(/([{,]\s*)'([^']+)'\s*:/g, '$1"$2":')
+      .replace(/([{,]\s*)([a-zA-Z0-9_-]+)\s*:/g, '$1"$2":');
+
     let inString = false;
     let escaped = false;
     const stack: ('{' | '[')[] = [];
     let repaired = '';
 
-    for (let i = 0; i < cand.length; i++) {
-      const char = cand[i];
+    for (let i = 0; i < preRepaired.length; i++) {
+      const char = preRepaired[i];
 
       if (escaped) {
         escaped = false;
@@ -260,6 +273,18 @@ export function repairAndParseJSON(rawText: string): any {
         cutIdx = candidate.lastIndexOf('}', cutIdx - 1);
       }
     }
+
+    // 6. Sixth attempt: Relaxed loose object evaluation via Function constructor safely
+    try {
+      const sanitized = candidate
+        .replace(/^[^{]*/, '')
+        .replace(/[^}]*$/, '')
+        .replace(/,\s*([\}\]])/g, '$1');
+      const looseObj = new Function(`"use strict"; return (${sanitized});`)();
+      if (looseObj && typeof looseObj === 'object') {
+        return looseObj;
+      }
+    } catch {}
 
     throw new Error(`Format JSON dari AI terpotong atau tidak lengkap: ${err?.message || 'Sintaks tidak valid'}`);
   }

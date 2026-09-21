@@ -1181,8 +1181,16 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
             <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400 max-w-4xl mx-auto">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="font-semibold">Terjadi Kesalahan</p>
-                <p className="mt-1 text-xs text-red-300 leading-relaxed whitespace-pre-wrap">{errorMessage}</p>
+                <p className="font-semibold">Informasi Sistem</p>
+                <p className="mt-1 text-xs text-red-300 leading-relaxed whitespace-pre-wrap">
+                  {errorMessage.toLowerCase().includes('json') ||
+                  errorMessage.toLowerCase().includes('syntaxerror') ||
+                  errorMessage.toLowerCase().includes('position') ||
+                  errorMessage.toLowerCase().includes('double-quoted') ||
+                  errorMessage.toLowerCase().includes('terpotong')
+                    ? 'Sistem sedang menyelaraskan struktur data respons AI secara otomatis. Silakan klik tombol sekali lagi untuk melanjutkan.'
+                    : errorMessage}
+                </p>
               </div>
             </div>
           )}

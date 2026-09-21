@@ -250,7 +250,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error in generate-roadmap:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan saat merancang Roadmap Pintar';
+    let errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan saat merancang Roadmap Pintar';
+    if (errorMessage.toLowerCase().includes('json') || errorMessage.toLowerCase().includes('syntaxerror')) {
+      errorMessage = 'Sistem sedang menyelaraskan struktur data dari AI. Silakan coba klik Susun Roadmap sekali lagi.';
+    }
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

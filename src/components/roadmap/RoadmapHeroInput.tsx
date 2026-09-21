@@ -59,12 +59,7 @@ export function RoadmapHeroInput({ onGenerate, isLoading }: RoadmapHeroInputProp
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8 md:py-14 flex flex-col items-center">
       {/* Badge Header Modern & Elegan */}
-      <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs font-medium mb-5 shadow-xs">
-        <Compass className="w-3.5 h-3.5 text-amber-400" />
-        <span className="text-zinc-200 font-semibold tracking-wide">Pohon Keahlian & Kurikulum Terarah</span>
-        <span className="w-1 h-1 rounded-full bg-zinc-600" />
-        <span className="text-zinc-400 font-normal">Universal AI Learning Guide</span>
-      </div>
+      
 
       {/* Main Title & Subtitle */}
       <h1 className="text-3xl md:text-5xl font-bold text-center text-white tracking-tight leading-tight mb-4">

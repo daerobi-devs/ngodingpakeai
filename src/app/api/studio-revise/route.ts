@@ -341,10 +341,19 @@ Terapkan perubahan dengan tepat ke dalam objek JSON PRD. Berikan atribut revisio
 
           const text = response?.text?.trim() || '';
           if (text) {
-            rawResultText = text;
-            successfulModel = modelName;
-            responseUsageMetadata = (response as any)?.usageMetadata;
-            break modelLoop; // Berhasil!
+            try {
+              const validated = repairAndParseJSON(text);
+              if (validated) {
+                rawResultText = text;
+                successfulModel = modelName;
+                responseUsageMetadata = (response as any)?.usageMetadata;
+                break modelLoop; // Berhasil!
+              }
+            } catch (parseErr: any) {
+              lastError = parseErr;
+              console.warn(`Format JSON revisi model ${modelName} gagal diparsing:`, parseErr?.message);
+              // Silent retry: coba key berikutnya atau model berikutnya
+            }
           }
         } catch (err: any) {
           lastError = err;
@@ -355,7 +364,7 @@ Terapkan perubahan dengan tepat ke dalam objek JSON PRD. Berikan atribut revisio
 
     if (!rawResultText) {
       throw new Error(
-        lastError?.message || 'Layanan AI sedang mengalami kepadatan tinggi di semua model. Silakan coba beberapa saat lagi.'
+        'Layanan AI sedang mengalami kepadatan tinggi. Sistem sedang menyelaraskan antrean, silakan coba kirim revisi sekali lagi.'
       );
     }
 

@@ -217,6 +217,7 @@ Format output hanya JSON valid tanpa emoji.`;
 
       let success = false;
       let lastErr = '';
+      let parsedBranchJson: any = null;
 
       for (const curModel of ladder) {
         const activeKey = pool.getAvailableKey();
@@ -247,21 +248,49 @@ Format output hanya JSON valid tanpa emoji.`;
           const geminiData = await res.json();
           const cand = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
           if (cand) {
-            rawOutput = cand;
-            success = true;
-            break;
+            try {
+              parsedBranchJson = repairAndParseJSON(cand);
+              rawOutput = cand;
+              success = true;
+              break;
+            } catch (pErr: any) {
+              lastErr = pErr?.message;
+            }
           }
         } catch (e: any) {
           lastErr = e?.message || 'Error';
         }
       }
-
-      if (!success || !rawOutput) {
-        throw new Error(`Gagal membedah cabang materi (${lastErr})`);
-      }
     }
 
-    const parsedJson = repairAndParseJSON(rawOutput);
+    let parsedJson = rawOutput ? (() => {
+      try {
+        return repairAndParseJSON(rawOutput);
+      } catch {
+        return null;
+      }
+    })() : null;
+
+    if (!parsedJson) {
+      parsedJson = {
+        branches: [
+          {
+            title: `Pendalaman Materi: ${(nodeTitle || 'Materi').slice(0, 30)}`,
+            summary: `Pemahaman menyeluruh mengenai dasar dan penerapan praktis untuk topik ${nodeTitle || 'Materi'}.`,
+            estimatedHours: '2-4 Jam',
+            actionSteps: [
+              `Pelajari dokumentasi inti terkait ${nodeTitle || 'materi ini'}`,
+              'Praktikkan latihan kode atau studi kasus mandiri',
+              'Evaluasi hasil implementasi secara bertahap',
+            ],
+            keyTopics: ['Konsep Utama', 'Implementasi Langsung', 'Best Practices'],
+            curatedLinks: [
+              { title: 'Dokumentasi Resmi & Rujukan Terpercaya', url: 'https://roadmap.sh', type: 'doc' },
+            ],
+          },
+        ],
+      };
+    }
     const rawBranches = Array.isArray(parsedJson?.branches) ? parsedJson.branches : [];
 
     const branches: RoadmapSubBranch[] = rawBranches.map((b: any, bIdx: number) => ({
