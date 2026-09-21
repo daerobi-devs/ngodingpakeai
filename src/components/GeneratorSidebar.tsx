@@ -22,6 +22,7 @@ import {
   EyeOff,
   Compass,
   FileText,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PRDOutput } from '@/types/prd';
@@ -38,20 +39,11 @@ export interface PrdHistorySummary {
 }
 
 export const getHistoryItemType = (item: PrdHistorySummary): ProjectHistoryType => {
-  if (
-    item.project_type === 'roadmap' ||
-    item.prd_data?.type === 'roadmap' ||
-    item.id?.startsWith('roadmap') ||
-    (item.title && item.title.toLowerCase().startsWith('roadmap:'))
-  ) {
+  if (item.project_type) return item.project_type;
+  if (item.prd_data?.type === 'roadmap' || item.prd_data?.roadmap || item.title?.toLowerCase().startsWith('roadmap:')) {
     return 'roadmap';
   }
-  if (
-    item.project_type === 'studio' ||
-    item.prd_data?.isStudio ||
-    item.id?.startsWith('studio') ||
-    (item.title && item.title.toLowerCase().startsWith('studio:'))
-  ) {
+  if (item.prd_data?.isStudio) {
     return 'studio';
   }
   return 'prd';
@@ -75,6 +67,8 @@ interface GeneratorSidebarProps {
   onRefreshHistory?: () => void;
   creationMode: 'wizard' | 'studio' | 'roadmap';
   onSetCreationMode: (mode: 'wizard' | 'studio' | 'roadmap') => void;
+  isHubActive?: boolean;
+  onCreateModeSelect?: (mode: 'wizard' | 'studio' | 'roadmap') => void;
 }
 
 export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
@@ -95,6 +89,8 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
   onRefreshHistory,
   creationMode,
   onSetCreationMode,
+  isHubActive = false,
+  onCreateModeSelect,
 }) => {
   const {
     isPro,
@@ -113,6 +109,20 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isHistoryHidden, setIsHistoryHidden] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'prd' | 'studio' | 'roadmap'>('all');
+  const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+  const newMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
+        setIsNewMenuOpen(false);
+      }
+    };
+    if (isNewMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isNewMenuOpen]);
 
   const counts = React.useMemo(() => {
     let prd = 0;
@@ -174,7 +184,7 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
           type="button"
           onClick={onNewPrd}
           className="p-2.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 transition-colors mb-4 shadow-sm cursor-pointer"
-          title="Buat PRD Baru"
+          title="Buat Baru (+)"
         >
           <Plus className="h-5 w-5 stroke-[2.5]" />
         </button>
@@ -232,62 +242,160 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
         </button>
       </div>
 
-      {/* Main Action Section */}
-      <div className="p-3 space-y-2 border-b border-zinc-800/60">
-        <button
-          type="button"
-          onClick={onNewPrd}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-zinc-100 hover:bg-white py-2 px-3 text-xs font-bold text-zinc-950 transition-all shadow-sm active:scale-[0.98] cursor-pointer"
-        >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
-          <span>Buat PRD Baru</span>
-        </button>
-      </div>
-
-      {/* Mode Pembuatan Section */}
-      <div className="px-3 py-2.5 border-b border-zinc-800/60">
-        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2 px-0.5">
-          Mode Pembuatan
-        </span>
-        <div className="flex items-center rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-0.5 gap-0.5">
+      {/* Main Action Section with Adaptive '+ Buat Baru' and Dropdown */}
+      <div className="p-3 space-y-2 border-b border-zinc-800/60 relative" ref={newMenuRef}>
+        <div className="flex items-center rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 transition-all shadow-sm">
           <button
             type="button"
-            onClick={() => onSetCreationMode('wizard')}
-            className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
-              creationMode === 'wizard'
-                ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
-            }`}
-            title="Mode Terpandu (Wizard)"
+            onClick={() => {
+              setIsNewMenuOpen(false);
+              onNewPrd();
+            }}
+            className="flex-1 flex items-center justify-center gap-2 py-2 pl-3 pr-2 text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
+            title="Buat Proyek Baru"
           >
-            <span className="truncate">Terpandu</span>
+            <Plus className="h-4 w-4 stroke-[2.5]" />
+            <span>
+              {creationMode === 'roadmap' && !isHubActive
+                ? 'Buat Roadmap'
+                : creationMode === 'studio' && !isHubActive
+                ? 'Buat Studio'
+                : 'Buat Baru'}
+            </span>
           </button>
+          <div className="w-[1px] h-4 bg-zinc-300" />
           <button
             type="button"
-            onClick={() => onSetCreationMode('studio')}
-            className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
-              creationMode === 'studio'
-                ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
-            }`}
-            title="Mode Studio (Dokumen & Chat AI)"
+            onClick={() => setIsNewMenuOpen(!isNewMenuOpen)}
+            className="p-2 hover:bg-zinc-200 rounded-r-xl transition-colors cursor-pointer text-zinc-800"
+            title="Pilih Jenis Pembuatan"
           >
-            <span className="truncate">Studio</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onSetCreationMode('roadmap')}
-            className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
-              creationMode === 'roadmap'
-                ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
-            }`}
-            title="Mode Roadmap Pintar (AI Skill & Career Tree)"
-          >
-            <span className="truncate">Roadmap</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isNewMenuOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
+
+        {/* Dropdown Menu */}
+        {isNewMenuOpen && (
+          <div className="absolute left-3 right-3 top-[calc(100%-4px)] z-50 rounded-xl border border-zinc-700 bg-zinc-900 p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <button
+              type="button"
+              onClick={() => {
+                setIsNewMenuOpen(false);
+                if (onCreateModeSelect) {
+                  onCreateModeSelect('wizard');
+                } else {
+                  onSetCreationMode('wizard');
+                  onNewPrd();
+                }
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors text-left cursor-pointer"
+            >
+              <FileText className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <div>
+                <div className="font-bold text-zinc-100">PRD Terpadu</div>
+                <div className="text-[10px] text-zinc-400">Bimbingan 3 langkah AI</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsNewMenuOpen(false);
+                if (onCreateModeSelect) {
+                  onCreateModeSelect('studio');
+                } else {
+                  onSetCreationMode('studio');
+                  onNewPrd();
+                }
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors text-left cursor-pointer"
+            >
+              <Layers className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+              <div>
+                <div className="font-bold text-zinc-100">Studio Spec &amp; Kanban</div>
+                <div className="text-[10px] text-zinc-400">Spesifikasi MCP &amp; Agent</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsNewMenuOpen(false);
+                if (onCreateModeSelect) {
+                  onCreateModeSelect('roadmap');
+                } else {
+                  onSetCreationMode('roadmap');
+                  onNewPrd();
+                }
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors text-left cursor-pointer"
+            >
+              <Compass className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-zinc-100">Roadmap Belajar &amp; Mentor</div>
+                <div className="text-[10px] text-zinc-400">Pohon skill &amp; AI Mentor</div>
+              </div>
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Mode Pembuatan Section - Sembunyikan saat di Welcome Hub agar tidak dobel dengan kartu tengah/topbar */}
+      {!isHubActive && (
+        <div className="px-3 py-2.5 border-b border-zinc-800/60">
+          <div className="flex items-center justify-between mb-2 px-0.5">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+              Mode Aktif
+            </span>
+            <button
+              type="button"
+              onClick={onNewPrd}
+              className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold transition-colors cursor-pointer"
+              title="Kembali ke Pilihan Alur Kerja"
+            >
+              Ganti Alur
+            </button>
+          </div>
+          <div className="flex items-center rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-0.5 gap-0.5">
+            <button
+              type="button"
+              onClick={() => onSetCreationMode('wizard')}
+              className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
+                creationMode === 'wizard'
+                  ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
+              }`}
+              title="Mode Terpandu (Wizard)"
+            >
+              <span className="truncate">Terpandu</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetCreationMode('studio')}
+              className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
+                creationMode === 'studio'
+                  ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
+              }`}
+              title="Mode Studio (Dokumen & Chat AI)"
+            >
+              <span className="truncate">Studio</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetCreationMode('roadmap')}
+              className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
+                creationMode === 'roadmap'
+                  ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
+              }`}
+              title="Mode Roadmap Pintar (AI Skill & Career Tree)"
+            >
+              <span className="truncate">Roadmap</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Projects History Section */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">

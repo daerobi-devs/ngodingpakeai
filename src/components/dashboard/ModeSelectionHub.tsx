@@ -171,9 +171,9 @@ export function ModeSelectionHub({
             {/* Action Button */}
             <button
               type="button"
-              className={`w-full py-2 px-3.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 isLight
-                  ? 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                  ? 'bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs'
                   : 'bg-zinc-100 hover:bg-white text-zinc-950 shadow-xs'
               }`}
             >
@@ -329,14 +329,14 @@ export function ModeSelectionHub({
             {/* Action Button */}
             <button
               type="button"
-              className={`w-full py-2 px-3.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
                 isLight
-                  ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-900 border-zinc-300'
-                  : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-100 border-zinc-700 hover:border-zinc-600'
+                  ? 'bg-white hover:bg-zinc-100 text-zinc-900 border-2 border-zinc-400 hover:border-zinc-700 shadow-xs'
+                  : 'bg-zinc-900 hover:bg-zinc-850 text-white border border-zinc-500 hover:border-amber-400 group-hover:border-zinc-300 shadow-xs'
               }`}
             >
               <span>Masuk ke Mode Studio</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform text-amber-400" />
             </button>
           </div>
         </div>
@@ -490,14 +490,14 @@ export function ModeSelectionHub({
             {/* Action Button */}
             <button
               type="button"
-              className={`w-full py-2 px-3.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
                 isLight
-                  ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-900 border-zinc-300'
-                  : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-100 border-zinc-700 hover:border-zinc-600'
+                  ? 'bg-white hover:bg-zinc-100 text-zinc-900 border-2 border-zinc-400 hover:border-zinc-700 shadow-xs'
+                  : 'bg-zinc-900 hover:bg-zinc-850 text-white border border-zinc-500 hover:border-emerald-400 group-hover:border-zinc-300 shadow-xs'
               }`}
             >
               <span>Eksplorasi Roadmap</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform text-emerald-400" />
             </button>
           </div>
         </div>

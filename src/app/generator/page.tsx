@@ -106,7 +106,7 @@ function GeneratorContent() {
   } = useAuth();
   const [keys, setKeys] = useState<string[]>([]);
   const [preferredModel, setPreferredModel] = useState<string>('gemini-3.8-flash');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePrdId, setActivePrdId] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<PrdHistorySummary[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -388,6 +388,25 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     setDiscoveryQuestions([]);
     setErrorMessage(null);
     setShowModeHub(true);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsSidebarOpen(false);
+    }
+  };
+
+  const handleCreateNew = (targetMode?: 'wizard' | 'studio' | 'roadmap') => {
+    setActivePrdId(null);
+    setGeneratedPRD(null);
+    setActiveRoadmap(null);
+    setFormData(INITIAL_FORM_DATA);
+    setWizardStep('input');
+    setWizardIdea('');
+    setDiscoveryQuestions([]);
+    setErrorMessage(null);
+    if (targetMode) {
+      handleSelectCreationMode(targetMode);
+    } else {
+      setShowModeHub(true);
+    }
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
@@ -854,6 +873,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           onRefreshHistory={fetchUserHistory}
           creationMode={creationMode}
           onSetCreationMode={handleSelectCreationMode}
+          isHubActive={showModeHub && !generatedPRD && !activeRoadmap}
+          onCreateModeSelect={(mode) => handleCreateNew(mode)}
         />
       </div>
 
