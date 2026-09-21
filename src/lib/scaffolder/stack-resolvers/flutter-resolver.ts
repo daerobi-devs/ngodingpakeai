@@ -2,18 +2,22 @@ import type JSZip from "jszip";
 import type { PRDOutput } from "@/types/prd";
 import { getNormalizedFeatures } from "./nextjs-resolver";
 
-function slugify(text: string): string {
-  return text
+export function toSafeDartPackageName(text: string): string {
+  let slug = text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/(^_|_$)+/g, "");
+  if (!slug || !/^[a-z]/.test(slug)) {
+    slug = "app_" + (slug || "starter");
+  }
+  return slug;
 }
 
 /**
  * Generates a Flutter (Dart) mobile starter codebase.
  */
 export function resolveFlutterStack(targetFolder: JSZip, prd: PRDOutput): void {
-  const projectName = slugify(prd.title) || "flutter_app";
+  const projectName = toSafeDartPackageName(prd.title);
   const features = getNormalizedFeatures(prd);
 
   // 1. pubspec.yaml

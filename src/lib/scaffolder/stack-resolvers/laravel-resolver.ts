@@ -9,11 +9,19 @@ function slugify(text: string): string {
     .replace(/(^-|-$)+/g, "");
 }
 
+export function toSafeComposerPackageName(text: string): string {
+  let slug = slugify(text);
+  if (!slug || !/^[a-z0-9]/.test(slug)) {
+    slug = "app-" + (slug || "starter");
+  }
+  return slug.slice(0, 50);
+}
+
 /**
  * Generates a PHP Laravel starter codebase structure.
  */
 export function resolveLaravelStack(targetFolder: JSZip, prd: PRDOutput): void {
-  const projectName = slugify(prd.title) || "laravel-app";
+  const projectName = toSafeComposerPackageName(prd.title);
   const features = getNormalizedFeatures(prd);
 
   // 1. composer.json
@@ -77,7 +85,11 @@ Route::get('/health', function () {
 ${features
   .map((f) => {
     const slug = slugify(f.name);
-    return `Route::get('/v1/${slug}', function () {
+    return `/**
+ * Modul: ${f.name} [${f.priority}]
+ * User Story: ${f.user_story.replace(/'/g, "\\'")}
+ */
+Route::get('/v1/${slug}', function () {
     return response()->json([
         'feature' => '${f.name.replace(/'/g, "\\'")}',
         'priority' => '${f.priority}',

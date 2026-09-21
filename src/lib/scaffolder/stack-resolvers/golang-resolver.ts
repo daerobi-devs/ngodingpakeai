@@ -9,11 +9,19 @@ function slugify(text: string): string {
     .replace(/(^-|-$)+/g, "");
 }
 
+export function toSafeGoModuleName(text: string): string {
+  let slug = slugify(text);
+  if (!slug || !/^[a-z0-9]/.test(slug)) {
+    slug = "app-" + (slug || "server");
+  }
+  return slug;
+}
+
 /**
  * Generates a Go standard layout starter codebase using net/http or Gin.
  */
 export function resolveGolangStack(targetFolder: JSZip, prd: PRDOutput): void {
-  const moduleName = slugify(prd.title) || "goserver";
+  const moduleName = toSafeGoModuleName(prd.title);
   const features = getNormalizedFeatures(prd);
 
   // 1. go.mod
@@ -64,20 +72,22 @@ func main() {
 		json.NewEncoder(w).Encode(resp)
 	})
 
-	// Dynamic Feature Handlers
+	// Dynamic Feature Handlers (Contract Skeletons)
 ${features
   .map((f) => {
     const slug = slugify(f.name);
-    return `\tmux.HandleFunc("GET /api/v1/${slug}", func(w http.ResponseWriter, r *http.Request) {
+    return `\t// Modul: ${f.name} [${f.priority}]
+\t// User Story: ${f.user_story.replace(/"/g, '\\"')}
+\tmux.HandleFunc("GET /api/v1/${slug}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"feature": "${f.name.replace(/"/g, '\\"')}",
+			"feature":  "${f.name.replace(/"/g, '\\"')}",
 			"priority": "${f.priority}",
-			"status": "ready",
+			"status":   "ready",
 		})
 	})`;
   })
-  .join("\n")}
+  .join("\n\n")}
 
 	server := &http.Server{
 		Addr:         ":" + port,

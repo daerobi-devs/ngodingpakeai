@@ -2,18 +2,28 @@ import type JSZip from "jszip";
 import type { PRDOutput } from "@/types/prd";
 import { getNormalizedFeatures } from "./nextjs-resolver";
 
-function slugify(text: string): string {
-  return text
+export function toSafePythonModuleName(text: string): string {
+  let s = text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/(^_|_$)+/g, "");
+  if (!s || /^[0-9]/.test(s)) {
+    s = "mod_" + (s || "endpoint");
+  }
+  const pyKeywords = [
+    "def", "class", "import", "from", "pass", "return", "for", "while",
+    "if", "else", "elif", "try", "except", "with", "as", "global",
+    "nonlocal", "lambda", "yield", "async", "await", "and", "or", "not", "is", "in"
+  ];
+  if (pyKeywords.includes(s)) s = s + "_module";
+  return s;
 }
 
 /**
  * Generates a clean, modular Python FastAPI starter codebase.
  */
 export function resolvePythonFastApiStack(targetFolder: JSZip, prd: PRDOutput): void {
-  const projectName = slugify(prd.title) || "fastapi_app";
+  const projectName = toSafePythonModuleName(prd.title) || "fastapi_app";
   const features = getNormalizedFeatures(prd);
 
   // 1. requirements.txt
@@ -100,11 +110,18 @@ ENV/
 `
   );
 
-  // 5. app/core/config.py
+  // 5. Package Inits (__init__.py)
+  targetFolder.file("app/__init__.py", `"""App package."""\n`);
+  targetFolder.file("app/core/__init__.py", `"""App core package."""\n`);
+  targetFolder.file("app/api/__init__.py", `"""App API package."""\n`);
+  targetFolder.file("app/api/v1/__init__.py", `"""App API v1 package."""\n`);
+  targetFolder.file("app/api/v1/endpoints/__init__.py", `"""App API v1 endpoints package."""\n`);
+
+  // 6. app/core/config.py
   targetFolder.file(
     "app/core/config.py",
     `from typing import List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "${prd.title.replace(/"/g, '\\"')}"
@@ -113,9 +130,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/${projectName}"
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]
 
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
+    model_config = SettingsConfigDict(case_sensitive=True, env_file=".env", extra="ignore")
 
 settings = Settings()
 `
@@ -173,7 +188,7 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
   const routerIncludes: string[] = [];
 
   for (const feat of features) {
-    const featSlug = slugify(feat.name);
+    const featSlug = toSafePythonModuleName(feat.name);
     routerImports.push(`from app.api.v1.endpoints import ${featSlug}`);
     routerIncludes.push(`api_router.include_router(${featSlug}.router, prefix="/${featSlug.replace(/_/g, "-")}", tags=["${feat.name}"])`);
   }
@@ -191,7 +206,7 @@ ${routerIncludes.join("\n")}
 
   // 8. app/api/v1/endpoints/*.py
   for (const feat of features) {
-    const featSlug = slugify(feat.name);
+    const featSlug = toSafePythonModuleName(feat.name);
     const pascalName = featSlug
       .split("_")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))

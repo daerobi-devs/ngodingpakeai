@@ -14,6 +14,30 @@ export function slugify(text: string): string {
     .replace(/(^-|-$)+/g, "");
 }
 
+export function toPascalCase(text: string): string {
+  return text
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join("");
+}
+
+export function toSafeIdentifier(text: string, suffix: string = ""): string {
+  let id = toPascalCase(text);
+  if (!id) id = "Module";
+  if (/^[0-9]/.test(id)) id = "_" + id;
+  return `${id}${suffix}`;
+}
+
+export function toSafeNpmPackageName(text: string): string {
+  let slug = slugify(text);
+  if (!slug || !/^[a-z0-9]/.test(slug)) {
+    slug = "app-" + (slug || "starter");
+  }
+  return slug.slice(0, 214);
+}
+
 /**
  * Normalizes features from PRD: uses feature_breakdown if present,
  * or dynamically synthesizes from boundaries.scope if feature_breakdown is empty.
@@ -28,10 +52,7 @@ export function getNormalizedFeatures(prd: PRDOutput): DeepFeature[] {
   if (scope.length > 0) {
     return scope.map((name, idx) => {
       const cleanSlug = slugify(name);
-      const pascalName = cleanSlug
-        .split("-")
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join("");
+      const pascalName = toSafeIdentifier(name);
 
       return {
         id: `feat-${idx + 1}`,
@@ -167,7 +188,7 @@ export function resolveNextJsStack(targetFolder: JSZip, prd: PRDOutput): void {
   const roles = extractRoles(prd);
   const isMultiRole = roles.length >= 2;
   const features = getNormalizedFeatures(prd);
-  const projectName = slugify(prd.title) || "app-starter";
+  const projectName = toSafeNpmPackageName(prd.title);
 
   // 1. package.json
   targetFolder.file(
@@ -184,10 +205,10 @@ export function resolveNextJsStack(targetFolder: JSZip, prd: PRDOutput): void {
           lint: "next lint",
         },
         dependencies: {
-          next: "^15.2.0",
+          next: "^16.0.0",
           react: "^19.0.0",
           "react-dom": "^19.0.0",
-          "lucide-react": "^1.16.0",
+          "lucide-react": "^1.46.0",
           clsx: "^2.1.1",
           "tailwind-merge": "^3.0.2",
         },
@@ -576,7 +597,7 @@ ${(feat.business_rules || []).map((rule) => ` *   - ${rule}`).join("\n")}
 import { CheckCircle2, ArrowLeft, Layers, Database, Globe } from "lucide-react";
 import Link from "next/link";
 
-export default function ${fSlug.replace(/-/g, "_")}_Page() {
+export default function ${toSafeIdentifier(feat.name, "Page")}() {
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
@@ -763,6 +784,9 @@ export default function PortalChooserPage() {
     // Populate each role route group
     for (const role of roles) {
       const roleFeatures = featureMap.get(role.slug) || [];
+      const sidebarComp = toSafeIdentifier(role.name, "Sidebar");
+      const layoutComp = toSafeIdentifier(role.name, "Layout");
+      const pageComp = toSafeIdentifier(role.name, "DashboardPage");
 
       targetFolder.file(
         `src/components/${role.slug}/Sidebar.tsx`,
@@ -772,7 +796,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Layers, LogOut } from "lucide-react";
 
-export function ${role.name}Sidebar() {
+export function ${sidebarComp}() {
   const pathname = usePathname();
 
   return (
@@ -823,16 +847,16 @@ export function ${role.name}Sidebar() {
 
       targetFolder.file(
         `src/app/(${role.slug})/layout.tsx`,
-        `import { ${role.name}Sidebar } from "@/components/${role.slug}/Sidebar";
+        `import { ${sidebarComp} } from "@/components/${role.slug}/Sidebar";
 
-export default function ${role.name}Layout({
+export default function ${layoutComp}({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex">
-      <${role.name}Sidebar />
+      <${sidebarComp} />
       <main className="flex-1 ml-64 p-6 min-w-0 overflow-y-auto">
         {children}
       </main>
@@ -847,7 +871,7 @@ export default function ${role.name}Layout({
         `import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-export default function ${role.name}Page() {
+export default function ${pageComp}() {
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="border-b border-zinc-800 pb-5">
@@ -891,45 +915,132 @@ export default function ${role.name}Page() {
       // Feature sub-routes for this role
       for (const feat of roleFeatures) {
         const fSlug = slugify(feat.name);
+        const featPageComp = toSafeIdentifier(role.name + "_" + feat.name, "Page");
+
         targetFolder.file(
           `src/app/(${role.slug})/${fSlug}/page.tsx`,
-          `import Link from "next/link";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+          `/**
+ * =========================================================================
+ * MODUL: ${feat.name} [${feat.priority}]
+ * PORTAL: ${role.name}
+ * =========================================================================
+ * User Story:
+ * ${feat.user_story}
+ *
+ * Alur Kerja (Happy Path):
+${(feat.happy_path || []).map((step, sIdx) => ` *   ${sIdx + 1}. ${step}`).join("\n")}
+ *
+ * Aturan Bisnis & Validasi:
+${(feat.business_rules || []).map((rule) => ` *   - ${rule}`).join("\n")}
+ *
+ * Tech Mapping:
+ * - Endpoints: ${(feat.tech_mapping?.api_endpoints || []).join(", ") || "-"}
+ * - Tables: ${(feat.tech_mapping?.db_tables || []).join(", ") || "-"}
+ * =========================================================================
+ */
 
-export default function ${role.name}_${fSlug.replace(/-/g, "_")}_Page() {
+import { CheckCircle2, ArrowLeft, Layers, Database, Globe } from "lucide-react";
+import Link from "next/link";
+
+export default function ${featPageComp}() {
   return (
     <div className="space-y-6 max-w-5xl">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-5">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-800 pb-5">
         <div>
           <div className="flex items-center gap-2">
             <span className="rounded bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-400 border border-blue-500/20">
               ${feat.priority}
             </span>
-            <h1 className="text-lg font-bold text-white">${feat.name.replace(/"/g, '\\"')}</h1>
+            <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+              Portal ${role.name}
+            </span>
+            <h1 className="text-lg font-bold tracking-tight text-white">${feat.name.replace(/"/g, '\\"')}</h1>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">${feat.user_story.replace(/"/g, '\\"')}</p>
+          <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+            ${feat.user_story.replace(/"/g, '\\"')}
+          </p>
         </div>
+
         <Link
           href="/${role.slug}"
           className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 transition"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Kembali</span>
+          <span>Kembali ke ${role.name}</span>
         </Link>
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
-        <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">Alur Kerja Utama</h3>
-        <div className="space-y-2">
-          ${(feat.happy_path || ["Inisialisasi modul", "Proses data", "Selesai"])
-            .map(
-              (step, idx) => `
-          <div key={${idx}} className="flex items-start gap-3 rounded-lg border border-zinc-800/60 bg-zinc-900/60 p-3 text-xs text-zinc-300">
-            <span className="font-mono text-blue-400 font-bold">${idx + 1}.</span>
-            <span>${step.replace(/"/g, '\\"')}</span>
-          </div>`
+      {/* Alur Kerja & Aturan Bisnis */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">
+            <Layers className="h-4 w-4 text-blue-400" />
+            <span>Alur Kerja (Happy Path)</span>
+          </div>
+          <div className="space-y-2">
+            ${(feat.happy_path || ["Inisialisasi modul", "Validasi parameter input", "Eksekusi proses"])
+              .map(
+                (step, idx) => `
+            <div key={${idx}} className="flex items-start gap-3 rounded-lg border border-zinc-800/60 bg-zinc-900/60 p-3">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/10 font-mono text-[10px] font-bold text-blue-400 border border-blue-500/20">
+                ${idx + 1}
+              </span>
+              <p className="text-xs text-zinc-300 leading-relaxed">${step.replace(/"/g, '\\"')}</p>
+            </div>`
+              )
+              .join("")}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span>Aturan Bisnis & Validasi</span>
+          </div>
+          <div className="space-y-2">
+            ${(feat.business_rules || ["Otorisasi hak akses peran wajib tervalidasi."])
+              .map(
+                (rule, idx) => `
+            <div key={${idx}} className="flex items-start gap-2.5 text-xs text-zinc-300 rounded-lg border border-zinc-800/60 bg-zinc-900/60 p-3">
+              <span className="font-mono text-emerald-400 text-xs mt-0.5">•</span>
+              <span className="leading-relaxed">${rule.replace(/"/g, '\\"')}</span>
+            </div>`
+              )
+              .join("")}
+          </div>
+        </div>
+      </div>
+
+      {/* Tech Mapping */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 font-mono">
+            <Globe className="h-3.5 w-3.5 text-blue-400" />
+            <span>Endpoint API Terkait</span>
+          </div>
+          <div className="space-y-1 font-mono text-[11px] text-blue-400">
+            ${((feat.tech_mapping?.api_endpoints || []).length > 0
+              ? feat.tech_mapping!.api_endpoints!
+              : [`/api/v1/${role.slug}/${fSlug}`]
             )
-            .join("")}
+              .map((ep) => `<div className="bg-zinc-950 px-2.5 py-1.5 rounded border border-zinc-800/80">${ep}</div>`)
+              .join("")}
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300 font-mono">
+            <Database className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Tabel Database</span>
+          </div>
+          <div className="space-y-1 font-mono text-[11px] text-emerald-400">
+            ${((feat.tech_mapping?.db_tables || []).length > 0
+              ? feat.tech_mapping!.db_tables!
+              : [fSlug.replace(/-/g, "_")]
+            )
+              .map((tb) => `<div className="bg-zinc-950 px-2.5 py-1.5 rounded border border-zinc-800/80">${tb}</div>`)
+              .join("")}
+          </div>
         </div>
       </div>
     </div>

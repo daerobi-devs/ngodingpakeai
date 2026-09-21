@@ -98,6 +98,18 @@ docker compose up --build
   if (frontendFolder) {
     if (frontendType === "nextjs") {
       resolveNextJsStack(frontendFolder, prd);
+      frontendFolder.file(
+        "Dockerfile",
+        `FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "run", "start"]
+`
+      );
     } else if (frontendType === "flutter") {
       resolveFlutterStack(frontendFolder, prd);
     } else {
@@ -110,10 +122,44 @@ docker compose up --build
   if (backendFolder) {
     if (backendType === "python") {
       resolvePythonFastApiStack(backendFolder, prd);
+      backendFolder.file(
+        "Dockerfile",
+        `FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+`
+      );
     } else if (backendType === "golang") {
       resolveGolangStack(backendFolder, prd);
+      backendFolder.file(
+        "Dockerfile",
+        `FROM golang:1.23-alpine AS builder
+WORKDIR /app
+COPY go.mod ./
+COPY . .
+RUN go build -o server cmd/server/main.go
+EXPOSE 8080
+CMD ["./server"]
+`
+      );
     } else if (backendType === "laravel") {
       resolveLaravelStack(backendFolder, prd);
+      backendFolder.file(
+        "Dockerfile",
+        `FROM php:8.2-cli-alpine
+WORKDIR /app
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY composer*.json ./
+RUN composer install --no-scripts
+COPY . .
+EXPOSE 8000
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+`
+      );
     } else {
       resolveGenericStack(backendFolder, prd);
     }
