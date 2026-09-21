@@ -235,7 +235,7 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
         <button
           type="button"
           onClick={onToggle}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors"
+          className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
           title="Tutup Sidebar Workspace"
         >
           <PanelLeftClose className="h-4 w-4" />
