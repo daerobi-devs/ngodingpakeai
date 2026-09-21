@@ -80,18 +80,15 @@ globs: "**/*"
 
 # Architecture Boundaries & Modular Layouts
 
-## 1. Multi-Surface App Shell Separation
-When the project has public visitors, authenticated users, and administrative roles, separate the layout into independent Route Groups:
-1. Public Marketing Surface (\`(marketing)/\`)
-   - High-conversion Landing Page with Hero, Feature grid, and Social proof.
-   - Independent lightweight navbar and footer.
-2. User/Role Dashboard Surfaces (\`([role_slug])/\` or \`(dashboard)/\`)
-   - Left Collapsible Sidebar (w-64 on desktop, w-16 icon-only mode when collapsed).
-   - Sticky Top Header with Breadcrumbs, Global Search (Cmd+K), and User Profile.
-   - Mobile sheet navigation on small viewports (< 768px).
-3. Admin Surface (\`(admin)/\`)
-   - Dedicated administrative sidebar with privileged operations.
-   - High-density data tables with sorting, filtering, and status chips.
+## 1. Application Layout & Domain Separation
+Organize routes and layouts directly matching the PRD specification:
+1. Root Application Shell (\`src/app/\`):
+   - Entry point: \`src/app/page.tsx\` directly represents the core application interface or dashboard.
+   - Distinct role portals (\`src/app/([role])/\`) are used ONLY when the PRD explicitly specifies multiple distinct user personas.
+   - Do NOT create unnecessary or irrelevant route groups (e.g. do NOT create a marketing folder for developer tools, internal engines, or dashboards).
+2. Navigation & Shell:
+   - Sidebar or Header with dynamic feature links derived directly from \`feature_breakdown\` in the PRD.
+   - Breadcrumbs, Search, and Status chips for active modules.
 
 ## 2. Component Layering
 - \`components/ui/\`: Primitives (Button, Input, Card, Dialog, Badge, Table).
