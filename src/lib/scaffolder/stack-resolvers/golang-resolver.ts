@@ -1,5 +1,6 @@
 import type JSZip from "jszip";
 import type { PRDOutput } from "@/types/prd";
+import { getNormalizedFeatures } from "./nextjs-resolver";
 
 function slugify(text: string): string {
   return text
@@ -13,7 +14,7 @@ function slugify(text: string): string {
  */
 export function resolveGolangStack(targetFolder: JSZip, prd: PRDOutput): void {
   const moduleName = slugify(prd.title) || "goserver";
-  const features = prd.feature_breakdown || [];
+  const features = getNormalizedFeatures(prd);
 
   // 1. go.mod
   targetFolder.file(

@@ -7,44 +7,7 @@ export interface ParsedRole {
   description: string;
 }
 
-/**
- * Extracts distinct user roles ONLY if explicitly mentioned in target_audience.
- * If no distinct multiple roles exist, returns an empty array to indicate a unified application.
- */
-export function extractRoles(prd: PRDOutput): ParsedRole[] {
-  const audience = (prd.archetype_detection?.target_audience || "").toLowerCase();
-  const detected: ParsedRole[] = [];
-
-  const roleKeywords: Array<{ pattern: RegExp; name: string; slug: string; desc: string }> = [
-    { pattern: /\b(dokter|doctor|medis)\b/, name: "Dokter", slug: "dokter", desc: "Portal Manajemen Medis & Pasien" },
-    { pattern: /\b(pasien|patient)\b/, name: "Pasien", slug: "pasien", desc: "Portal Pasien & Reservasi Layanan" },
-    { pattern: /\b(guru|pengajar|dosen|teacher)\b/, name: "Guru", slug: "guru", desc: "Portal Guru & Manajemen Kelas" },
-    { pattern: /\b(siswa|student|murid|mahasiswa)\b/, name: "Siswa", slug: "siswa", desc: "Portal Siswa & Pembelajaran" },
-    { pattern: /\b(merchant|seller|penjual|vendor)\b/, name: "Merchant", slug: "merchant", desc: "Portal Merchant & Penjualan" },
-    { pattern: /\b(kurir|courier|driver)\b/, name: "Kurir", slug: "kurir", desc: "Portal Logistik & Pengantaran" },
-  ];
-
-  for (const item of roleKeywords) {
-    if (item.pattern.test(audience)) {
-      if (!detected.some((r) => r.slug === item.slug)) {
-        detected.push({ name: item.name, slug: item.slug, description: item.desc });
-      }
-    }
-  }
-
-  // Only return roles if at least 2 distinct roles are explicitly detected (e.g. Dokter & Pasien)
-  if (detected.length >= 2) {
-    if (audience.includes("admin") && !detected.some((r) => r.slug === "admin")) {
-      detected.push({ name: "Admin", slug: "admin", description: "Pusat Kontrol & Pengaturan Sistem" });
-    }
-    return detected;
-  }
-
-  // Otherwise, return empty to treat as a clean unified application
-  return [];
-}
-
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -52,13 +15,158 @@ function slugify(text: string): string {
 }
 
 /**
- * Generates a clean Next.js starter codebase strictly tailored to the PRD.
- * NO fake marketing folders, NO boilerplate sales hero sections.
+ * Normalizes features from PRD: uses feature_breakdown if present,
+ * or dynamically synthesizes from boundaries.scope if feature_breakdown is empty.
+ * Guarantees that every PRD produces real feature files matching its actual content.
+ */
+export function getNormalizedFeatures(prd: PRDOutput): DeepFeature[] {
+  if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+    return prd.feature_breakdown;
+  }
+
+  const scope = prd.boundaries?.scope || [];
+  if (scope.length > 0) {
+    return scope.map((name, idx) => {
+      const cleanSlug = slugify(name);
+      const pascalName = cleanSlug
+        .split("-")
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join("");
+
+      return {
+        id: `feat-${idx + 1}`,
+        name,
+        priority: idx < 3 ? "P0" : "P1",
+        user_story: `Sebagai pengguna, saya ingin mengoperasikan modul ${name} untuk mendukung alur kerja sistem.`,
+        happy_path: [`Akses modul ${name}`, `Validasi parameter input`, `Proses data ${name}`],
+        business_rules: [`Data pada modul ${name} harus tervalidasi sebelum dieksekusi.`],
+        edge_cases: [`Penanganan timeout atau kegagalan koneksi pada ${name}.`],
+        tech_mapping: {
+          frontend_components: [`${pascalName}View`],
+          api_endpoints: [`/api/v1/${cleanSlug}`],
+          db_tables: [cleanSlug.replace(/-/g, "_")],
+        },
+        agent_prompt: `Implementasikan arsitektur modul ${name} sesuai spesifikasi PRD.`,
+      };
+    });
+  }
+
+  return [
+    {
+      id: "feat-core",
+      name: "Core System Engine",
+      priority: "P0",
+      user_story: "Sebagai pengguna, saya dapat menjalankan modul pemrosesan utama sistem.",
+      happy_path: ["Inisialisasi sistem", "Proses data", "Tampilkan hasil"],
+      business_rules: ["Validasi input wajib dipenuhi."],
+      edge_cases: ["Error handling pada kegagalan eksekusi."],
+      tech_mapping: {
+        api_endpoints: ["/api/v1/core"],
+        db_tables: ["core_records"],
+      },
+      agent_prompt: "Bangun modul inti sistem.",
+    },
+  ];
+}
+
+/**
+ * Dynamically extracts roles directly from PRD user stories and target_audience.
+ * ZERO hardcoded role lists. If there are 2 or more distinct roles (e.g. Kasir & Koki,
+ * Dokter & Pasien, Mandor & Operator), it dynamically generates portals for them.
+ * If single-user / tool / engine, returns empty array to keep a clean unified layout.
+ */
+export function extractRoles(prd: PRDOutput): ParsedRole[] {
+  const detected: ParsedRole[] = [];
+  const audience = prd.archetype_detection?.target_audience || "";
+  const features = prd.feature_breakdown || [];
+
+  // 1. Dynamically parse from User Stories ("Sebagai [Role]..." or "As a [Role]...")
+  for (const feat of features) {
+    const story = feat.user_story || "";
+    const matchId = story.match(/(?:sebagai|untuk)\s+([A-Za-z0-9\s_-]+?)(?:,|\s+saya|\s+agar|\s+kami|\s+bisa|\s+dapat|\.)/i);
+    const matchEn = story.match(/as\s+(?:a|an)\s+([A-Za-z0-9\s_-]+?)(?:,|\s+i\s+want|\s+i\s+can|\s+so\s+that|\.)/i);
+    const rawRole = (matchId?.[1] || matchEn?.[1] || "").trim();
+
+    if (rawRole && rawRole.length >= 3 && rawRole.length <= 25) {
+      const slug = slugify(rawRole);
+      const ignored = ["user", "pengguna", "sistem", "system", "aplikasi", "semua", "publik", "guest"];
+      if (!detected.some((r) => r.slug === slug) && !ignored.includes(slug)) {
+        detected.push({
+          name: rawRole.charAt(0).toUpperCase() + rawRole.slice(1),
+          slug,
+          description: `Portal Akses & Manajemen ${rawRole}`,
+        });
+      }
+    }
+  }
+
+  // 2. Dynamically parse from target_audience string (split by comma, dan, and, &, /)
+  if (audience) {
+    const segments = audience.split(/[,/&]|\s+dan\s+|\s+and\s+/i);
+    for (let seg of segments) {
+      seg = seg.trim().replace(/^(para|semua|calon|seluruh|staf|tim)\s+/i, "").trim();
+      if (seg && seg.length >= 3 && seg.length <= 25) {
+        const slug = slugify(seg);
+        const ignored = ["user", "pengguna", "semua", "publik", "umum", "anyone", "masyarakat"];
+        if (!detected.some((r) => r.slug === slug) && !ignored.includes(slug)) {
+          detected.push({
+            name: seg.charAt(0).toUpperCase() + seg.slice(1),
+            slug,
+            description: `Portal ${seg}`,
+          });
+        }
+      }
+    }
+  }
+
+  // If at least 2 distinct operational roles are found, treat as multi-role system
+  if (detected.length >= 2) {
+    return detected;
+  }
+
+  // Otherwise, return empty for clean single unified app
+  return [];
+}
+
+/**
+ * Assigns features to their corresponding role if multi-role system is active.
+ */
+export function mapFeaturesToRoles(features: DeepFeature[], roles: ParsedRole[]): Map<string, DeepFeature[]> {
+  const mapping = new Map<string, DeepFeature[]>();
+  for (const role of roles) {
+    mapping.set(role.slug, []);
+  }
+
+  const defaultRoleSlug = roles[0].slug;
+
+  for (const feat of features) {
+    const context = `${feat.name} ${feat.user_story} ${(feat.business_rules || []).join(" ")}`.toLowerCase();
+    let assigned = false;
+
+    for (const role of roles) {
+      if (context.includes(role.slug) || context.includes(role.name.toLowerCase())) {
+        mapping.get(role.slug)?.push(feat);
+        assigned = true;
+        break;
+      }
+    }
+
+    if (!assigned) {
+      mapping.get(defaultRoleSlug)?.push(feat);
+    }
+  }
+
+  return mapping;
+}
+
+/**
+ * Generates a clean, 100% dynamic Next.js starter codebase.
+ * ZERO static marketing folders, ZERO hardcoded role templates.
  */
 export function resolveNextJsStack(targetFolder: JSZip, prd: PRDOutput): void {
   const roles = extractRoles(prd);
   const isMultiRole = roles.length >= 2;
-  const features = prd.feature_breakdown || [];
+  const features = getNormalizedFeatures(prd);
   const projectName = slugify(prd.title) || "app-starter";
 
   // 1. package.json
@@ -253,7 +361,7 @@ export function cn(...inputs: ClassValue[]) {
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Layers, ChevronRight } from "lucide-react";
+import { Layers } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -262,7 +370,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Console Overview", href: "/" },
+  { label: "Overview", href: "/" },
   ${features
     .map((f) => {
       const fSlug = slugify(f.name);
@@ -324,7 +432,7 @@ export function Sidebar() {
           <span>Status</span>
           <span className="flex items-center gap-1.5 text-emerald-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Ready
+            Active
           </span>
         </div>
       </div>
@@ -372,7 +480,7 @@ export default function RootLayout({
     targetFolder.file(
       "src/app/page.tsx",
       `import Link from "next/link";
-import { Layers, ArrowRight, Zap, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Layers } from "lucide-react";
 
 export default function OverviewPage() {
   return (
@@ -381,7 +489,7 @@ export default function OverviewPage() {
       <div className="border-b border-zinc-800 pb-5">
         <h1 className="text-xl font-bold tracking-tight text-white">${prd.title.replace(/"/g, '\\"')}</h1>
         <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-          ${(prd.opportunity_framing?.working_hypothesis || prd.opportunity_framing?.core_problem || "Platform digital terstruktur untuk otomasi dan efisiensi sistem.").replace(/"/g, '\\"')}
+          ${(prd.opportunity_framing?.working_hypothesis || prd.opportunity_framing?.core_problem || "Workspace modular siap pakai yang terstruktur langsung dari PRD.").replace(/"/g, '\\"')}
         </p>
       </div>
 
@@ -393,14 +501,14 @@ export default function OverviewPage() {
           <p className="text-[10px] text-zinc-500">Terspesifikasi di docs/PRD.md</p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-1">
-          <span className="text-[11px] font-medium text-zinc-400">Arsitektur UI</span>
+          <span className="text-[11px] font-medium text-zinc-400">Arsitektur</span>
           <div className="text-2xl font-bold text-white">Next.js 16</div>
           <p className="text-[10px] text-zinc-500">Tailwind v4 + Zero Emoji</p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-1">
           <span className="text-[11px] font-medium text-zinc-400">Status Sistem</span>
           <div className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
-            <span>Online</span>
+            <span>Ready</span>
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
           </div>
           <p className="text-[10px] text-zinc-500">Siap dikembangkan dengan AI Coding Agent</p>
@@ -409,7 +517,7 @@ export default function OverviewPage() {
 
       {/* Feature Grid */}
       <div className="space-y-3 pt-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono">Daftar Modul & Sub-rute</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono">Modul Fitur Utama</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           ${features
             .map((f) => {
@@ -449,7 +557,7 @@ export default function OverviewPage() {
         `"use client";
 
 import { useState } from "react";
-import { CheckCircle2, AlertCircle, ArrowLeft, RefreshCw, Terminal } from "lucide-react";
+import { CheckCircle2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function ${fSlug.replace(/-/g, "_")}_Page() {
@@ -488,7 +596,7 @@ export default function ${fSlug.replace(/-/g, "_")}_Page() {
             activeTab === "flow" ? "border-blue-500 text-white font-semibold" : "border-transparent text-zinc-400 hover:text-zinc-200"
           }\`}
         >
-          Alur Kerja (Happy Path)
+          Alur Kerja
         </button>
         <button
           onClick={() => setActiveTab("rules")}
@@ -496,7 +604,7 @@ export default function ${fSlug.replace(/-/g, "_")}_Page() {
             activeTab === "rules" ? "border-blue-500 text-white font-semibold" : "border-transparent text-zinc-400 hover:text-zinc-200"
           }\`}
         >
-          Aturan Bisnis & Validasi (${(feat.business_rules || []).length})
+          Aturan Bisnis (${(feat.business_rules || []).length})
         </button>
         <button
           onClick={() => setActiveTab("tech")}
@@ -582,11 +690,13 @@ export default function ${fSlug.replace(/-/g, "_")}_Page() {
   }
 
   // =========================================================================
-  // SCENARIO 2: Multi-Role Application (Dokter, Pasien, Guru, Siswa, dll.)
-  // Explicit route groups: src/app/([role])/...
+  // SCENARIO 2: Multi-Role Application (Extracted dynamically from PRD)
+  // Route groups: src/app/([role])/...
   // ZERO (marketing) folder!
   // =========================================================================
   if (isMultiRole) {
+    const featureMap = mapFeaturesToRoles(features, roles);
+
     // Root layout
     targetFolder.file(
       "src/app/layout.tsx",
@@ -617,7 +727,7 @@ export default function RootLayout({
 `
     );
 
-    // Root page: Role Portal Chooser
+    // Root page: Role Portal Switcher
     targetFolder.file(
       "src/app/page.tsx",
       `import Link from "next/link";
@@ -659,6 +769,8 @@ export default function PortalChooserPage() {
 
     // Populate each role route group
     for (const role of roles) {
+      const roleFeatures = featureMap.get(role.slug) || [];
+
       targetFolder.file(
         `src/components/${role.slug}/Sidebar.tsx`,
         `"use client";
@@ -690,6 +802,18 @@ export function ${role.name}Sidebar() {
           <Layers className="h-4 w-4 text-zinc-400" />
           <span>Dashboard ${role.name}</span>
         </Link>
+        ${roleFeatures
+          .map((f) => {
+            const fSlug = slugify(f.name);
+            return `
+        <Link
+          href="/${role.slug}/${fSlug}"
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 transition"
+        >
+          <span className="truncate">${f.name.replace(/"/g, '\\"')}</span>
+        </Link>`;
+          })
+          .join("")}
       </div>
 
       <div className="border-t border-zinc-800/80 pt-4 px-2">
@@ -727,16 +851,100 @@ export default function ${role.name}Layout({
 
       targetFolder.file(
         `src/app/(${role.slug})/page.tsx`,
-        `export default function ${role.name}Page() {
+        `import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
+export default function ${role.name}Page() {
   return (
-    <div className="space-y-4 max-w-5xl">
-      <h1 className="text-xl font-bold text-white">${role.description}</h1>
-      <p className="text-xs text-zinc-400">Selamat datang di workspace ${role.name}.</p>
+    <div className="space-y-6 max-w-5xl">
+      <div className="border-b border-zinc-800 pb-5">
+        <h1 className="text-xl font-bold text-white">${role.description}</h1>
+        <p className="text-xs text-zinc-400 mt-1">Selamat datang di workspace ${role.name} untuk ${prd.title.replace(/"/g, '\\"')}.</p>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono">Modul Khusus ${role.name}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          ${roleFeatures
+            .map((f) => {
+              const fSlug = slugify(f.name);
+              return `
+          <Link
+            key="${f.id}"
+            href="/${role.slug}/${fSlug}"
+            className="group flex flex-col justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 transition hover:border-zinc-700 hover:bg-zinc-900/80"
+          >
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="rounded bg-blue-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-blue-400 border border-blue-500/20">
+                  ${f.priority}
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white transition" />
+              </div>
+              <h3 className="text-sm font-semibold text-white group-hover:text-blue-400 transition">${f.name.replace(/"/g, '\\"')}</h3>
+              <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">${f.user_story.replace(/"/g, '\\"')}</p>
+            </div>
+          </Link>`;
+            })
+            .join("")}
+        </div>
+      </div>
     </div>
   );
 }
 `
       );
+
+      // Feature sub-routes for this role
+      for (const feat of roleFeatures) {
+        const fSlug = slugify(feat.name);
+        targetFolder.file(
+          `src/app/(${role.slug})/${fSlug}/page.tsx`,
+          `import Link from "next/link";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
+
+export default function ${role.name}_${fSlug.replace(/-/g, "_")}_Page() {
+  return (
+    <div className="space-y-6 max-w-5xl">
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-400 border border-blue-500/20">
+              ${feat.priority}
+            </span>
+            <h1 className="text-lg font-bold text-white">${feat.name.replace(/"/g, '\\"')}</h1>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">${feat.user_story.replace(/"/g, '\\"')}</p>
+        </div>
+        <Link
+          href="/${role.slug}"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 transition"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Kembali</span>
+        </Link>
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
+        <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">Alur Kerja Utama</h3>
+        <div className="space-y-2">
+          ${(feat.happy_path || ["Inisialisasi modul", "Proses data", "Selesai"])
+            .map(
+              (step, idx) => `
+          <div key={${idx}} className="flex items-start gap-3 rounded-lg border border-zinc-800/60 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+            <span className="font-mono text-blue-400 font-bold">${idx + 1}.</span>
+            <span>${step.replace(/"/g, '\\"')}</span>
+          </div>`
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  );
+}
+`
+        );
+      }
     }
   }
 }
