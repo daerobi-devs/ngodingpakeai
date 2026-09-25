@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, X, MessageSquare, FileEdit, Sparkles, Check, ArrowRight, Trash2 } from 'lucide-react';
+import { Send, Loader2, X, MessageSquare, FileEdit, Check, ArrowRight, Trash2, HelpCircle } from 'lucide-react';
 
 export interface StudioChatMessage {
   id: string;
@@ -21,6 +21,13 @@ interface StudioChatDrawerProps {
   isLoading: boolean;
   theme?: 'dark' | 'light';
 }
+
+const PROACTIVE_SUGGESTIONS = [
+  { text: 'Apa yang kurang di PRD ini? Berikan analisis arsitektur & rekomendasi konkret.', mode: 'chat' as const, label: 'Audit PRD' },
+  { text: 'Periksa potensi celah mitigasi risiko, race condition, dan edge-case.', mode: 'chat' as const, label: 'Cek Edge-Case' },
+  { text: 'Tambahkan manajemen kupon promosi & sistem diskon dinamis.', mode: 'revise' as const, label: 'Tambah Kupon' },
+  { text: 'Lengkapi fitur operasional back-office admin dan audit log.', mode: 'revise' as const, label: 'Fitur Admin' },
+];
 
 export const StudioChatDrawer: React.FC<StudioChatDrawerProps> = ({
   isOpen,
@@ -151,14 +158,41 @@ export const StudioChatDrawer: React.FC<StudioChatDrawerProps> = ({
       {/* Message Stream */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs leading-relaxed">
         {messages.length === 0 ? (
-          <div className="py-8 text-center text-zinc-500 space-y-2.5">
+          <div className="py-6 text-center text-zinc-500 space-y-3">
             <div className="w-10 h-10 rounded-full bg-[#ea580c]/10 text-[#ea580c] mx-auto flex items-center justify-center border border-[#ea580c]/20">
               <MessageSquare className="h-5 w-5" />
             </div>
-            <p className="text-xs font-semibold text-zinc-300">Ruang Diskusi & Revisi AI</p>
-            <p className="text-[11px] text-zinc-500 max-w-xs mx-auto leading-relaxed">
-              Pilih tab <strong>Diskusi</strong> untuk tanya jawab arsitektur tanpa mengubah isi dokumen, atau pilih <strong>Revisi PRD</strong> untuk langsung memodifikasi spesifikasi.
-            </p>
+            <div>
+              <p className="text-xs font-semibold text-zinc-300">Ruang Diskusi & Revisi AI</p>
+              <p className="text-[11px] text-zinc-500 max-w-xs mx-auto mt-1 leading-relaxed">
+                Konsultasikan kelengkapan spesifikasi arsitektur atau langsung perintahkan modifikasi PRD secara instan.
+              </p>
+            </div>
+
+            {/* Proactive Quick Prompt Chips */}
+            <div className="pt-2 text-left space-y-1.5 max-w-xs mx-auto">
+              <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold px-1">Saran Prompt Cepat:</p>
+              <div className="flex flex-col gap-1.5">
+                {PROACTIVE_SUGGESTIONS.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setActiveMode(chip.mode);
+                      onSendMessage(chip.text, chip.mode);
+                    }}
+                    disabled={isLoading}
+                    className="flex items-center justify-between p-2 rounded-lg bg-[#161b22] hover:bg-[#1f2937] border border-zinc-800 text-left transition-colors cursor-pointer group"
+                  >
+                    <div className="pr-2">
+                      <span className="text-[11px] text-zinc-200 group-hover:text-white font-medium block">{chip.label}</span>
+                      <span className="text-[10px] text-zinc-500 truncate block max-w-[200px]">{chip.text}</span>
+                    </div>
+                    <ArrowRight className="h-3 w-3 text-zinc-500 group-hover:text-[#ea580c] shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           messages.map((msg) => {
@@ -210,6 +244,25 @@ export const StudioChatDrawer: React.FC<StudioChatDrawerProps> = ({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Quick Chips Bar when chat has history */}
+      {messages.length > 0 && !isLoading && (
+        <div className="px-3 py-1.5 border-t border-zinc-800/60 bg-[#161b22]/40 flex gap-1.5 overflow-x-auto no-scrollbar">
+          {PROACTIVE_SUGGESTIONS.map((chip, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                setActiveMode(chip.mode);
+                onSendMessage(chip.text, chip.mode);
+              }}
+              className="shrink-0 px-2 py-0.5 rounded text-[10px] bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/50 transition-colors cursor-pointer"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bottom Input Field */}
       <form onSubmit={handleSubmit} className="p-3 border-t border-zinc-800/80 bg-[#0d1117]">

@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
       .from('prd_history')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
+      .not('title', 'ilike', '[Arsitek]%')
       .gte('created_at', startOfDay.toISOString());
 
     // 4. Calculate effective daily limit based on tier

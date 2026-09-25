@@ -10,6 +10,48 @@ interface MermaidRendererProps {
   theme?: "dark" | "light";
 }
 
+function sanitizeMermaidChart(raw: string): string {
+  let cleaned = raw
+    .trim()
+    .replace(/^```mermaid\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  // If it's an erDiagram, fix common LLM Mermaid ERD syntax errors
+  if (cleaned.startsWith("erDiagram") || cleaned.includes("erDiagram")) {
+    // 1. Remove parentheses from data types inside entity blocks (e.g. varchar(255) -> varchar, decimal(10,2) -> decimal, int(11) -> int)
+    cleaned = cleaned.replace(/(\b\w+)\s*\([^)]*\)/g, "$1");
+
+    // 2. Normalize multi-word types that break Mermaid parser
+    cleaned = cleaned.replace(/timestamp\s+with(?:out)?\s+time\s+zone/gi, "timestamp");
+    cleaned = cleaned.replace(/character\s+varying/gi, "varchar");
+    cleaned = cleaned.replace(/double\s+precision/gi, "float");
+
+    // 3. Normalize hyphens in entity names inside relationships and blocks (e.g. USER-ROLES -> USER_ROLES)
+    cleaned = cleaned.replace(/([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)\s*\{/g, "$1_$2 {");
+    cleaned = cleaned.replace(/([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)\s*\|/g, "$1_$2 |");
+    cleaned = cleaned.replace(/\|\s*([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)/g, "| $1_$2");
+
+    // 4. Ensure relationship lines have no broken spaces in markers
+    cleaned = cleaned.replace(/\|\s*\|\s*--\s*o\s*\{/g, "||--o{");
+    cleaned = cleaned.replace(/\|\s*\|\s*--\s*\|\s*\{/g, "||--|{");
+    cleaned = cleaned.replace(/\|\s*\|\s*--\s*\|\s*\|/g, "||--||");
+  }
+
+  // If flowchart, clean invalid characters inside unquoted node labels
+  if (cleaned.startsWith("graph") || cleaned.startsWith("flowchart")) {
+    cleaned = cleaned.replace(/\[([^"\]]+)\]/g, (match, inner) => {
+      if (inner.includes("(") || inner.includes(")") || inner.includes("/")) {
+        return `["${inner.replace(/"/g, "'")}"]`;
+      }
+      return match;
+    });
+  }
+
+  return cleaned;
+}
+
 export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
   chart,
   title,
@@ -41,12 +83,8 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
         return;
       }
 
-      // Clean any potential markdown wrapper
-      const cleanChart = chart
-        .trim()
-        .replace(/^```mermaid\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/\s*```$/i, "");
+      // Clean & sanitize chart syntax
+      const cleanChart = sanitizeMermaidChart(chart);
 
       // Avoid redundant re-rendering if chart is identical and theme unchanged
       if (lastChartRef.current === `${cleanChart}_${theme}` && svgContent) {

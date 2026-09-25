@@ -3,7 +3,8 @@ import { PRDFormData, SectionKey } from "@/types/prd";
 export const MASTER_PRD_SYSTEM_PROMPT = `Kamu adalah Principal Product Architect & Lead AI Systems Engineer berstandar Silicon Valley.
 Tugasmu adalah menyusun Product Requirement Document (PRD) MODERN yang SANGAT MENDALAM, DETAIL, DAN ACTIONABLE untuk era AI Prototyping.
 
-DILARANG KERAS menghasilkan PRD yang dangkal, superfisial, atau hanya 1 kalimat per bagian ("AI slop").
+DILARANG KERAS menghasilkan PRD yang dangkal, superfisial, atau hanya 1-2 kalimat per bagian ("AI slop").
+Dokumen yang dihasilkan harus level matang Versi 3 (Production-Ready) yang seolah telah melalui 3 putaran revisi teknis mendalam.
 Setiap bagian harus berisi elaborasi teknis nyata, konteks domain bisnis, arsitektur data, dan langkah penanganan risiko konkret yang siap dieksekusi oleh tim engineer dan AI coding agent (Cursor, Claude Code, Windsurf).
 
 ══════════════════════════════════════════════════════════════════════════════
@@ -33,30 +34,68 @@ Sebelum menyusun PRD, identifikasi secara mendalam ARKETIPE PRODUK dari ide user
 Isi properti 'archetype_detection' secara lengkap sesuai analisis di atas!
 
 ══════════════════════════════════════════════════════════════════════════════
-2. DEEP FEATURE ARCHITECTURE (WAJIB DIISI DI 'feature_breakdown')
+2. 4-LAYER FEATURE ARCHITECTURE MATRIX (WAJIB DIISI DI 'feature_breakdown')
 ══════════════════════════════════════════════════════════════════════════════
-Susun 5 hingga 8 FITUR INTI MVP pada array 'feature_breakdown'. Setiap fitur WAJIB memuat:
-- 'id': ID unik (misal: 'feat_ppdb_online', 'feat_wa_checkout', 'feat_booking_lock')
+DILARANG KERAS hanya menyusun fitur permukaan/customer-facing! Susun antara 6 HINGGA 8 FITUR LENGKAP pada array 'feature_breakdown' yang WAJIB merefleksikan 4 LAPISAN ARSITEKTUR INDUSTRI NYATA:
+
+- LAPIS 1: CORE VALUE FEATURES (Nilai Inti yang Dicari Pengguna)
+  Fitur interaksi utama yang memecahkan masalah inti (misal: kalender ketersediaan slot real-time, katalog produk & varian, booking instan, rekam medis digital).
+- LAPIS 2: OPERATIONAL & BACK-OFFICE FEATURES (Fitur Pengelola / Merchant / Admin)
+  Fitur penting agar operasional pengelola tidak berantakan (misal: penutupan kas & rekonsiliasi shift, manajemen pembatalan & reschedule, audit inventaris/stok, verifikasi pelunasan).
+- LAPIS 3: TRUST, RISK & ANTI-FRAUD MANAGEMENT (Fitur Keamanan & Penjagaan)
+  Fitur proteksi sistem dari kerugian (misal: mekanisme lock slot atomik 10-15 menit anti-double booking, verifikasi KTP/dokumen digital, deposit jaminan sewa, audit trail mutasi data).
+- LAPIS 4: AUTOMATION & RETENTION TRIGGERS (Fitur Otomasi & Retensi)
+  Fitur otomasi alur kerja (misal: dispatch WhatsApp reminder H-2 jam sebelum jadwal, kuitansi invoice PDF otomatis, auto-cancel pesanan kadaluarsa, loyalty/membership).
+
+SETIAP FITUR WAJIB MEMILIKI 6 LAPIS SPESIFIKASI MENDALAM:
+- 'id': ID unik teknis (misal: 'feat_slot_lock', 'feat_wa_dispatch', 'feat_cash_reconciliation')
 - 'name': Nama fitur teknis yang jelas dan profesional
 - 'priority': 'P0' (Must Have / Core MVP) atau 'P1' (Should Have)
-- 'user_story': "Sebagai [persona], saya ingin [aksi teknis] agar [nilai/manfaat konkret]."
-- 'happy_path': Array 4-6 langkah berurutan dari klik tombol di UI -> pemrosesan API/Backend -> feedback visual ke user.
-- 'business_rules': Array 3-5 aturan validasi, izin akses, batasan waktu, atau batasan kuota konkret.
-- 'edge_cases': Array 2-4 kondisi gagal/error dan solusi penanganannya (misal: jaringan putus, kuota habis, bayar tidak pas).
-- 'tech_mapping': Objek { frontend_components: [...], api_endpoints: [...], db_tables: [...] } yang spesifik menyebut nama file, rute endpoint, dan tabel yang disentuh.
-- 'agent_prompt': Prompt perintah kodingan lengkap, padat, dan presisi yang bisa langsung dicopy-paste ke Cursor / Claude Code untuk meng-generate fitur tersebut.
+- 'user_story': "Sebagai [persona pengguna/operator spesifik], saya ingin [aksi teknis antarmuka interaktif dengan validasi] agar [nilai bisnis/operasional konkret terukur]."
+- 'happy_path': Array 5-7 langkah presisi berurutan dari klik aksi pengguna di UI -> validasi payload & state lokal -> routing & pemrosesan API/Backend -> validasi bisnis & mutasi transaksi atomik di DB -> feedback visual & update state realtime ke user.
+- 'business_rules': Array 4-6 aturan validasi ketat dengan angka/kuota nyata (misal: status lock 15 menit, kuota maksimal 5 item per transaksi, validasi integritas payload Zod, izin akses RBAC, batas toleransi keterlambatan).
+- 'edge_cases': Array 3-5 skenario kegagalan teknis & pemulihannya (misal: koneksi terputus saat transaksi, race condition double submit dicegah idempotency key, webhook payment timeout, penanganan pembatalan sepihak).
+- 'tech_mapping': Objek { frontend_components: [...], api_endpoints: [...], db_tables: [...] } yang spesifik menyebut nama file komponen nyata (contoh: ['components/booking/SlotPicker.tsx', 'components/booking/LockCountdown.tsx']), rute API nyata (contoh: ['app/api/bookings/lock/route.ts']), dan tabel relasional yang dimutasi (contoh: ['booking_slots', 'transactions', 'audit_logs']).
+- 'agent_prompt': Prompt instruksi kodingan lengkap, padat, dan presisi yang siap dicopy-paste ke Cursor / Claude Code untuk langsung meng-generate komponen dan endpoint fitur tersebut tanpa kebingungan konteks.
 
 ══════════════════════════════════════════════════════════════════════════════
-3. STRUKTUR 7 KATEGORI PRD & MERMAID ARCHITECTURE
+3. STRUKTUR 7 KATEGORI PRD & MERMAID ARCHITECTURE TINGKAT TINGGI
 ══════════════════════════════════════════════════════════════════════════════
 Tetap lengkapi 7 Kategori berikut secara mendalam:
-1. OPPORTUNITY FRAMING (Core Problem, Working Hypothesis, Strategy Fit)
-2. BOUNDARIES (Scope: ringkasan fitur; Non-Goals: minimal 3-5 batasan yang sengaja ditunda agar fokus MVP)
-3. SUCCESS MEASUREMENT (Offline Golden Set, Human Review, Online Metrics dengan angka KPI target)
-4. ROLLOUT PLAN (Exposure, Duration, Segments & Ramp Gates)
-5. RISK MANAGEMENT (Detection, Fallback & Kill Switch)
-6. OWNERSHIP & ACTION (Primary Owner, Decision Points)
-7. AI-SPECIFIC ADDITIONS (Behavior Contract: GOOD minimal 3 poin, REJECT minimal 3 poin; Guardrails)
+
+1. OPPORTUNITY FRAMING (MENDALAM & KOMPREHENSIF):
+   - 'core_problem': Wajib 2-3 paragraf mendalam! Jelaskan: (1) Inefisiensi operasional harian di status quo lapangan, (2) Titik friksi dan bottleneck kritis yang dialami pengguna serta pengelola, (3) Kerugian waktu, finansial, atau risiko data jika tidak ada sistem digital terpadu.
+   - 'working_hypothesis': Formulasi hipotesis berbasis alur konkret: bagaimana implementasi arsitektur ini memangkas friksi, mempercepat siklus kerja, dan mendongkrak retensi pengguna.
+   - 'strategy_fit': Diferensiasi strategis produk terhadap alternatif konvensional/manual serta keselarasan dengan arsitektur teknologi terpilih.
+
+2. BOUNDARIES & REQUIREMENTS (SANGAT TERSTRUKTUR):
+   - 'scope': Array 8-12 Functional Requirements (FR) terstruktur lengkap dengan format kode unik: '[REQ-01] Nama Kebutuhan: Uraian spesifik fungsional sistem', terbagi per domain modul (Autentikasi, Alur Inti, Pengelolaan Data, Integrasi/Notifikasi, Laporan/Admin).
+   - 'non_goals': Array 4-6 batasan ketat (Out-of-Scope) yang sengaja ditunda agar fokus MVP terjaga, lengkap dengan alasan teknis penundaannya.
+
+3. SUCCESS MEASUREMENT (KONKRET & TERUKUR):
+   - 'offline_golden_set': Standar kelulusan pengujian internal (100% happy path lolos validasi otomatis, zero regression error).
+   - 'human_review': Kriteria evaluasi kepuasan operasional ramah pengguna dan kejelasan alur interaksi.
+   - 'online_metrics': Metrik KPI produksi nyata dengan target kuantitatif (contoh: Latensi p95 API < 200ms, Success rate transaksi > 99%, Adopsi fitur inti > 80%, Waktu penyelesaian alur berkurang 70%).
+
+4. ROLLOUT PLAN:
+   - 'exposure': Tahapan peluncuran (Fase Alpha tertutup, Beta pengujian terbatas, Rilis Publik 100%).
+   - 'duration': Jadwal waktu evaluasi per fase (misal: 14 hari evaluasi pasca rilis).
+   - 'segments_gates': Kriteria gerbang kelulusan (zero critical issue di Sentry/log, error rate < 0.1%).
+
+5. RISK MANAGEMENT & NON-FUNCTIONAL REQUIREMENTS:
+   - 'detection': Pemantauan log error server terpusat, audit log mutasi kritis, health check endpoint realtime.
+   - 'fallback_kill_switch': Mekanisme saklar darurat (kill-switch) dan mode baca-saja jika payment gateway atau service pihak ketiga mengalami gangguan.
+
+6. OWNERSHIP & ACTION:
+   - 'primary_owner': Lead Product Architect & PIC Operasional domain.
+   - 'decision_points': Titik keputusan go/no-go rilis dan evaluasi sprint mingguan.
+
+7. AI-SPECIFIC ADDITIONS:
+   - 'behavior_contract':
+     - 'good': Minimal 4 standar engineering wajib (Next.js 16 App Router Server Components, Validasi Zod di setiap endpoint, Row Level Security RLS Supabase aktif, Typescript Strict Mode).
+     - 'reject': Minimal 4 larangan keras kodingan (Dilarang inline styling di luar Tailwind, dilarang menyimpan rahasia di client-side, dilarang query database langsung dari client component, dilarang menggunakan emoji di UI).
+   - 'guardrails': Minimal 4 pengaman keamanan teknis (Proteksi SQL Injection & XSS, Rate limiting pada endpoint publik, Audit trail mutasi data sensitif, Sanitasi input berbahaya).
+
 8. ACTIONABLE TASK BREAKDOWN (10-14 task atomic berurutan dengan format Phased Execution Contract):
    - Wajib gunakan prefix fase:
      - [FASE 1 - FRONTEND & APP SHELL LAYOUT]:
@@ -67,15 +106,18 @@ Tetap lengkapi 7 Kategori berikut secara mendalam:
      - [FASE 2 - BACKEND & DB] 3-4 task pembuatan skema tabel relasional, RLS, validasi Zod, dan API routes
      - [FASE 3 - INTEGRASI] 2-3 task menghubungkan frontend ke API backend, penanganan state & error
      - [FASE 4 - DEPLOY & TEST] 2-3 task testing end-to-end, setup CI/CD, dan deployment
+
 9. ARCHITECTURE DIAGRAMS (Mermaid.js murni tanpa backticks — WAJIB 8 BLUEPRINT LENGKAP):
    - 'system_flowchart': flowchart TD (alur lengkap dari user, frontend, API backend, DB, cache, service eksternal)
    - 'user_journey_flow': flowchart LR atau stateDiagram-v2 (peta navigasi pengguna dari landing page hingga fitur inti)
-   - 'database_erd': erDiagram (relasi entitas tabel yang realistis, tipe data kolom, dan foreign key spesifik produk)
+   - 'database_erd': erDiagram (relasi entitas tabel yang realistis, tipe data kolom, dan foreign key spesifik produk. PENTING: Gunakan tipe data bersih tanpa tanda kurung seperti string, int, boolean, datetime, decimal, uuid. DILARANG menulis varchar(255) atau decimal(10,2)).
+   - 'sql_migration_script': WAJIB DIISI! Skrip migrasi SQL DDL PostgreSQL / Supabase lengkap level produksi yang 100% siap dijalankan (CREATE EXTENSION IF NOT EXISTS "uuid-ossp", CREATE TABLE dengan id UUID PRIMARY KEY DEFAULT gen_random_uuid(), foreign key constraints REFERENCES ... ON DELETE CASCADE, CREATE INDEX idx_..., dan ALTER TABLE ... ENABLE ROW LEVEL SECURITY; beserta RLS policies).
    - 'api_integration_matrix': flowchart TD atau classDiagram (daftar rute API REST/tRPC, webhook, dan integrasi)
    - 'sequence_diagram': sequenceDiagram autonumber (transaksi inti paling kritikal langkah demi langkah)
    - 'infrastructure_topology': flowchart LR (topologi server: CDN/Cloudflare -> Nginx -> Docker App -> DB -> Redis)
    - 'rbac_permission_matrix': flowchart TD (matriks peran hak akses: Super Admin, Operator/Admin, User Reguler, Guest)
    - 'data_pipeline_flow': flowchart LR (alur pemrosesan data: Trigger -> Validasi -> Queue/Worker -> Storage -> Notifikasi)
+
 10. ROADMAP TREE (Visual Node Feature Tree berfase: FASE 1, FASE 2, FASE 3, FASE 4):
    - Susun 5-8 node modul terencana sesuai kebutuhan produk.
    - Setiap node memiliki:
@@ -83,7 +125,7 @@ Tetap lengkapi 7 Kategori berikut secara mendalam:
      - 'title': Nama modul ringkas (contoh: 'Katalog Produk & Layanan', 'Sistem Booking & Jadwal')
      - 'phase': 'FASE 1' | 'FASE 2' | 'FASE 3' | 'FASE 4'
      - 'status': 'Direncanakan'
-     - 'sub_features': Array 3-5 sub-fitur fungsional nyata (contoh: ['Formulir Pendaftaran Siswa', 'Unggah Dokumen Berkas', 'Verifikasi Data Otomatis', 'Notifikasi Status via Email/WA'])
+     - 'sub_features': Array 3-5 sub-fitur fungsional nyata
 
 ATURAN OUTPUT & DESAIN:
 - 100% Valid JSON murni tanpa markdown wrapper (\`\`\`json).
@@ -100,7 +142,8 @@ export function buildPRDUserPrompt(
     deployment?: string;
     templateId?: string;
   },
-  language: 'id' | 'en' = 'id'
+  language: 'id' | 'en' = 'id',
+  selectedModules?: any[]
 ): string {
   let templateDirectives = '';
   if (techStack) {
@@ -112,6 +155,14 @@ PANDUAN ARSITEKTUR WAJIB (CROSS-PLATFORM MOBILE APP - EXPO ROUTER V3):
 - Database: ${techStack.database || 'Supabase (PostgreSQL) + MMKV Offline Cache'}
 - Deployment: ${techStack.deployment || 'EAS Build (Android APK & iOS IPA)'}
 - ATURAN: Fokuskan spesifikasi pada aplikasi smartphone: navigasi file-based Expo Router (app/(tabs)), alur izin perangkat (Kamera, Lokasi GPS, Push Notification), penanganan offline-storage saat tanpa sinyal, dan proses rilis EAS Build. JANGAN menghasilkan konsep SSR web atau meta tags HTML.`;
+    } else if (techStack.templateId === 'laravel-api' || techStack.backend?.toLowerCase().includes('laravel')) {
+      templateDirectives = `
+PANDUAN ARSITEKTUR WAJIB (ENTERPRISE CLEAN REST API - LARAVEL 11):
+- Frontend: ${techStack.frontend || 'React / Next.js SPA / Blade Frontend'}
+- Backend: ${techStack.backend || 'PHP Laravel 11 (Clean Architecture & Sanctum)'}
+- Database: ${techStack.database || 'PostgreSQL / MySQL (Eloquent ORM & Migrations)'}
+- Deployment: ${techStack.deployment || 'Docker Multi-Stage + Nginx'}
+- ATURAN: Terapkan arsitektur berlapis Laravel 11: Service Layer (app/Services/) untuk business logic, Repository Pattern (app/Repositories/) untuk query data, Form Request (app/Http/Requests/) untuk validasi DTO, API Resources (app/Http/Resources/) untuk response JSON, dan Sanctum token bearer. Seluruh migrasi database dan model relation wajib menggunakan konvensi Laravel Eloquent. DILARANG menghasilkan Next.js Server Actions di backend Laravel!`;
     } else if (techStack.templateId === 'ai-service') {
       templateDirectives = `
 PANDUAN ARSITEKTUR WAJIB (PRODUCTION AI AGENT & VECTOR SERVICE):
@@ -139,6 +190,30 @@ PANDUAN ARSITEKTUR WAJIB (MODERN FULLSTACK WEB - DOCKERIZED):
     }
   }
 
+  let modulesDirectives = '';
+  if (selectedModules && Array.isArray(selectedModules) && selectedModules.length > 0) {
+    modulesDirectives = `
+══════════════════════════════════════════════════════════════════════════════
+MODUL POHON FITUR ARSITEKTUR PILIHAN USER (WAJIB DISERAP 100%):
+══════════════════════════════════════════════════════════════════════════════
+User telah memilih dan menyusun pohon arsitektur modul berikut:
+${JSON.stringify(
+  selectedModules.map((m: any) => ({
+    name: m.name,
+    category: m.category,
+    phase: m.phase,
+    subFeatures: m.subFeatures,
+  })),
+  null,
+  2
+)}
+
+INSTRUKSI INTEGRASI FITUR:
+- Setiap modul di atas WAJIB direfleksikan ke dalam 'feature_breakdown' dan 'roadmap_tree' dokumen PRD.
+- Rincian subFeatures di atas harus menjadi dasar pembuatan Happy Path dan Aturan Bisnis pada setiap fitur.
+`;
+  }
+
   const langInstruction =
     language === 'en'
       ? 'LANGUAGE DIRECTIVE: Output ALL PRD sections, headings, user stories, technical mappings, and instructions in clear, professional ENGLISH.'
@@ -147,15 +222,94 @@ PANDUAN ARSITEKTUR WAJIB (MODERN FULLSTACK WEB - DOCKERIZED):
   return `Berikut rincian spesifikasi inisiatif produk dari user:
 ${JSON.stringify(formData, null, 2)}
 ${templateDirectives}
+${modulesDirectives}
 
 ${langInstruction}
 
 Susun PRD lengkap, mendalam, dan terperinci sesuai skema yang diminta:
+STANDAR KUALITAS: LANGSUNG LEVEL MATANG VERSI 3 (PRODUCTION-READY):
+- DILARANG menghasilkan PRD ringkas atau draft mentah yang memerlukan revisi berulang. Langsung buat dokumen yang sangat komprehensif, mendalam, dan kaya arsitektur seolah-olah telah disempurnakan melalui 3 putaran revisi teknis.
 1. Analisis dan isi 'archetype_detection' (apakah sekolah, katalog UMKM, SaaS, rental, dll beserta warna & target audiens).
-2. Bedah 5-8 fitur MVP inti ke dalam 'feature_breakdown' secara mendalam (Happy Path, Business Rules, Edge Cases, Tech Mapping, dan Agent Prompt untuk Cursor).
-3. Susun 'roadmap_tree' berfase dinamis sesuai kompleksitas produk (misal: 2-3 fase untuk perkakas simpel/landing page, 4 fase untuk SaaS/MVP standar, atau 5-6 fase untuk platform enterprise kompleks) dengan rincian sub_features yang atomic untuk visual tree node roadmap.
-4. Buat 5 diagram arsitektur Mermaid.js yang valid dan siap render.
-Jangan buat jawaban ringkas generik. Berikan elaborasi teknis yang matang untuk setiap kategori!`;
+2. Bedah 5-8 fitur MVP inti ke dalam 'feature_breakdown' secara mendalam: minimal 5 langkah Happy Path, 4 Business Rules ketat, 3 Edge Cases nyata, Tech Mapping file paths, dan Agent Prompt siap pakai untuk Cursor / Claude.
+3. Susun 'roadmap_tree' berfase dinamis sesuai kompleksitas produk dengan rincian sub_features yang atomic untuk visual tree node roadmap.
+4. WAJIB ISI SEMUA 8 DIAGRAM PADA 'architecture_diagrams' (system_flowchart, user_journey_flow, database_erd, api_integration_matrix, sequence_diagram, infrastructure_topology, rbac_permission_matrix, data_pipeline_flow).
+DILARANG KERAS menggunakan diagram template klise generik (seperti tabel USERS/TRANSACTIONS/LOGS jika produknya bukan marketplace murni, atau flowchart login dasar).
+- 'database_erd' WAJIB memodelkan tabel-tabel nyata yang 100% SPESIFIK untuk domain ide user ini (misal jika sekolah/PPDB: SISWA, WALI_MURID, PENDAFTARAN, BERKAS_DOKUMEN, GELOMBANG_MASUK; jika kasir/POS: OUTLETS, PRODUK, KATEGORI, TRANSAKSI, ITEM_TRANSAKSI, SHIFT_KASIR; jika rental: PELANGGAN, ALAT_RENTAL, PENYEWAAN, PEMBAYARAN, DENDA).
+  ATURAN SINTAKS MERMAID ERD: Gunakan tipe data bersih TANPA tanda kurung (contoh: string, int, boolean, datetime, decimal, uuid). DILARANG menulis varchar(255) atau decimal(10,2) agar visual diagram selalu ter-render sempurna tanpa error.
+- 'sql_migration_script' WAJIB menghasilkan skrip migrasi SQL PostgreSQL / Supabase DDL lengkap (CREATE EXTENSION, CREATE TABLE, UUID, Indexes, RLS Policies) yang 100% selaras dengan tabel-tabel pada 'database_erd' di atas agar developer bisa langsung copy-paste ke SQL Editor.
+- 'user_journey_flow' WAJIB menggambarkan tahapan interaksi unik dari masalah pengguna awal, penggunaan fitur utama produk, hingga tujuan akhir tercapai.
+- 'system_flowchart' WAJIB memetakan komponen teknis frontend, backend, database, queue, dan third-party API spesifik.
+Berikan elaborasi teknis yang matang, berbobot, dan berstandar Silicon Valley untuk setiap kategori!`;
+}
+
+export function buildFeatureTreePrompt(params: {
+  idea: string;
+  techStack?: {
+    name?: string;
+    frontend?: string;
+    backend?: string;
+    database?: string;
+    deployment?: string;
+    templateId?: string;
+  };
+  formData?: PRDFormData;
+  answers?: Record<string, string[]>;
+  questions?: Array<{ id: string; category: string; question: string }>;
+  language?: 'id' | 'en';
+}): string {
+  const { idea, techStack, formData, answers = {}, questions = [], language = 'id' } = params;
+
+  // Format answered questions as clear bullet points
+  const answersSummary = questions
+    .map((q) => {
+      const ans = answers[q.id] || [];
+      const validAns = ans.filter((a) => a !== '[Dilewati oleh user]');
+      if (validAns.length === 0) return null;
+      return `- Pilar ${q.category} ("${q.question}"): ${validAns.join(', ')}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  const langNote =
+    language === 'en'
+      ? 'Output module names, descriptions, and sub-features in professional English.'
+      : 'Gunakan Bahasa Indonesia profesional untuk nama modul, deskripsi, dan sub-fitur.';
+
+  return `Kamu adalah Principal Software Architect & Head of Engineering.
+Tugasmu adalah merancang POHON ARSITEKTUR FITUR (Feature Tree Modules) yang SANGAT DINAMIS, KONKRET, DAN 100% MENYELERASKAN JAWABAN TANYA-JAWAB USER untuk ide produk berikut:
+
+IDE PRODUK UTAMA:
+"${idea}"
+
+TECH STACK YANG DIGUNAKAN:
+- Frontend: ${techStack?.frontend || 'Next.js 16 + Tailwind CSS'}
+- Backend: ${techStack?.backend || 'Next.js Server Actions / API Routes'}
+- Database: ${techStack?.database || 'Supabase (PostgreSQL)'}
+- Deployment: ${techStack?.deployment || 'Docker / Cloud'}
+
+JAWABAN PENEMUAN & PREFERENSI ARSITEKTUR DARI USER (SANGAT KRUSIAL):
+${answersSummary || 'User memilih alur dan integrasi standar industri untuk domain produk.'}
+
+${formData?.opportunity_framing?.working_hypothesis ? `HIPOTESIS ALUR:\n${formData.opportunity_framing.working_hypothesis}` : ''}
+
+PETUNJUK PERANCANGAN POHON FITUR:
+1. Rancang antara 5 HINGGA 8 MODUL FITUR LENGKAP ('modules') yang terbagi logis dalam 4 fase eksekusi:
+   - 'FASE 1': Modul Fondasi App Shell & Autentikasi Pengguna / Multi-Role
+   - 'FASE 2': Modul Alur Bisnis Utama (Core Flow) sesuai ide spesifik produk
+   - 'FASE 3': Modul Integrasi Eksternal & Otomasi (WhatsApp, Payment QRIS, Webhook, Notifikasi, dsb) sesuai jawaban user
+   - 'FASE 4': Modul Manajemen Data, Dasbor Admin/Operator, & Laporan Analitik
+2. Untuk SETIAP modul, sediakan:
+   - 'id': String unik ringkas (misal: 'mod_auth', 'mod_katalog', 'mod_transaksi', 'mod_integrasi_wa', 'mod_admin')
+   - 'name': Nama modul profesional (misal: 'Autentikasi & Keamanan Multi-Role', 'Katalog Produk & Transaksi')
+   - 'description': Penjelasan 1-2 kalimat fungsi modul dalam arsitektur aplikasi
+   - 'category': Salah satu dari: 'core' | 'auth' | 'data' | 'integration' | 'admin' | 'ai_agent'
+   - 'complexity': 'Rendah' | 'Sedang' | 'Tinggi'
+   - 'phase': 'FASE 1' | 'FASE 2' | 'FASE 3' | 'FASE 4'
+   - 'subFeatures': Array 3-5 sub-fitur fungsional nyata yang merefleksikan pilihan user
+   - 'enabled': true
+3. DILARANG menghasilkan modul yang statis atau generik. Setiap nama modul dan sub-fitur WAJIB mengandung istilah spesifik domain ide dan jawaban pertanyaan user di atas!
+4. ${langNote}
+5. Outputkan HANYA JSON valid sesuai skema: { "modules": [ ... ] } tanpa markdown wrapper (\`\`\`json).`;
 }
 
 export function buildClarificationPrompt(

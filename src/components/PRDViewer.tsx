@@ -9,6 +9,7 @@ import { generateDesignDoc, getDesignPalette, generateAIHarmonicPalette, DesignP
 import { generateStarterCodebaseZip, detectStackFromPrd } from "@/lib/scaffolder/codebase-scaffolder";
 import { BeginnerRoadmap } from "./BeginnerRoadmap";
 import { CustomPaletteModal } from "./CustomPaletteModal";
+import { synthesizeDynamicArchitectureDiagrams } from "@/lib/gemini/schemas";
 import {
   FileText,
   GitFork,
@@ -189,48 +190,29 @@ export const PRDViewer: React.FC<PRDViewerProps> = ({
     }, 200);
   };
 
+  const dynamicDiagrams = useMemo(() => {
+    return synthesizeDynamicArchitectureDiagrams(
+      prd.title,
+      prd.archetype_detection,
+      prd.feature_breakdown || [],
+      prd.architecture_diagrams
+    );
+  }, [prd.title, prd.archetype_detection, prd.feature_breakdown, prd.architecture_diagrams]);
+
   const defaultFlowchart = useMemo(() => {
-    return (
-      prd.architecture_diagrams?.system_flowchart ||
-      `graph TD
-  User([User Client]) --> WebApp[Web Frontend]
+    return dynamicDiagrams.system_flowchart || `graph TD
+  User([Pengguna]) --> WebApp[Web Frontend]
   WebApp --> API[Backend API Routes]
   API --> Auth[Auth & Security Guardrails]
   API --> Service[Core Business Services]
   Service --> DB[(Primary Database)]
   Service --> Cache[(Redis / In-Memory Cache)]
-  Service --> ThirdParty[External Integrations]`
-    );
-  }, [prd.architecture_diagrams?.system_flowchart]);
+  Service --> ThirdParty[External Integrations]`;
+  }, [dynamicDiagrams.system_flowchart]);
 
   const defaultERD = useMemo(() => {
-    return (
-      prd.architecture_diagrams?.database_erd ||
-      `erDiagram
-  USERS ||--o{ TRANSACTIONS : initiates
-  USERS {
-    string id PK
-    string email
-    string name
-    string role
-    datetime created_at
-  }
-  TRANSACTIONS ||--|{ LOGS : generates
-  TRANSACTIONS {
-    string id PK
-    string user_id FK
-    string status
-    float amount
-    datetime updated_at
-  }
-  LOGS {
-    string id PK
-    string transaction_id FK
-    string event
-    datetime timestamp
-  }`
-    );
-  }, [prd.architecture_diagrams?.database_erd]);
+    return dynamicDiagrams.database_erd;
+  }, [dynamicDiagrams.database_erd]);
 
   const defaultSequence = useMemo(() => {
     return (

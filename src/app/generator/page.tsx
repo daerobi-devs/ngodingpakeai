@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { PRDFormData, PRDOutput, SectionKey } from '@/types/prd';
 import { GeneratorSidebar, PrdHistorySummary } from '@/components/GeneratorSidebar';
 import { PRDViewer } from '@/components/PRDViewer';
@@ -15,6 +15,8 @@ import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { useAuth } from '@/context/AuthContext';
 import { WizardHeroInput, TechStackConfig, DEFAULT_TECH_STACK } from '@/components/wizard/WizardHeroInput';
 import { WizardDiscoveryStep } from '@/components/wizard/WizardDiscoveryStep';
+import { FeatureTreeStep, FeatureModule } from '@/components/wizard/FeatureTreeStep';
+import { TEMPLATE_ARCHETYPES } from '@/lib/templates/archetypes';
 import { ClarificationQuestion } from '@/types/prd';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { StudioWorkspace } from '@/components/studio/StudioWorkspace';
@@ -86,6 +88,7 @@ const INITIAL_FORM_DATA: PRDFormData = {
 };
 
 function GeneratorContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlTemplate = searchParams?.get('template') || undefined;
   const {
@@ -154,15 +157,40 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const [statusStep, setStatusStep] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [creationMode, setCreationMode] = useState<'wizard' | 'studio' | 'roadmap'>('wizard');
-  const [showModeHub, setShowModeHub] = useState<boolean>(!urlTemplate);
+  const urlMode = searchParams?.get('mode');
+  const [creationMode, setCreationMode] = useState<'prd' | 'roadmap'>(() => {
+    if (urlMode === 'roadmap') return 'roadmap';
+    return 'prd';
+  });
+  const [showModeHub, setShowModeHub] = useState<boolean>(false);
   const [activeRoadmap, setActiveRoadmap] = useState<RoadmapOutput | null>(null);
   const [loadingRoadmap, setLoadingRoadmap] = useState(false);
-  const [wizardStep, setWizardStep] = useState<'input' | 'discovery'>('input');
+  const [wizardStep, setWizardStep] = useState<'input' | 'discovery' | 'feature_tree'>('input');
   const [wizardIdea, setWizardIdea] = useState('');
   const [wizardStack, setWizardStack] = useState<TechStackConfig>(DEFAULT_TECH_STACK);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(urlTemplate);
   const [discoveryQuestions, setDiscoveryQuestions] = useState<ClarificationQuestion[]>([]);
   const [loadingClarifications, setLoadingClarifications] = useState(false);
+  const [customFeatureModules, setCustomFeatureModules] = useState<FeatureModule[]>([]);
+  const [loadingFeatureTree, setLoadingFeatureTree] = useState(false);
+
+  useEffect(() => {
+    if (urlMode === 'roadmap') {
+      setCreationMode('roadmap');
+      setShowModeHub(false);
+    } else if (urlMode === 'prd' || urlMode === 'wizard' || urlMode === 'studio') {
+      setCreationMode('prd');
+      setShowModeHub(false);
+    }
+
+    if (typeof window !== 'undefined') {
+      const pending = localStorage.getItem('ngodingpakeprd_pending_idea');
+      if (pending) {
+        setWizardIdea(pending);
+        localStorage.removeItem('ngodingpakeprd_pending_idea');
+      }
+    }
+  }, [urlMode]);
 
   const isLight = theme === 'light';
   const isServerManaged = systemSettings?.api_key_mode === 'server_managed';
@@ -191,20 +219,36 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     return true; // 'all'
   };
 
-  const handleSelectCreationMode = (mode: 'wizard' | 'studio' | 'roadmap') => {
-    if (mode === 'studio' && !isStudioAllowed()) {
+  const isArchitectAllowed = () => {
+    const policy = systemSettings?.architect_access_tier || 'paid_only';
+    if (policy === 'pro_only') {
+      return isPro || isAdmin;
+    }
+    if (policy === 'paid_only') {
+      return isPaid || isPro || isPlus || isAdmin;
+    }
+    return true; // 'all'
+  };
+
+  const handleSelectCreationMode = (mode: 'prd' | 'roadmap' | 'wizard' | 'studio') => {
+    const targetMode = mode === 'roadmap' ? 'roadmap' : 'prd';
+    if (targetMode === 'roadmap' && !isRoadmapAllowed()) {
       setIsPricingModalOpen(true);
       return;
     }
-    if (mode === 'roadmap' && !isRoadmapAllowed()) {
-      setIsPricingModalOpen(true);
-      return;
-    }
-    setCreationMode(mode);
+    setCreationMode(targetMode);
     setShowModeHub(false);
   };
 
-  const handleSelectModeFromHub = (mode: 'wizard' | 'studio' | 'roadmap') => {
+  const handleSelectModeFromHub = (mode: 'prd' | 'roadmap' | 'wizard' | 'studio' | 'architect') => {
+    if (mode === 'architect') {
+      if (!isArchitectAllowed()) {
+        setIsPricingModalOpen(true);
+        return;
+      }
+      router.push('/architect');
+      return;
+    }
     handleSelectCreationMode(mode);
   };
 
@@ -242,7 +286,14 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       if (local) {
         const parsed = JSON.parse(local);
         if (Array.isArray(parsed)) {
-          combined = parsed.map((item: any) => {
+          // Bersihkan jika ada item log arsitek yang sempat tersimpan di local storage
+          const cleanLocal = parsed.filter(
+            (item: any) => !item.title?.toLowerCase().startsWith('[arsitek]') && item.prd_data?.type !== 'architect'
+          );
+          if (cleanLocal.length !== parsed.length) {
+            localStorage.setItem('local_prd_history', JSON.stringify(cleanLocal));
+          }
+          combined = cleanLocal.map((item: any) => {
             const isRoadmap = item.project_type === 'roadmap' || item.prd_data?.type === 'roadmap' || item.id?.startsWith('roadmap') || (item.title && item.title.toLowerCase().startsWith('roadmap:'));
             const isStudio = item.project_type === 'studio' || item.prd_data?.isStudio || item.id?.startsWith('studio') || (item.title && item.title.toLowerCase().startsWith('studio:'));
             return {
@@ -264,48 +315,33 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.prds)) {
-            const cloudItems: PrdHistorySummary[] = data.prds.map((p: any) => {
-              const isRoadmap = p.prd_data?.type === 'roadmap' || p.id?.startsWith('roadmap') || (p.title && p.title.toLowerCase().startsWith('roadmap:'));
-              const isStudio = p.prd_data?.isStudio || p.id?.startsWith('studio') || (p.title && p.title.toLowerCase().startsWith('studio:'));
-              return {
-                id: p.id,
-                title: p.title,
-                created_at: p.created_at,
-                model_used: p.model_used,
-                prd_data: p.prd_data,
-                project_type: isRoadmap ? 'roadmap' : isStudio ? 'studio' : 'prd',
-              };
-            });
+            const cloudItems: PrdHistorySummary[] = data.prds
+              .filter((p: any) => !p.title?.toLowerCase().startsWith('[arsitek]') && p.prd_data?.type !== 'architect')
+              .map((p: any) => {
+                const isRoadmap = p.prd_data?.type === 'roadmap' || p.id?.startsWith('roadmap') || (p.title && p.title.toLowerCase().startsWith('roadmap:'));
+                const isStudio = p.prd_data?.isStudio || p.id?.startsWith('studio') || (p.title && p.title.toLowerCase().startsWith('studio:'));
+                return {
+                  id: p.id,
+                  title: p.title,
+                  created_at: p.created_at,
+                  model_used: p.model_used,
+                  prd_data: p.prd_data,
+                  project_type: isRoadmap ? 'roadmap' : isStudio ? 'studio' : 'prd',
+                };
+              });
 
-            // Deduplicate cloud items: jika ada item dengan tipe dan judul identik, pertahankan yang paling baru
-            const seenKeys = new Map<string, PrdHistorySummary>();
-            const deduplicatedCloud: PrdHistorySummary[] = [];
+            // Deduplicate cloud items cleanly by unique ID without deleting anything
+            const uniqueCloudMap = new Map<string, PrdHistorySummary>();
             for (const item of cloudItems) {
-              const normKey = `${item.project_type || 'prd'}::${(item.title || '').trim().toLowerCase()}`;
-              if (seenKeys.has(normKey)) {
-                const existing = seenKeys.get(normKey)!;
-                // Hapus duplikat yang lebih usang di latar belakang dari Supabase
-                const toDeleteId = (item.prd_data?.roadmap?.updatedAt && !existing.prd_data?.roadmap?.updatedAt)
-                  ? existing.id
-                  : item.id;
-                fetch(`/api/user-prds?id=${encodeURIComponent(toDeleteId)}&userId=${encodeURIComponent(user.id)}`, { method: 'DELETE' }).catch(() => {});
-                if (toDeleteId === existing.id) {
-                  seenKeys.set(normKey, item);
-                  const idx = deduplicatedCloud.findIndex(d => d.id === existing.id);
-                  if (idx !== -1) deduplicatedCloud[idx] = item;
-                }
-                continue;
+              if (!uniqueCloudMap.has(item.id)) {
+                uniqueCloudMap.set(item.id, item);
               }
-              seenKeys.set(normKey, item);
-              deduplicatedCloud.push(item);
             }
+            const deduplicatedCloud = Array.from(uniqueCloudMap.values());
 
-            // Merge avoiding duplicates by id and key
-            const existingIds = new Set(deduplicatedCloud.map((c) => c.id));
-            const uniqueLocal = combined.filter((l) => {
-              const normKey = `${l.project_type || 'prd'}::${(l.title || '').trim().toLowerCase()}`;
-              return !existingIds.has(l.id) && !seenKeys.has(normKey);
-            });
+            // Merge with local items avoiding duplicate IDs
+            const cloudIdSet = new Set(deduplicatedCloud.map((c) => c.id));
+            const uniqueLocal = combined.filter((l) => !cloudIdSet.has(l.id));
             combined = [...deduplicatedCloud, ...uniqueLocal];
           }
         }
@@ -316,7 +352,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       }
     }
 
-    setHistoryItems(combined);
+    setHistoryItems(combined.filter((item) => !item.title?.toLowerCase().startsWith('[arsitek]')));
   };
 
   useEffect(() => {
@@ -393,7 +429,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     }
   };
 
-  const handleCreateNew = (targetMode?: 'wizard' | 'studio' | 'roadmap') => {
+  const handleCreateNew = (targetMode?: 'prd' | 'roadmap' | 'wizard' | 'studio') => {
     setActivePrdId(null);
     setGeneratedPRD(null);
     setActiveRoadmap(null);
@@ -423,15 +459,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       setActiveRoadmap(prd?.roadmap || prd);
       setGeneratedPRD(null);
       setActivePrdId(id);
-    } else if (itemType === 'studio' || prd?.isStudio) {
-      setCreationMode('studio');
-      setGeneratedPRD(prd);
-      setActiveRoadmap(null);
-      setActivePrdId(id);
     } else {
-      if (creationMode === 'roadmap') {
-        setCreationMode('wizard');
-      }
+      setCreationMode('prd');
       setGeneratedPRD(prd);
       setActiveRoadmap(null);
       setActivePrdId(id);
@@ -671,12 +700,61 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     }
   };
 
-  const handleDiscoverySubmit = async (compiledFormData: PRDFormData) => {
+  const handleDiscoverySubmit = async (
+    compiledFormData: PRDFormData,
+    discoveryDetails?: {
+      answers: Record<string, string[]>;
+      questions: ClarificationQuestion[];
+    }
+  ) => {
     setFormData(compiledFormData);
-    await handleGenerate(compiledFormData, wizardStack);
+    setLoadingFeatureTree(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch('/api/generate-feature-tree', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-api-key': keys.join(','),
+          'x-gemini-preferred-model': preferredModel,
+        },
+        body: JSON.stringify({
+          idea: wizardIdea,
+          techStack: wizardStack,
+          formData: compiledFormData,
+          answers: discoveryDetails?.answers || {},
+          questions: discoveryDetails?.questions || discoveryQuestions,
+          language: wizardStack.language || 'id',
+          userId: user?.id,
+        }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success && Array.isArray(json.data?.modules) && json.data.modules.length > 0) {
+        setCustomFeatureModules(json.data.modules);
+      }
+    } catch (err: unknown) {
+      console.warn('Feature tree generation error, continuing to tree step:', err);
+    } finally {
+      setLoadingFeatureTree(false);
+      setWizardStep('feature_tree');
+    }
   };
 
-  const handleGenerate = async (overrideFormData?: PRDFormData, overrideTechStack?: TechStackConfig) => {
+  const handleFeatureTreeSubmit = async (
+    updatedFormData: PRDFormData,
+    selectedModules: FeatureModule[]
+  ) => {
+    setFormData(updatedFormData);
+    await handleGenerate(updatedFormData, wizardStack, selectedModules);
+  };
+
+  const handleGenerate = async (
+    overrideFormData?: PRDFormData,
+    overrideTechStack?: TechStackConfig,
+    selectedModules?: FeatureModule[]
+  ) => {
     const targetFormData = overrideFormData || formData;
     const targetTechStack = overrideTechStack || wizardStack;
 
@@ -717,6 +795,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           userId: user?.id,
           techStack: targetTechStack,
           language: targetTechStack.language || 'id',
+          selectedModules: selectedModules || (customFeatureModules.length > 0 ? customFeatureModules : undefined),
         }),
       });
 
@@ -731,18 +810,19 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
 
       setGeneratedPRD(json.data);
 
-      // Save to history state & local storage
+      // Save to history state & local storage with consistent ID from Supabase
+      const historyId = json.prdId || json.data?.metadata?.prdId || `prd_${Date.now()}`;
       const newHistoryItem: PrdHistorySummary = {
-        id: `prd_${Date.now()}`,
-        title: targetFormData.title || 'Untitled PRD',
+        id: historyId,
+        title: targetFormData.title || json.data?.title || 'Untitled PRD',
         created_at: new Date().toISOString(),
         model_used: json.data?.metadata?.modelUsed || preferredModel,
         prd_data: json.data,
-        project_type: creationMode === 'studio' ? 'studio' : 'prd',
+        project_type: 'prd',
       };
 
-      setHistoryItems((prev) => [newHistoryItem, ...prev]);
-      setActivePrdId(newHistoryItem.id);
+      setHistoryItems((prev) => [newHistoryItem, ...prev.filter((i) => i.id !== historyId)]);
+      setActivePrdId(historyId);
 
       try {
         const local = localStorage.getItem('local_prd_history');
@@ -851,9 +931,9 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     <div className={`flex h-screen overflow-hidden transition-colors duration-200 ${
       isLight ? 'bg-zinc-100 text-zinc-900' : 'bg-[#09090b] text-zinc-100'
     }`}>
-      {/* 1. Collapsible Left Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-40 lg:static lg:z-auto transition-transform duration-200 ease-in-out ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      {/* 1. Slide-over Left Sidebar Drawer (Uncramped full-width workspace) */}
+      <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out shadow-2xl ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         <GeneratorSidebar
           isOpen={isSidebarOpen}
@@ -878,11 +958,11 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         />
       </div>
 
-      {/* Mobile Sidebar Backdrop */}
+      {/* Sidebar Backdrop (Click outside to close drawer) */}
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs transition-opacity"
         />
       )}
 
@@ -911,8 +991,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           </div>
         )}
 
-        {/* Top Workspace Header (Hidden in Studio Mode with PRD to prevent double header) */}
-        {!(creationMode === 'studio' && generatedPRD) && (
+        {/* Top Workspace Header (Hidden when PRD Studio is active to prevent double header) */}
+        {!generatedPRD && (
           <header className="h-14 shrink-0 border-b border-zinc-800/80 bg-[#09090b]/90 backdrop-blur-md px-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3 min-w-0">
             {/* Sidebar toggle button */}
@@ -928,7 +1008,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
             {/* Breadcrumb Navigation */}
             <div className="flex items-center gap-1.5 text-xs text-zinc-400 truncate">
               <Link href="/" className="hover:text-zinc-200 transition-colors hidden sm:inline">
-                Home
+                Beranda
               </Link>
               <ChevronRight className="h-3 w-3 hidden sm:inline" />
               <button
@@ -953,11 +1033,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                       ? activeRoadmap.title
                       : creationMode === 'roadmap'
                       ? 'Roadmap Pintar'
-                      : generatedPRD
-                      ? generatedPRD.title || 'Dokumen PRD'
-                      : creationMode === 'studio'
-                      ? 'Studio AI'
-                      : formData.title?.trim() || 'Draf Produk Baru'}
+                      : formData.title?.trim() || 'Bikin PRD'}
                   </span>
                 </>
               )}
@@ -965,45 +1041,24 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
 
             {/* Mode Switcher Tabs */}
             <div className="hidden sm:flex items-center rounded-xl border border-zinc-800 bg-zinc-950/70 p-0.5 gap-0.5 ml-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setGeneratedPRD(null);
-                  setActiveRoadmap(null);
-                  setShowModeHub(true);
-                }}
-                className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  showModeHub && !generatedPRD && !activeRoadmap
-                    ? 'bg-amber-500 text-zinc-950 shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-                }`}
-                title="Portal Pilihan Alur Kerja (Hub)"
+              <Link
+                href="/"
+                className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 cursor-pointer"
+                title="Beranda Utama"
               >
-                <span>Pilih Alur</span>
-              </button>
+                <span>Beranda</span>
+              </Link>
               <button
                 type="button"
-                onClick={() => handleSelectCreationMode('wizard')}
+                onClick={() => handleSelectCreationMode('prd')}
                 className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  !showModeHub && creationMode === 'wizard'
+                  !showModeHub && creationMode === 'prd'
                     ? 'bg-amber-500 text-zinc-950 shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
-                title="Mode Terpandu (Wizard)"
+                title="Bikin PRD & Living Spec Studio"
               >
-                <span>Terpandu</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectCreationMode('studio')}
-                className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  !showModeHub && creationMode === 'studio'
-                    ? 'bg-amber-500 text-zinc-950 shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-                }`}
-                title="Mode Studio AI (Dokumen & Chat)"
-              >
-                <span>Studio AI</span>
+                <span>Bikin PRD</span>
               </button>
               <button
                 type="button"
@@ -1013,10 +1068,17 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                     ? 'bg-amber-500 text-zinc-950 shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
-                title="Mode Roadmap Pintar (AI Skill & Career Tree)"
+                title="Mode Roadmap Pintar"
               >
                 <span>Roadmap</span>
               </button>
+              <Link
+                href="/architect"
+                className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all text-zinc-400 hover:text-purple-300 hover:bg-purple-950/40"
+                title="Studio Arsitek & Bab 3"
+              >
+                <span>Studio Arsitek</span>
+              </Link>
             </div>
           </div>
 
@@ -1191,7 +1253,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         {/* Canvas Body */}
         <div
           className={
-            (creationMode === 'studio' && generatedPRD) || (creationMode === 'roadmap' && activeRoadmap)
+            generatedPRD || (creationMode === 'roadmap' && activeRoadmap)
               ? 'flex-1 overflow-hidden flex flex-col w-full h-full p-0 m-0'
               : showModeHub && !generatedPRD && !activeRoadmap
               ? 'flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col justify-center items-center min-h-0'
@@ -1251,6 +1313,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               theme={theme}
               isStudioLocked={!isStudioAllowed()}
               isRoadmapLocked={!isRoadmapAllowed()}
+              isArchitectLocked={!isArchitectAllowed()}
               onOpenPricing={() => setIsPricingModalOpen(true)}
             />
           ) : creationMode === 'roadmap' ? (
@@ -1283,34 +1346,22 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               </div>
             )
           ) : generatedPRD ? (
-            creationMode === 'studio' ? (
-              /* Studio Mode Workspace (Full-height 3-column AI Canvas) */
-              <div id="studio-workspace-section" className="w-full h-full">
-                <StudioWorkspace
-                  initialPrd={generatedPRD}
-                  prdId={activePrdId || undefined}
-                  apiKeyHeader={keys.join(',')}
-                  userId={user?.id}
-                  onBackToEdit={() => setGeneratedPRD(null)}
-                  onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-                  onUpdatePrd={handleUpdateStudioPrd}
-                  onRequireUpgrade={() => setIsPricingModalOpen(true)}
-                  theme={theme}
-                />
-              </div>
-            ) : (
-              /* Condition 1: Standard PRD Viewer Mode */
-              <div id="prd-viewer-section" className="w-full max-w-6xl mx-auto">
-                <PRDViewer
-                  prd={generatedPRD}
-                  onBackToEdit={() => setGeneratedPRD(null)}
-                  theme={theme}
-                  onRequireUpgrade={() => setIsPricingModalOpen(true)}
-                />
-              </div>
-            )
+            /* Studio Workspace with Living Spec, MCP Kanban & Architecture */
+            <div id="studio-workspace-section" className="w-full h-full">
+              <StudioWorkspace
+                initialPrd={generatedPRD}
+                prdId={activePrdId || undefined}
+                apiKeyHeader={keys.join(',')}
+                userId={user?.id}
+                onBackToEdit={() => setGeneratedPRD(null)}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                onUpdatePrd={handleUpdateStudioPrd}
+                onRequireUpgrade={() => setIsPricingModalOpen(true)}
+                theme={theme}
+              />
+            </div>
           ) : (
-            /* Condition 2: PRD Input Phase */
+            /* Condition: 3-Step Anti-Ramen PRD Creation Flow */
             <div className="w-full">
               <div className="max-w-4xl mx-auto mb-2 flex items-center justify-start">
                 <button
@@ -1322,43 +1373,47 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                   <span>Kembali ke Pilihan Alur</span>
                 </button>
               </div>
-              {creationMode === 'studio' ? (
-                /* Studio Hero Input */
-                <div id="studio-hero-container" className="w-full">
-                  <StudioHeroInput
+
+              <div id="wizard-container" className="w-full">
+                {wizardStep === 'input' ? (
+                  /* Langkah 1: Input Ide & Tech Stack */
+                  <WizardHeroInput
                     initialIdea={wizardIdea}
                     userName={user ? displayName : undefined}
-                    onSubmitIdea={handleStudioSubmit}
-                    isLoading={loading}
+                    apiKeyHeader={keys.join(',')}
+                    preferredModel={preferredModel}
+                    onSubmitIdea={handleHeroSubmit}
+                    isLoading={loadingClarifications}
+                    theme={theme}
+                    initialTemplateId={selectedTemplateId || urlTemplate}
+                    onRequireUpgrade={() => setIsPricingModalOpen(true)}
+                  />
+                ) : wizardStep === 'discovery' ? (
+                  /* Langkah 1b: Pertanyaan Klarifikasi */
+                  <WizardDiscoveryStep
+                    idea={wizardIdea}
+                    techStack={wizardStack}
+                    questions={discoveryQuestions}
+                    onBack={() => setWizardStep('input')}
+                    onSubmitDiscovery={handleDiscoverySubmit}
+                    isGeneratingPrd={loading}
+                    isGeneratingFeatureTree={loadingFeatureTree}
                     theme={theme}
                   />
-                </div>
-              ) : (
-                /* Sub-condition: Wizard Mode (Terpandu) */
-                <div id="wizard-container" className="w-full">
-                  {wizardStep === 'input' ? (
-                    <WizardHeroInput
-                      initialIdea={wizardIdea}
-                      userName={user ? displayName : undefined}
-                      onSubmitIdea={handleHeroSubmit}
-                      isLoading={loadingClarifications}
-                      theme={theme}
-                      initialTemplateId={urlTemplate}
-                      onRequireUpgrade={() => setIsPricingModalOpen(true)}
-                    />
-                  ) : (
-                    <WizardDiscoveryStep
-                      idea={wizardIdea}
-                      techStack={wizardStack}
-                      questions={discoveryQuestions}
-                      onBack={() => setWizardStep('input')}
-                      onSubmitDiscovery={handleDiscoverySubmit}
-                      isGeneratingPrd={loading}
-                      theme={theme}
-                    />
-                  )}
-                </div>
-              )}
+                ) : (
+                  /* Langkah 2: Pohon Fitur & Modul Arsitektur */
+                  <FeatureTreeStep
+                    idea={wizardIdea}
+                    techStack={wizardStack}
+                    formData={formData}
+                    onBack={() => setWizardStep('discovery')}
+                    onProceedToStudio={handleFeatureTreeSubmit}
+                    isGeneratingPrd={loading}
+                    theme={theme}
+                    customModules={customFeatureModules.length > 0 ? customFeatureModules : undefined}
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>

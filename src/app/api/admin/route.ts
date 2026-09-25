@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeOpenAiEndpoint, parseOpenAiChatResponse } from '@/lib/ai/openai-compat';
+import { getInMemoryTokenStats } from '@/lib/supabase/token-tracker';
 
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE ?? '';
 const ADMIN_EMAIL = 'buatintech@gmail.com';
@@ -85,22 +86,46 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'live_monitoring') {
-      const { data: recentGenerations } = await adminSupabase
+      const memoryStats = getInMemoryTokenStats();
+
+      // 1. Safely fetch recentGenerations from prd_history
+      let recentGenerations: any[] = [];
+      let totalGenCount = 0;
+      let isHistoryTableMissing = false;
+
+      const { data: dbGenerations, error: genError, count } = await adminSupabase
         .from('prd_history')
-        .select('id, user_id, title, model_used, gemini_slot_used, tokens_used, is_server_key, created_at')
+        .select('id, user_id, title, model_used, gemini_slot_used, tokens_used, is_server_key, created_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .limit(30);
 
-      const { count: totalGenCount } = await adminSupabase
-        .from('prd_history')
-        .select('*', { count: 'exact', head: true });
+      if (genError) {
+        isHistoryTableMissing = true;
+      } else {
+        recentGenerations = dbGenerations || [];
+        totalGenCount = count || (dbGenerations?.length || 0);
+      }
 
-      const { data: profilesData } = await adminSupabase
+      // 2. Safely fetch profiles (with fallback if total_server_tokens column doesn't exist)
+      let profilesData: any[] = [];
+      let isProfileTokenColumnMissing = false;
+
+      const { data: profs, error: profErr } = await adminSupabase
         .from('profiles')
         .select('id, email, full_name, subscription_tier, assigned_gemini_slot, is_banned, trial_count, total_server_tokens, updated_at');
 
+      if (profErr) {
+        isProfileTokenColumnMissing = true;
+        const { data: fallbackProfs } = await adminSupabase
+          .from('profiles')
+          .select('id, email, full_name, subscription_tier, assigned_gemini_slot, is_banned, trial_count, updated_at');
+        profilesData = fallbackProfs || [];
+      } else {
+        profilesData = profs || [];
+      }
+
       const profileMap = new Map<string, { email?: string; full_name?: string; tier?: string; slot?: string; isBanned?: boolean; tokens?: number }>();
-      (profilesData || []).forEach((p: any) => {
+      profilesData.forEach((p: any) => {
         profileMap.set(p.id, {
           email: p.email,
           full_name: p.full_name,
@@ -111,33 +136,43 @@ export async function GET(req: NextRequest) {
         });
       });
 
-      // Sum server tokens from profiles and from recorded generations
-      const totalServerTokensFromProfiles = (profilesData || []).reduce((acc: number, p: any) => acc + (p.total_server_tokens || 0), 0);
-      const serverTokensFromHistory = (recentGenerations || [])
+      // 3. Sum server tokens from profiles, from history, and from in-memory fallback
+      const totalServerTokensFromProfiles = profilesData.reduce((acc: number, p: any) => acc + (p.total_server_tokens || 0), 0);
+      const serverTokensFromHistory = recentGenerations
         .filter((g: any) => g.is_server_key !== false)
         .reduce((acc: number, g: any) => acc + (g.tokens_used || 0), 0);
 
-      const computedTotalTokens = Math.max(totalServerTokensFromProfiles, serverTokensFromHistory);
+      const computedTotalTokens = Math.max(
+        totalServerTokensFromProfiles,
+        serverTokensFromHistory,
+        memoryStats.totalServerTokens
+      );
 
-      const enrichedGenerations = (recentGenerations || []).map((g: any) => {
+      // 4. Merge DB generations and in-memory generations (avoiding duplicates)
+      const existingIds = new Set(recentGenerations.map((g: any) => g.id));
+      const fallbackItems = memoryStats.recentGenerations.filter((m) => !existingIds.has(m.id));
+      const combinedGenerations = [...recentGenerations, ...fallbackItems].slice(0, 30);
+
+      const enrichedGenerations = combinedGenerations.map((g: any) => {
         const prof = g.user_id ? profileMap.get(g.user_id) : undefined;
         return {
           ...g,
           gemini_slot_used: g.gemini_slot_used || null,
           tokens_used: g.tokens_used || 0,
           is_server_key: typeof g.is_server_key === 'boolean' ? g.is_server_key : true,
-          userEmail: prof?.email || (g.user_id ? 'User ID: ' + g.user_id.slice(0, 8) : 'Pengunjung (Guest/Trial)'),
-          userName: prof?.full_name || (g.user_id ? 'Member' : 'Tamu / Visitor'),
-          userTier: prof?.tier || (g.user_id ? 'free' : 'trial'),
+          userEmail: g.userEmail || prof?.email || (g.user_id ? 'User ID: ' + g.user_id.slice(0, 8) : 'Pengunjung (Guest/Trial)'),
+          userName: g.userName || prof?.full_name || (g.user_id ? 'Member' : 'Tamu / Visitor'),
+          userTier: g.userTier || prof?.tier || (g.user_id ? 'free' : 'trial'),
         };
       });
 
       return NextResponse.json({
         success: true,
         recentGenerations: enrichedGenerations,
-        totalGenerations: totalGenCount || 0,
-        activeUsersCount: profilesData?.length || 0,
+        totalGenerations: Math.max(totalGenCount, memoryStats.recentGenerations.length),
+        activeUsersCount: profilesData.length,
         totalServerTokens: computedTotalTokens,
+        isDatabaseSetupNeeded: isHistoryTableMissing || isProfileTokenColumnMissing,
       });
     }
 

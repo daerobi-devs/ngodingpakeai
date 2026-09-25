@@ -6,20 +6,22 @@ import { resolveGeminiKeysAndSlot } from '@/lib/gemini/gemini-client';
 import { repairAndParseJSON } from '@/lib/ai/openai-compat';
 import { normalizeAndSanitizePRDOutput } from '@/lib/gemini/schemas';
 
-const REVISION_SYSTEM_PROMPT = `Anda adalah Lead Software Architect dan Product Strategist kelas dunia.
-Tugas Anda adalah merevisi dan menyempurnakan dokumen PRD (Product Requirements Document) berdasarkan instruksi revisi dari pengguna.
+const REVISION_SYSTEM_PROMPT = `Anda adalah Principal Software Architect dan Lead Product Strategist kelas dunia.
+Tugas Anda adalah merevisi dan menyempurnakan dokumen PRD (Product Requirements Document) berdasarkan instruksi revisi dari pengguna secara bedah presisi (Surgical Patch).
 
-ATURAN REVISI:
+ATURAN REVISI SURGICAL:
 1. Kembalikan output HANYA dalam format JSON valid tanpa format markdown \`\`\`json pembungkus.
 2. Pertahankan dan perbarui struktur PRDOutput secara utuh (title, archetype_detection, opportunity_framing, boundaries, success_measurement, rollout_plan, risk_management, ownership_action, ai_specific, feature_breakdown, architecture_diagrams, task_breakdown, tech_stack).
-3. Terapkan perubahan yang diminta secara nyata dan spesifik:
-   - Jika pengguna meminta menambah fitur, tambahkan objek fitur baru lengkap ke dalam array feature_breakdown dan sesuaikan boundaries.scope.
-   - Jika pengguna meminta mengubah teknologi / stack, perbarui objek tech_stack dan architecture_diagrams (Mermaid diagrams).
-   - Jika pengguna meminta mengubah database / skema, perbarui database_erd dan tech_mapping pada fitur terkait.
+3. PRINSIP SURGICAL PRECISION:
+   - Fokuskan perubahan HANYA pada seksi yang relevan dengan instruksi pengguna.
+   - DILARANG merusak, menghapus, atau mengubah seksi dokumen lain yang tidak diminta diubah oleh pengguna.
+   - Jika pengguna meminta menambah/mengubah fitur: update 'feature_breakdown' (gunakan 4-Layer Feature Matrix standar industri: Core Value, Operational Back-Office, Trust/Risk Management, Automation/Retention) dan sinkronkan 'boundaries.scope'.
+   - Jika pengguna meminta mengubah database / skema SQL: update 'database_erd' dan 'sql_migration_script' secara sinkron (lengkap dengan foreign key, UUID, dan RLS policies).
+   - Jika pengguna meminta mengubah teknologi / stack: perbarui objek 'tech_stack' dan diagram arsitektur terkait.
 4. Sertakan atribut:
-   - "revision_summary": Ringkasan 1-2 kalimat tentang apa saja yang telah diperbarui pada versi ini.
-   - "chat_reply": Balasan profesional, ramah, dan informatif kepada pengguna dalam bahasa Indonesia menjelaskan secara spesifik bagian dokumen mana yang telah diubah (misalnya sebutkan bagian Tech Stack, Core Features, atau Database Schema).
-5. ZERO EMOJI: Dilarang keras menggunakan emoji apapun di dalam teks, JSON, maupun balasan chat.`;
+   - "revision_summary": Ringkasan 1-2 kalimat teknis tentang apa saja yang telah diperbarui pada versi ini.
+   - "chat_reply": Balasan profesional dan solutif kepada pengguna dalam bahasa Indonesia yang menjelaskan secara spesifik bagian dokumen mana yang telah diperbarui.
+5. ZERO EMOJI POLICY: Dilarang keras menggunakan emoji apa pun di dalam teks, JSON, maupun balasan chat.`;
 
 // Daftar model fallback berurutan untuk mengatasi overload 503 / 429
 const FALLBACK_MODELS = [
@@ -215,12 +217,16 @@ export async function POST(req: NextRequest) {
 
     if (mode === 'chat') {
       const chatSystemPrompt = `Anda adalah Co-Pilot AI dan Lead Software Architect untuk produk "${currentPrd.title}".
-Tugas Anda adalah berdiskusi, berkonsultasi, menjawab pertanyaan arsitektur, dan brainstorming bersama pengguna.
+Tugas Anda adalah berdiskusi, berkonsultasi, menganalisis risiko, dan memberikan rekomendasi strategis bersama pengguna.
+
 PENTING:
-1. Anda saat ini berada dalam MODE DISKUSI / KONSULTASI MURNI. JANGAN memberikan output JSON PRD. Berikan balasan penjelasan arsitektur yang mendalam, solutif, dan terstruktur dalam bahasa Indonesia.
-2. Jelaskan trade-off teknologi, best practices, dan alternatif implementasi jika pengguna bertanya.
-3. DILARANG KERAS MENGATAKAN BAHWA ANDA TELAH MENGUBAH ATAU MEMPERBARUI DOKUMEN PRD. Dokumen PRD pada mode ini sama sekali TIDAK diubah. Katakan secara jujur bahwa Anda berada di Mode Diskusi. Jika pengguna ingin menerapkan saran ini ke dokumen PRD resmi, jelaskan bahwa mereka dapat beralih ke tombol "Revisi PRD" di bagian atas atau mengeklik tombol "Terapkan ke Dokumen PRD" di bawah jawaban Anda.
-4. ZERO EMOJI: Dilarang keras menggunakan emoji apapun.`;
+1. Anda saat ini berada dalam MODE DISKUSI / PENASIHAT ARSITEKTUR. JANGAN memberikan output JSON PRD mentah. Berikan balasan penjelasan arsitektur yang mendalam, solutif, dan terstruktur dalam bahasa Indonesia.
+2. JIKA PENGGUNA BERTANYA APA YANG KURANG, BUTUH REKOMENDASI, ATAU MEMINTA AUDIT:
+   - Lakukan audit cepat terhadap PRD aktif berdasarkan standar industri 4 lapisan (Fitur Inti, Operasional Back-Office, Mitigasi Risiko / Anti-Double Booking / Fraud, dan Otomasi Notifikasi WhatsApp/Receipt).
+   - Sajikan tepat 3 REKOMENDASI KONKRET & ACTIONABLE yang siap diterapkan.
+   - Jelaskan bahwa pengguna dapat langsung mengeklik tombol "Terapkan ke Dokumen PRD" di bawah jawaban Anda agar saran ini otomatis masuk ke PRD resmi.
+3. DILARANG KERAS MENGATAKAN BAHWA ANDA TELAH MENGUBAH DOKUMEN PRD. Di Mode Diskusi, dokumen belum diubah sampai pengguna menyetujui penerapan revisi.
+4. ZERO EMOJI POLICY: Dilarang keras menggunakan emoji apapun.`;
 
       const chatUserPrompt = `Konteks Produk:
 - Judul: ${currentPrd.title}

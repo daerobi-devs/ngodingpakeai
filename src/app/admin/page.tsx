@@ -49,6 +49,7 @@ import {
   Moon,
   Search,
   GitFork,
+  Network,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -181,6 +182,7 @@ export default function AdminDashboard() {
     totalGenerations: number;
     activeUsersCount: number;
     totalServerTokens?: number;
+    isDatabaseSetupNeeded?: boolean;
   } | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
 
@@ -389,6 +391,7 @@ export default function AdminDashboard() {
             totalGenerations: data.totalGenerations || 0,
             activeUsersCount: data.activeUsersCount || 0,
             totalServerTokens: data.totalServerTokens || 0,
+            isDatabaseSetupNeeded: Boolean(data.isDatabaseSetupNeeded),
           });
         }
       }
@@ -1435,6 +1438,69 @@ export default function AdminDashboard() {
 
             return (
               <div className="space-y-6">
+                {/* Notice if database setup is needed for token logging */}
+                {monitoringData?.isDatabaseSetupNeeded && (
+                  <div className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md ${
+                    adminTheme === 'light'
+                      ? 'bg-amber-50 border-amber-300 text-amber-900'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                  }`}>
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-xs">Setup Database Diperlukan untuk Pencatatan Token Permanen</p>
+                        <p className="text-[11px] opacity-85 leading-relaxed mt-0.5">
+                          Tabel <code>prd_history</code> atau kolom <code>total_server_tokens</code> di Supabase belum dibuat. Sistem saat ini mencatat token secara sementara di memori server. Jalankan SQL setup agar riwayat dan token tersimpan permanen di database.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sqlScript = `-- Setup Tabel Pencatatan Token & Riwayat PRD & Arsitek
+CREATE TABLE IF NOT EXISTS public.prd_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+  title TEXT NOT NULL DEFAULT 'Untitled PRD',
+  prd_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  model_used TEXT DEFAULT 'Gemini Flash',
+  tokens_used INTEGER DEFAULT 0,
+  is_server_key BOOLEAN DEFAULT false,
+  gemini_slot_used TEXT DEFAULT 'Slot Auto',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS is_server_key BOOLEAN DEFAULT false;
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS model_used TEXT DEFAULT 'AI Engine';
+ALTER TABLE public.prd_history ADD COLUMN IF NOT EXISTS gemini_slot_used TEXT DEFAULT 'Slot Auto';
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS total_server_tokens INTEGER DEFAULT 0;
+
+ALTER TABLE public.prd_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow insert for all users" ON public.prd_history;
+CREATE POLICY "Allow insert for all users" ON public.prd_history FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users view own prd history" ON public.prd_history;
+CREATE POLICY "Users view own prd history" ON public.prd_history FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+
+DROP POLICY IF EXISTS "Admin view all prd history" ON public.prd_history;
+CREATE POLICY "Admin view all prd history" ON public.prd_history FOR ALL USING (true);
+
+CREATE INDEX IF NOT EXISTS idx_prd_history_created_at ON public.prd_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prd_history_user_id ON public.prd_history(user_id);`;
+                        navigator.clipboard.writeText(sqlScript);
+                        showToast('success', 'Script SQL Setup Token disalin ke clipboard! Buka Supabase SQL Editor dan jalankan.');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Salin SQL Setup</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Stat Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                   <div className={`rounded-2xl border p-5 shadow-xs transition-colors ${adminTheme === 'light' ? 'border-slate-200 bg-white' : 'border-zinc-800/80 bg-zinc-950'}`}>
@@ -2050,6 +2116,57 @@ export default function AdminDashboard() {
                           checked={(settings.roadmap_access_tier || 'paid_only') === m.id}
                           onChange={() => setSettings({ ...settings, roadmap_access_tier: m.id as any })}
                           className="mt-0.5 text-amber-500 focus:ring-amber-500"
+                        />
+                        <div>
+                          <div className="font-semibold text-white">{m.title}</div>
+                          <div className="text-[11px] text-zinc-400">{m.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Studio Arsitek & Bab 3 Access Policy */}
+                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
+                    <Network className="h-4 w-4" />
+                    <span>Studio Arsitek &amp; Bab 3 Policy</span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Atur hak akses ke Studio Arsitek (6 Diagram UML/ERD, Ekspor Word DOCX Bab 3, &amp; AI Dosen).
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    {[
+                      {
+                        id: 'paid_only',
+                        title: 'Pelanggan Berbayar (Disarankan)',
+                        desc: 'Khusus user Plus, Pro, & Unlimited. Free user diarahkan upgrade.',
+                      },
+                      {
+                        id: 'pro_only',
+                        title: 'Khusus PRO & Unlimited',
+                        desc: 'Hanya user paket Pro & Unlimited yang dapat mengakses Studio Arsitek & Ekspor DOCX.',
+                      },
+                      {
+                        id: 'all',
+                        title: 'Semua Pengguna (Termasuk Free)',
+                        desc: 'Semua user dapat mengakses Studio Arsitek (kuota harian tetap berlaku).',
+                      },
+                    ].map((m) => (
+                      <label
+                        key={m.id}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                          (settings.architect_access_tier || 'paid_only') === m.id
+                            ? 'border-purple-500/50 bg-purple-500/10 text-white font-semibold'
+                            : 'border-zinc-800/80 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="architect_access_tier"
+                          checked={(settings.architect_access_tier || 'paid_only') === m.id}
+                          onChange={() => setSettings({ ...settings, architect_access_tier: m.id as any })}
+                          className="mt-0.5 text-purple-500 focus:ring-purple-500"
                         />
                         <div>
                           <div className="font-semibold text-white">{m.title}</div>

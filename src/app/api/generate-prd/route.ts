@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     const userId = body.userId;
     const techStack = body.techStack;
     const language = body.language || 'id';
+    const selectedModules = body.selectedModules;
 
     if (!formData) {
       return NextResponse.json(
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
           .from('prd_history')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', userProfile.id)
+          .not('title', 'ilike', '[Arsitek]%')
           .gte('created_at', startOfDay.toISOString());
 
         if (!countError && (count || 0) >= effectiveDailyLimit) {
@@ -173,7 +175,7 @@ export async function POST(req: NextRequest) {
     }
 
     const systemPrompt = MASTER_PRD_SYSTEM_PROMPT;
-    const userPrompt = buildPRDUserPrompt(formData, techStack, language);
+    const userPrompt = buildPRDUserPrompt(formData, techStack, language, selectedModules);
 
     const prdResult = await generatePRDUnified({
       systemSettings,
@@ -226,8 +228,9 @@ export async function POST(req: NextRequest) {
 
     const slotUsed = finalPrdResult.metadata?.geminiSlotUsed || 'Slot Auto';
 
+    let insertedHistoryId: string | null = null;
     try {
-      await adminSupabase
+      const { data: insertedRow } = await adminSupabase
         .from('prd_history')
         .insert({
           user_id: userProfile?.id || null,
@@ -237,17 +240,24 @@ export async function POST(req: NextRequest) {
           tokens_used: tokensUsed,
           is_server_key: isServerKey,
           gemini_slot_used: slotUsed,
-        });
+        })
+        .select('id')
+        .single();
+      if (insertedRow?.id) {
+        insertedHistoryId = insertedRow.id;
+      }
     } catch (histErr) {
       console.error('Failed to log prd_history:', histErr);
     }
 
     return NextResponse.json({
       success: true,
+      prdId: insertedHistoryId,
       data: {
         ...finalPrdResult,
         metadata: {
           ...finalPrdResult.metadata,
+          prdId: insertedHistoryId,
           tokensUsed,
           isServerKey,
           geminiSlotUsed: slotUsed,

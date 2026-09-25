@@ -4,6 +4,9 @@ import {
   clarificationResponseSchema,
   ClarificationOutputZodSchema,
   normalizeAndSanitizeClarifications,
+  geminiFeatureTreeResponseSchema,
+  normalizeAndSanitizeFeatureModules,
+  synthesizeDomainFeatureModules,
 } from "./schemas";
 import { PRDOutput, ClarificationQuestion } from "@/types/prd";
 import { getDomainDiscoveryQuestions } from "./domain-discovery";
@@ -11,10 +14,13 @@ import { repairAndParseJSON } from "@/lib/ai/openai-compat";
 
 // Active high-performance model hierarchy ladder proven on Google AI Studio
 export const MODEL_LADDER = [
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.0-flash-lite",
   "gemini-3.8-flash",
   "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
-  "gemini-flash-latest",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-flash-lite-latest",
@@ -213,7 +219,7 @@ export async function generateStructuredPRD(
             responseMimeType: "application/json",
             responseSchema: geminiPRDResponseSchema,
             temperature: 0.3,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 24576,
           },
         };
 
@@ -363,3 +369,63 @@ export async function generateClarifications(options: {
   // Graceful domain-discovery fallback questions if AI fails
   return getDomainDiscoveryQuestions(userIdea);
 }
+
+export async function generateGeminiFeatureTree(options: {
+  apiKeyPool: KeyPoolManager;
+  idea: string;
+  prompt: string;
+  preferredModel?: string;
+  answers?: Record<string, string[]>;
+  questions?: any[];
+}): Promise<any[]> {
+  const { apiKeyPool, idea, prompt, preferredModel, answers = {}, questions = [] } = options;
+
+  const ladder = preferredModel
+    ? [preferredModel, ...MODEL_LADDER.filter((m) => m !== preferredModel)]
+    : MODEL_LADDER;
+
+  for (let modelIdx = 0; modelIdx < ladder.length; modelIdx++) {
+    const currentModel = ladder[modelIdx];
+    const apiKey = apiKeyPool.getAvailableKey();
+    if (!apiKey) continue;
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: geminiFeatureTreeResponseSchema,
+          temperature: 0.3,
+          maxOutputTokens: 8192,
+        },
+      };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        apiKeyPool.markCooldown(apiKey, 30000);
+        continue;
+      }
+
+      const data = await res.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      const parsed = repairAndParseJSON(rawText);
+      const sanitized = normalizeAndSanitizeFeatureModules(parsed);
+      if (sanitized.length > 0) {
+        return sanitized;
+      }
+    } catch {
+      // Continue to next model/key
+    }
+  }
+
+  return synthesizeDomainFeatureModules(idea, answers, questions);
+}
+

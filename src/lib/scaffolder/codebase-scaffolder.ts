@@ -179,7 +179,25 @@ export function detectStackFromPrd(prd: PRDOutput): DetectedStackInfo {
     return { type: "laravel", name: "PHP Laravel" };
   }
 
-  // 4. Default: Next.js App Router (Fullstack)
+  // 4. Custom Other Stacks (Rust, Java/Spring, .NET, Ruby, Elixir, etc.)
+  const isCustomOther =
+    lang.includes("rust") ||
+    lang.includes("java") ||
+    lang.includes("kotlin") ||
+    lang.includes("c#") ||
+    lang.includes("csharp") ||
+    lang.includes("ruby") ||
+    lang.includes("elixir") ||
+    be.includes("rust") ||
+    be.includes("spring") ||
+    be.includes("dotnet") ||
+    be.includes("rails");
+
+  if (isCustomOther && !isFrontendWeb) {
+    return { type: "generic", name: `Clean Architecture (${stack.language || stack.backend || "Custom"})` };
+  }
+
+  // 5. Default: Next.js App Router (Fullstack)
   return { type: "nextjs", name: "Next.js App Router (Fullstack)" };
 }
 
@@ -196,7 +214,7 @@ export async function generateStarterCodebaseZip(
 
   const mode = options?.mode || "full_starter";
   const versionNum = options?.versionNumber;
-  const safeTitle = prd.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const safeTitle = prd.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "") || "project";
   const folderName = `${safeTitle}-${mode === "docs_only" ? "docs-kit" : "starter-repo"}${versionNum ? `-v${versionNum}` : ""}`;
   const rootFolder = zip.folder(folderName) || zip;
 
@@ -241,6 +259,9 @@ export async function generateStarterCodebaseZip(
         break;
       case "flutter":
         resolveFlutterStack(rootFolder, prd);
+        break;
+      case "generic":
+        resolveGenericStack(rootFolder, prd);
         break;
       case "nextjs":
       default:

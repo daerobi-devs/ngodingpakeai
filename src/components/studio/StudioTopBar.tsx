@@ -14,6 +14,8 @@ import {
   Menu,
   Package,
   FileText,
+  Palette,
+  Terminal,
 } from 'lucide-react';
 
 export interface DocumentVersionInfo {
@@ -27,15 +29,17 @@ interface StudioTopBarProps {
   versions: DocumentVersionInfo[];
   activeVersion: number;
   onSelectVersion: (versionNumber: number) => void;
-  viewMode: 'preview' | 'raw' | 'kanban';
-  onToggleViewMode: (mode: 'preview' | 'raw' | 'kanban') => void;
+  viewMode: 'preview' | 'raw' | 'kanban' | 'ui_prompt';
+  onToggleViewMode: (mode: 'preview' | 'raw' | 'kanban' | 'ui_prompt') => void;
   onExportZip: (mode?: 'full_starter' | 'docs_only') => void;
+  onDownloadMarkdown?: () => void;
   onCopyMarkdown: () => void;
   isCopiedMarkdown: boolean;
   isExportingZip: boolean;
   isChatOpen: boolean;
   onToggleChat: () => void;
   onOpenMcpModal?: () => void;
+  onOpenAgentConfig?: () => void;
   onToggleSidebar?: () => void;
   onBack?: () => void;
   theme?: 'dark' | 'light';
@@ -49,12 +53,14 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
   viewMode,
   onToggleViewMode,
   onExportZip,
+  onDownloadMarkdown,
   onCopyMarkdown,
   isCopiedMarkdown,
   isExportingZip,
   isChatOpen,
   onToggleChat,
   onOpenMcpModal,
+  onOpenAgentConfig,
   onToggleSidebar,
   onBack,
   theme = 'dark',
@@ -209,6 +215,20 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           <Kanban className="h-4 w-4" />
         </button>
 
+        {/* UI Design Prompt button */}
+        <button
+          type="button"
+          onClick={() => onToggleViewMode('ui_prompt')}
+          className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+            viewMode === 'ui_prompt'
+              ? 'bg-[#ea580c] text-white border-[#ea580c]'
+              : 'border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200'
+          }`}
+          title="Prompt Desain UI (v0 / Stitch / Figma)"
+        >
+          <Palette className="h-4 w-4" />
+        </button>
+
         {/* MCP Server Integration button */}
         {onOpenMcpModal && (
           <button
@@ -221,15 +241,33 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           </button>
         )}
 
-        {/* Download ZIP with Starter Repo vs Docs options */}
+        {/* Coding Agent Config button */}
+        {onOpenAgentConfig && (
+          <button
+            type="button"
+            onClick={onOpenAgentConfig}
+            className="p-1.5 rounded-lg border border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer"
+            title="Generator Konfigurasi Coding Agent (.cursorrules, CLAUDE.md, .windsurfrules, .env)"
+          >
+            <Terminal className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* Download Button Group (Direct PRD .MD & ZIP Options) */}
         <div className="relative" ref={downloadDropdownRef}>
           <div className="inline-flex items-center">
             <button
               type="button"
-              onClick={() => onExportZip('full_starter')}
+              onClick={() => {
+                if (onDownloadMarkdown) {
+                  onDownloadMarkdown();
+                } else {
+                  onExportZip('full_starter');
+                }
+              }}
               disabled={isExportingZip}
-              className="p-1.5 rounded-l-lg border border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
-              title="Download Starter Proyek (.zip) - Repo Koding Utuh"
+              className="p-1.5 rounded-l-lg border border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 transition-all cursor-pointer"
+              title="Download Dokumen PRD (.md) Langsung"
             >
               <Download className={`h-4 w-4 ${isExportingZip ? 'animate-bounce text-[#f97316]' : ''}`} />
             </button>
@@ -238,7 +276,7 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
               onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
               disabled={isExportingZip}
               className="p-1.5 rounded-r-lg border-y border-r border-l-0 border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
-              title="Opsi Download ZIP"
+              title="Pilihan Format Download (PRD .MD / Starter .ZIP)"
             >
               <ChevronDown className={`h-3 w-3 transition-transform ${isDownloadDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -246,19 +284,38 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
 
           {isDownloadDropdownOpen && (
             <div
-              className={`absolute right-0 top-full mt-1.5 w-64 rounded-xl border shadow-2xl z-50 overflow-hidden text-left p-1.5 ${
+              className={`absolute right-0 top-full mt-1.5 w-72 rounded-xl border shadow-2xl z-50 overflow-hidden text-left p-1.5 ${
                 isLight
                   ? 'border-zinc-200 bg-white text-zinc-800'
                   : 'border-zinc-800 bg-[#161b22] text-zinc-200'
               }`}
             >
+              {/* Opsi 1: Download PRD .MD Saja (Tepat seperti yang ditanyakan user) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDownloadDropdownOpen(false);
+                  if (onDownloadMarkdown) onDownloadMarkdown();
+                }}
+                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-amber-500/10 text-left transition cursor-pointer group"
+              >
+                <span className="text-xs font-semibold text-white group-hover:text-amber-400 flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-amber-400" />
+                  Dokumen PRD (.MD)
+                </span>
+                <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
+                  Download berkas PRD murni format Markdown (.md) tanpa arsip ZIP
+                </span>
+              </button>
+
+              {/* Opsi 2: Starter Repo .ZIP */}
               <button
                 type="button"
                 onClick={() => {
                   setIsDownloadDropdownOpen(false);
                   onExportZip('full_starter');
                 }}
-                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition cursor-pointer"
+                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition border-t border-zinc-800/80 mt-1 cursor-pointer"
               >
                 <span className="text-xs font-semibold text-white flex items-center gap-1.5">
                   <Package className="h-3.5 w-3.5 text-emerald-400" />
@@ -269,6 +326,7 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
                 </span>
               </button>
 
+              {/* Opsi 3: Paket Dokumen .ZIP */}
               <button
                 type="button"
                 onClick={() => {
@@ -278,11 +336,11 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
                 className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition border-t border-zinc-800/80 mt-1 cursor-pointer"
               >
                 <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-blue-400" />
-                  Dokumen Saja (.ZIP)
+                  <Download className="h-3.5 w-3.5 text-blue-400" />
+                  Paket Dokumen (.ZIP)
                 </span>
                 <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
-                  Hanya berkas PRD.md, DESIGN.md, diagram .mmd, dan rules
+                  Arsip ZIP berisi PRD.md, DESIGN.md, diagram .mmd, dan rules
                 </span>
               </button>
             </div>

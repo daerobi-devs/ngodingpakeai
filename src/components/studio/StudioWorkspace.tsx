@@ -8,7 +8,9 @@ import { StudioDocumentView } from './StudioDocumentView';
 import { StudioChatDrawer, StudioChatMessage } from './StudioChatDrawer';
 import { StudioKanbanView, KanbanTask, generateComprehensiveKanbanTasks } from './StudioKanbanView';
 import { StudioMcpModal } from './StudioMcpModal';
+import { StudioAgentConfigModal } from './StudioAgentConfigModal';
 import { generateStudioFullMarkdown } from './studio-markdown';
+import { StudioUIDesignPromptView } from './StudioUIDesignPromptView';
 import { generateDesignDoc, getDesignPalette } from '@/lib/design-template';
 import { generateStarterCodebaseZip } from '@/lib/scaffolder/codebase-scaffolder';
 
@@ -100,9 +102,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     return 1;
   });
 
-  const [viewMode, setViewMode] = useState<'preview' | 'raw' | 'kanban'>('preview');
+  const [viewMode, setViewMode] = useState<'preview' | 'raw' | 'kanban' | 'ui_prompt'>('preview');
   const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState<boolean>(false);
+  const [isAgentConfigModalOpen, setIsAgentConfigModalOpen] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<StudioChatMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -365,6 +368,39 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     [prdId, currentPrd, fullMarkdown, liveKanbanTasks]
   );
 
+  const handleUpdateDiagrams = useCallback(
+    (diagrams: any) => {
+      setVersions((prev) => {
+        const activeIdx = prev.findIndex((v) => v.versionNumber === activeVersionNumber);
+        if (activeIdx === -1) return prev;
+        const target = prev[activeIdx];
+        const updatedPrd: PRDOutput = {
+          ...target.prd,
+          architecture_diagrams: {
+            ...target.prd.architecture_diagrams,
+            ...diagrams,
+          },
+          sql_migration_script: diagrams.sql_migration_script || target.prd.sql_migration_script,
+        };
+        const updatedList = [...prev];
+        updatedList[activeIdx] = {
+          ...target,
+          prd: updatedPrd,
+        };
+        try {
+          localStorage.setItem(storageVersionKey, JSON.stringify(updatedList));
+        } catch {
+          // silent
+        }
+        if (onUpdatePrd) {
+          onUpdatePrd(updatedPrd, target.versionNumber);
+        }
+        return updatedList;
+      });
+    },
+    [activeVersionNumber, storageVersionKey, onUpdatePrd]
+  );
+
   const handleExportZip = async (mode: 'full_starter' | 'docs_only' = 'full_starter') => {
     setIsExportingZip(true);
     try {
@@ -383,6 +419,24 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
       alert('Gagal mengekspor file ZIP.');
     } finally {
       setIsExportingZip(false);
+    }
+  };
+
+  const handleDownloadMarkdown = () => {
+    try {
+      const blob = new Blob([fullMarkdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeTitle = (currentPrd.title || 'PRD')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      a.href = url;
+      a.download = `PRD_${safeTitle}_v${activeVersionNumber}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download Markdown error:', err);
     }
   };
 
@@ -490,13 +544,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
       }
     } catch (err: any) {
       console.error('Chat/Revision error:', err);
-      const errorMsg: StudioChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'assistant',
-        text: `Terjadi kendala saat memproses: ${err.message || 'Silakan periksa koneksi atau coba lagi.'}`,
-        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setChatMessages((prev) => [...prev, errorMsg]);
+      // Suppress error display so technical errors do not appear to the user in discussion or revision
     } finally {
       setIsRevising(false);
     }
@@ -513,12 +561,14 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         viewMode={viewMode}
         onToggleViewMode={(mode) => setViewMode(mode)}
         onExportZip={handleExportZip}
+        onDownloadMarkdown={handleDownloadMarkdown}
         onCopyMarkdown={handleCopyMarkdown}
         isCopiedMarkdown={isCopiedMarkdown}
         isExportingZip={isExportingZip}
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
         onOpenMcpModal={() => setIsMcpModalOpen(true)}
+        onOpenAgentConfig={() => setIsAgentConfigModalOpen(true)}
         onBack={onBackToEdit}
         onToggleSidebar={onToggleSidebar}
         theme={theme}
@@ -526,8 +576,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
 
       {/* 2. Main 3-Column Content Body matching video layout */}
       <div className="flex-1 flex min-h-0 relative overflow-hidden bg-[#0b0f17]">
-        {/* Left Column: Outline Table of Contents (Hidden in Kanban mode for full board view) */}
-        {viewMode !== 'kanban' && (
+        {/* Left Column: Outline Table of Contents (Hidden in Kanban and UI Prompt mode for full board/prompt view) */}
+        {viewMode !== 'kanban' && viewMode !== 'ui_prompt' && (
           <div className="hidden lg:block pl-6 pr-2 py-6 overflow-y-auto shrink-0">
             <StudioOutline
               activeSectionId={activeSectionId}
@@ -537,7 +587,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
           </div>
         )}
 
-        {/* Center Column: Scrollable Document Canvas OR Kanban Board */}
+        {/* Center Column: Scrollable Document Canvas OR Kanban Board OR UI Design Prompt */}
         <div
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-8 scroll-smooth"
@@ -551,12 +601,19 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               onOpenMcpModal={() => setIsMcpModalOpen(true)}
               theme={theme}
             />
+          ) : viewMode === 'ui_prompt' ? (
+            <StudioUIDesignPromptView
+              prd={currentPrd}
+              theme={theme}
+            />
           ) : (
             <StudioDocumentView
               prd={currentPrd}
               fullMarkdown={fullMarkdown}
               viewMode={viewMode}
               theme={theme}
+              onUpdateDiagrams={handleUpdateDiagrams}
+              apiKeyHeader={apiKeyHeader}
             />
           )}
         </div>
@@ -581,6 +638,13 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         projectTitle={currentPrd.title}
         userToken={userId}
         theme={theme}
+      />
+
+      {/* Coding Agent Configuration Modal */}
+      <StudioAgentConfigModal
+        isOpen={isAgentConfigModalOpen}
+        onClose={() => setIsAgentConfigModalOpen(false)}
+        prd={currentPrd}
       />
     </div>
   );

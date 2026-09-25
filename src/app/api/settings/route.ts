@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   admin_emails: ['daerobi.devs@gmail.com'],
   studio_access_tier: 'paid_only',
   roadmap_access_tier: 'paid_only',
+  architect_access_tier: 'paid_only',
 };
 
 export async function GET() {
@@ -124,6 +125,8 @@ export async function PUT(req: NextRequest) {
       delete coreUpdates.mpg_api_key;
       delete coreUpdates.mpg_webhook_secret;
       delete coreUpdates.studio_access_tier;
+      delete coreUpdates.roadmap_access_tier;
+      delete coreUpdates.architect_access_tier;
 
       const retry = await adminSupabase
         .from('system_settings')

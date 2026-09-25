@@ -65,10 +65,10 @@ interface GeneratorSidebarProps {
   onToggleTheme: () => void;
   isLoadingHistory?: boolean;
   onRefreshHistory?: () => void;
-  creationMode: 'wizard' | 'studio' | 'roadmap';
-  onSetCreationMode: (mode: 'wizard' | 'studio' | 'roadmap') => void;
+  creationMode: 'prd' | 'roadmap' | 'wizard' | 'studio';
+  onSetCreationMode: (mode: 'prd' | 'roadmap' | 'wizard' | 'studio') => void;
   isHubActive?: boolean;
-  onCreateModeSelect?: (mode: 'wizard' | 'studio' | 'roadmap') => void;
+  onCreateModeSelect?: (mode: 'prd' | 'roadmap' | 'wizard' | 'studio') => void;
 }
 
 export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
@@ -258,9 +258,7 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
             <span>
               {creationMode === 'roadmap' && !isHubActive
                 ? 'Buat Roadmap'
-                : creationMode === 'studio' && !isHubActive
-                ? 'Buat Studio'
-                : 'Buat Baru'}
+                : 'Bikin PRD'}
             </span>
           </button>
           <div className="w-[1px] h-4 bg-zinc-300" />
@@ -282,9 +280,9 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
               onClick={() => {
                 setIsNewMenuOpen(false);
                 if (onCreateModeSelect) {
-                  onCreateModeSelect('wizard');
+                  onCreateModeSelect('prd');
                 } else {
-                  onSetCreationMode('wizard');
+                  onSetCreationMode('prd');
                   onNewPrd();
                 }
               }}
@@ -292,28 +290,8 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
             >
               <FileText className="h-3.5 w-3.5 text-amber-400 shrink-0" />
               <div>
-                <div className="font-bold text-zinc-100">PRD Terpadu</div>
-                <div className="text-[10px] text-zinc-400">Bimbingan 3 langkah AI</div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsNewMenuOpen(false);
-                if (onCreateModeSelect) {
-                  onCreateModeSelect('studio');
-                } else {
-                  onSetCreationMode('studio');
-                  onNewPrd();
-                }
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors text-left cursor-pointer"
-            >
-              <Layers className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-              <div>
-                <div className="font-bold text-zinc-100">Studio Spec &amp; Kanban</div>
-                <div className="text-[10px] text-zinc-400">Spesifikasi MCP &amp; Agent</div>
+                <div className="font-bold text-zinc-100">Bikin PRD Baru</div>
+                <div className="text-[10px] text-zinc-400">Living Spec &amp; MCP Kanban</div>
               </div>
             </button>
 
@@ -332,8 +310,8 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
             >
               <Compass className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
               <div>
-                <div className="font-bold text-zinc-100">Roadmap Belajar &amp; Mentor</div>
-                <div className="text-[10px] text-zinc-400">Pohon skill &amp; AI Mentor</div>
+                <div className="font-bold text-zinc-100">Roadmap Pintar</div>
+                <div className="text-[10px] text-zinc-400">Pohon skill &amp; Kurikulum AI</div>
               </div>
             </button>
           </div>
@@ -359,27 +337,15 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
           <div className="flex items-center rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-0.5 gap-0.5">
             <button
               type="button"
-              onClick={() => onSetCreationMode('wizard')}
+              onClick={() => onSetCreationMode('prd')}
               className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
-                creationMode === 'wizard'
+                creationMode === 'prd' || creationMode === 'wizard' || creationMode === 'studio'
                   ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
               }`}
-              title="Mode Terpandu (Wizard)"
+              title="Mode Bikin PRD"
             >
-              <span className="truncate">Terpandu</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onSetCreationMode('studio')}
-              className={`flex-1 inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
-                creationMode === 'studio'
-                  ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
-              }`}
-              title="Mode Studio (Dokumen & Chat AI)"
-            >
-              <span className="truncate">Studio</span>
+              <span className="truncate">PRD</span>
             </button>
             <button
               type="button"
@@ -389,7 +355,7 @@ export const GeneratorSidebar: React.FC<GeneratorSidebarProps> = ({
                   ? 'bg-zinc-800 text-zinc-100 border border-zinc-750 shadow-xs'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
               }`}
-              title="Mode Roadmap Pintar (AI Skill & Career Tree)"
+              title="Mode Roadmap Pintar"
             >
               <span className="truncate">Roadmap</span>
             </button>

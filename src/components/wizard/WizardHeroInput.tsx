@@ -75,6 +75,8 @@ export const DEFAULT_TECH_STACK: TechStackConfig = {
 interface WizardHeroInputProps {
   initialIdea?: string;
   userName?: string;
+  apiKeyHeader?: string;
+  preferredModel?: string;
   onSubmitIdea: (idea: string, stack: TechStackConfig, language?: LanguageOption) => void;
   isLoading?: boolean;
   theme?: 'dark' | 'light';
@@ -85,6 +87,8 @@ interface WizardHeroInputProps {
 export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   initialIdea = '',
   userName = '',
+  apiKeyHeader,
+  preferredModel,
   onSubmitIdea,
   isLoading = false,
   theme = 'dark',
@@ -119,6 +123,18 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     initialTemplateId && TEMPLATE_ARCHETYPES[initialTemplateId] ? initialTemplateId : DEFAULT_ARCHETYPE_ID
   );
+
+  useEffect(() => {
+    if (initialIdea) {
+      setIdea(initialIdea);
+    }
+  }, [initialIdea]);
+
+  useEffect(() => {
+    if (initialTemplateId && TEMPLATE_ARCHETYPES[initialTemplateId]) {
+      setSelectedTemplateId(initialTemplateId);
+    }
+  }, [initialTemplateId]);
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageOption>('id');
   const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
@@ -137,9 +153,37 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
       setEnrichNotification(null);
       setOriginalIdea(idea);
 
+      let keyToSend = apiKeyHeader || '';
+      if (!keyToSend && typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('gemini_api_keys');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              keyToSend = parsed.join(',');
+            }
+          }
+        } catch {}
+      }
+
+      let modelToSend = preferredModel || '';
+      if (!modelToSend && typeof window !== 'undefined') {
+        try {
+          modelToSend = localStorage.getItem('gemini_preferred_model') || '';
+        } catch {}
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (keyToSend) {
+        headers['x-gemini-api-key'] = keyToSend;
+      }
+      if (modelToSend) {
+        headers['x-gemini-preferred-model'] = modelToSend;
+      }
+
       const res = await fetch('/api/enrich-idea', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userIdea: idea.trim(),
           language: selectedLanguage,

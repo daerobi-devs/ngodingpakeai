@@ -19,8 +19,15 @@ interface WizardDiscoveryStepProps {
   techStack: TechStackConfig;
   questions: ClarificationQuestion[];
   onBack: () => void;
-  onSubmitDiscovery: (finalFormData: PRDFormData) => void;
+  onSubmitDiscovery: (
+    finalFormData: PRDFormData,
+    discoveryDetails: {
+      answers: Record<string, string[]>;
+      questions: ClarificationQuestion[];
+    }
+  ) => void;
   isGeneratingPrd?: boolean;
+  isGeneratingFeatureTree?: boolean;
   theme?: 'dark' | 'light';
 }
 
@@ -31,6 +38,7 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
   onBack,
   onSubmitDiscovery,
   isGeneratingPrd = false,
+  isGeneratingFeatureTree = false,
   theme = 'dark',
 }) => {
   const isLight = theme === 'light';
@@ -215,7 +223,7 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
       },
     };
 
-    onSubmitDiscovery(formData);
+    onSubmitDiscovery(formData, { answers, questions });
   };
 
   return (
@@ -467,12 +475,12 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
         <button
           type="button"
           onClick={onBack}
-          disabled={isGeneratingPrd}
+          disabled={isGeneratingPrd || isGeneratingFeatureTree}
           className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-colors ${
             isLight
               ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100'
               : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 hover:text-white'
-          }`}
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Kembali</span>
@@ -481,17 +489,22 @@ export const WizardDiscoveryStep: React.FC<WizardDiscoveryStepProps> = ({
         <button
           type="button"
           onClick={handleFinalSubmit}
-          disabled={isGeneratingPrd}
+          disabled={isGeneratingPrd || isGeneratingFeatureTree}
           className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-6 py-2.5 text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
-          {isGeneratingPrd ? (
+          {isGeneratingFeatureTree ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-zinc-950" />
+              <span>AI Sedang Meracik Modul Fitur...</span>
+            </>
+          ) : isGeneratingPrd ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin text-zinc-950" />
               <span>Menyusun PRD & Roadmap...</span>
             </>
           ) : (
             <>
-              <span>Susun PRD & Roadmap Arsitektur</span>
+              <span>Susun Pohon Arsitektur Fitur</span>
               <ArrowRight className="h-4 w-4 text-zinc-950" />
             </>
           )}

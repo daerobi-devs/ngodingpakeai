@@ -18,6 +18,7 @@ export interface TierFeatureFlags {
   custom_stack: boolean;
   export_zip: boolean;
   architecture_diagrams: boolean;
+  academic_architect?: boolean;
 }
 
 export interface PricingTierConfig {
@@ -57,6 +58,7 @@ export const DEFAULT_PRICING_TIERS: PricingTierConfig[] = [
       custom_stack: false,
       export_zip: false,
       architecture_diagrams: false,
+      academic_architect: false,
     },
     is_popular: false,
     isActive: true,
@@ -76,6 +78,7 @@ export const DEFAULT_PRICING_TIERS: PricingTierConfig[] = [
       'Akses Penuh Fitur Racik Custom Stack',
       'Unduh Starter Kit Siap Koding (.ZIP)',
       '5 Diagram Arsitektur & Database ERD',
+      'Studio Arsitek & Naskah Bab 3 Skripsi DOCX',
     ],
     allowed_templates: ['starter', 'mobile-app', 'ai-service', 'custom'],
     feature_flags: {
@@ -83,6 +86,7 @@ export const DEFAULT_PRICING_TIERS: PricingTierConfig[] = [
       custom_stack: true,
       export_zip: true,
       architecture_diagrams: true,
+      academic_architect: true,
     },
     is_popular: false,
     isActive: true,
@@ -102,6 +106,7 @@ export const DEFAULT_PRICING_TIERS: PricingTierConfig[] = [
       'Akses Penuh Fitur Racik Custom Stack',
       'Unduh Starter Kit Siap Koding (.ZIP)',
       '5 Diagram Arsitektur & Database ERD',
+      'Studio Arsitek & Naskah Bab 3 Skripsi DOCX',
     ],
     allowed_templates: ['all'],
     feature_flags: {
@@ -109,6 +114,7 @@ export const DEFAULT_PRICING_TIERS: PricingTierConfig[] = [
       custom_stack: true,
       export_zip: true,
       architecture_diagrams: true,
+      academic_architect: true,
     },
     is_popular: true,
     isActive: true,
@@ -197,6 +203,7 @@ export interface SystemSettings {
   admin_emails?: string[];
   studio_access_tier?: 'all' | 'paid_only' | 'pro_only';
   roadmap_access_tier?: 'all' | 'paid_only' | 'pro_only';
+  architect_access_tier?: 'all' | 'paid_only' | 'pro_only';
   updated_at?: string;
 }
 

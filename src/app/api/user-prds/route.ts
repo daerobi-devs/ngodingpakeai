@@ -24,13 +24,19 @@ export async function GET(req: NextRequest) {
       .from('prd_history')
       .select('*')
       .eq('user_id', userId)
+      .not('title', 'ilike', '[Arsitek]%')
       .order('created_at', { ascending: false });
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, prds: data || [] });
+    // Filter lapis kedua untuk keamanan mutlak: singkirkan log arsitek dari riwayat PRD
+    const cleanPrds = (data || []).filter(
+      (item: any) => !item.title?.toLowerCase().startsWith('[arsitek]') && item.prd_data?.type !== 'architect'
+    );
+
+    return NextResponse.json({ success: true, prds: cleanPrds });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Gagal mengambil riwayat PRD';
     return NextResponse.json({ success: false, error: msg }, { status: 500 });

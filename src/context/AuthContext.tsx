@@ -21,7 +21,7 @@ interface AuthContextType {
   remainingToday: number;
   remainingTrials: number;
   pendingOrder: PaymentOrder | null;
-  loginWithGoogle: (redirectTo?: string) => Promise<void>;
+  loginWithGoogle: (redirectTo?: string, usePopup?: boolean) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshSettings: () => Promise<void>;
@@ -194,14 +194,117 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, [user?.id, pendingOrder, fetchProfile]);
 
-  const loginWithGoogle = async (redirectTo = '/generator') => {
+  const loginWithGoogle = async (redirectTo = '/generator', usePopup = true): Promise<boolean> => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+    if (usePopup && typeof window !== 'undefined') {
+      const callbackUrl = `${origin}/auth/callback?popup=true&next=${encodeURIComponent(redirectTo)}`;
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: callbackUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error || !data?.url) {
+        console.error('Failed to get OAuth URL for popup, falling back to direct redirect:', error);
+        await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          },
+        });
+        return false;
+      }
+
+      // Hitung koordinat tengah layar browser pengguna
+      const width = 500;
+      const height = 650;
+      const left = window.screenX + Math.max(0, Math.floor((window.outerWidth - width) / 2));
+      const top = window.screenY + Math.max(0, Math.floor((window.outerHeight - height) / 2));
+
+      const popup = window.open(
+        data.url,
+        'google-oauth-popup',
+        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+      );
+
+      // Jika browser memblokir popup, fallback otomatis ke redirect penuh
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        console.warn('Popup diblokir oleh browser. Mengalihkan ke redirect normal.');
+        window.location.href = data.url;
+        return false;
+      }
+
+      return new Promise<boolean>((resolve) => {
+        let isDone = false;
+
+        const cleanup = () => {
+          if (typeof window !== 'undefined') {
+            window.removeEventListener('message', handleMessage);
+          }
+          clearInterval(pollTimer);
+        };
+
+        const finishSuccess = async () => {
+          if (isDone) return;
+          isDone = true;
+          cleanup();
+          try {
+            const { data: { session: freshSession } } = await supabase.auth.getSession();
+            if (freshSession) {
+              setSession(freshSession);
+              setUser(freshSession.user);
+              await Promise.all([
+                fetchProfile(freshSession.user.id),
+                fetchPendingOrder(freshSession.user.id),
+              ]);
+            }
+          } catch (e) {
+            console.warn('Session refresh error:', e);
+          }
+          resolve(true);
+        };
+
+        const handleMessage = async (event: MessageEvent) => {
+          if (event.origin === origin && event.data?.type === 'SUPABASE_AUTH_SUCCESS') {
+            await finishSuccess();
+          }
+        };
+
+        window.addEventListener('message', handleMessage);
+
+        const pollTimer = setInterval(async () => {
+          if (popup.closed) {
+            clearInterval(pollTimer);
+            if (!isDone) {
+              setTimeout(async () => {
+                if (isDone) return;
+                const { data: { session: checkSession } } = await supabase.auth.getSession();
+                if (checkSession) {
+                  await finishSuccess();
+                } else {
+                  isDone = true;
+                  cleanup();
+                  resolve(false);
+                }
+              }, 600);
+            }
+          }
+        }, 500);
+      });
+    }
+
+    // Default redirect mode
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: origin + '/auth/callback?next=' + encodeURIComponent(redirectTo),
+        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
+    return true;
   };
 
   const logout = async () => {

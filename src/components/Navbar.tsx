@@ -16,6 +16,7 @@ import {
   Settings,
   Users,
   Zap,
+  Network,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -215,10 +216,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {isLandingPage ? (
             <>
-              {onToggleTheme && (
-                <ThemeToggle theme={theme || 'dark'} onToggle={onToggleTheme} />
-              )}
-
               {!user ? (
                 <button
                   type="button"
@@ -282,6 +279,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                       >
                         <FileText className="h-3.5 w-3.5" />
                         <span>Buka Studio Generator</span>
+                      </Link>
+
+                      <Link
+                        href="/architect"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-purple-400 hover:bg-zinc-900 transition-colors font-medium"
+                      >
+                        <Network className="h-3.5 w-3.5" />
+                        <span>Studio Arsitek &amp; Bab 3</span>
                       </Link>
 
                       {isPlus && onOpenPricing && (

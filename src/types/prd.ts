@@ -106,12 +106,15 @@ export interface PRDOutput {
     system_flowchart?: string;        // Mermaid flowchart TD/LR
     user_journey_flow?: string;       // Mermaid flowchart LR / State diagram
     database_erd?: string;            // Mermaid erDiagram
+    sql_migration_script?: string;    // Production-ready DDL SQL migration script
     api_integration_matrix?: string;  // Mermaid flowchart / classDiagram
     sequence_diagram?: string;        // Mermaid sequenceDiagram
     infrastructure_topology?: string; // Mermaid flowchart LR - Cloudflare, Nginx, Docker, DB, Cache
     rbac_permission_matrix?: string;  // Mermaid flowchart TD - RBAC roles & permissions
     data_pipeline_flow?: string;      // Mermaid flowchart LR - Data input, queue, worker, storage
   };
+  sql_migration_script?: string;
+  ui_design_prompts?: UIDesignPromptScreen[];
   tech_stack?: {
     name?: string;
     version?: string;
@@ -189,3 +192,15 @@ export type SectionKey =
   | 'risk_management'
   | 'ownership_action'
   | 'ai_specific';
+
+export interface UIDesignPromptScreen {
+  id: string;
+  screen_name: string;
+  category: 'dashboard' | 'core_flow' | 'crud_management' | 'auth_settings' | string;
+  description: string;
+  wireframe_summary: string;
+  target_roles: string[];
+  v0_prompt: string;
+  stitch_prompt: string;
+}
+

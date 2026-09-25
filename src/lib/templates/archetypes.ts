@@ -87,6 +87,52 @@ export const TEMPLATE_ARCHETYPES: Record<string, TemplateArchetype> = {
       'Pastikan semua status mutasi memiliki feedback loading UI dan error boundary.',
     ],
   },
+  'laravel-api': {
+    id: 'laravel-api',
+    name: 'laravel-api',
+    version: 'v11.x',
+    title: 'PHP Laravel 11 Clean REST API',
+    badge: 'Enterprise Backend',
+    description: 'Arsitektur REST API Kokoh dengan Sanctum, Service Layer & PostgreSQL',
+    repoReference: {
+      name: 'laravel/laravel & spatie/laravel-data',
+      url: 'https://github.com/laravel/laravel',
+      stars: '75.000+ Stars',
+    },
+    tech: {
+      frontend: {
+        name: 'React / Next.js / Blade Frontend',
+        sublabel: 'SPA Client / Blade Views',
+        iconType: 'react',
+      },
+      backend: {
+        name: 'PHP Laravel 11',
+        sublabel: 'Sanctum Auth & Service Layer',
+        iconType: 'custom',
+      },
+      database: {
+        name: 'PostgreSQL / MySQL',
+        sublabel: 'Eloquent ORM & Migrations',
+        iconType: 'postgres',
+      },
+      deployment: {
+        name: 'Docker + Nginx',
+        sublabel: 'Multi-stage Production Image',
+        iconType: 'docker',
+      },
+    },
+    architectDirectives: [
+      'Gunakan Service Layer (app/Services/) untuk memisahkan business logic murni.',
+      'Gunakan Form Request (app/Http/Requests/) untuk validasi DTO ketat.',
+      'Gunakan API Resources (app/Http/Resources/) untuk serialisasi JSON konsisten.',
+      'Autentikasi menggunakan Laravel Sanctum token bearer dengan role permissions.',
+    ],
+    cursorRulesSummary: [
+      'Wajib gunakan type-hinting ketat pada method PHP 8.2+.',
+      'Dilarang query DB langsung di Controller, alihkan ke Service / Repository.',
+      'Database migration harus menyertakan index dan foreign key constraints.',
+    ],
+  },
 
   'mobile-app': {
     id: 'mobile-app',

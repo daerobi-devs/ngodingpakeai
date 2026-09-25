@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
           .from('prd_history')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', userProfile.id)
+          .not('title', 'ilike', '[Arsitek]%')
           .gte('created_at', startOfDay.toISOString());
 
         if (!countError && (count || 0) >= effectiveDailyLimit) {
