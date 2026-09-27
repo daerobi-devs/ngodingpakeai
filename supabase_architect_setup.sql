@@ -68,11 +68,16 @@ CREATE TRIGGER on_architect_projects_updated
 -- 2. Pendaftaran Pengaturan Hak Akses di Dashboard Admin (system_settings)
 -- ==============================================================================
 
--- Menambahkan kolom architect_access_tier ('paid_only' | 'pro_only' | 'all') jika belum ada
+-- Menambahkan kolom architect_access_tier ('paid_only' | 'pro_only' | 'all') dan is_architect_enabled jika belum ada
 ALTER TABLE public.system_settings 
-ADD COLUMN IF NOT EXISTS architect_access_tier TEXT DEFAULT 'paid_only';
+ADD COLUMN IF NOT EXISTS architect_access_tier TEXT DEFAULT 'paid_only',
+ADD COLUMN IF NOT EXISTS is_architect_enabled BOOLEAN DEFAULT true;
 
--- Memastikan baris default system_settings memiliki nilai awal 'paid_only'
+-- Memastikan baris default system_settings memiliki nilai awal
 UPDATE public.system_settings 
 SET architect_access_tier = 'paid_only' 
 WHERE architect_access_tier IS NULL;
+
+UPDATE public.system_settings 
+SET is_architect_enabled = true 
+WHERE is_architect_enabled IS NULL;

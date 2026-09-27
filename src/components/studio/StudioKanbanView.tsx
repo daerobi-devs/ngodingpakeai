@@ -18,6 +18,7 @@ import {
   ArrowRight,
   X,
   Server,
+  ListTodo,
 } from 'lucide-react';
 
 export interface KanbanTask {
@@ -45,6 +46,8 @@ interface StudioKanbanViewProps {
   onAddTask?: (newTask: KanbanTask) => void;
   onOpenMcpModal?: () => void;
   theme?: 'dark' | 'light';
+  isTasksGenerated?: boolean;
+  onGenerateTasks?: () => void;
 }
 
 export function generateComprehensiveKanbanTasks(prd: PRDOutput): KanbanTask[] {
@@ -117,8 +120,135 @@ Instruksi Pengerjaan:
 3. Buat trigger pembuatan profil otomatis saat user mendaftar.`,
     });
 
-    // 4. Feature Breakdown dari Dokumen PRD
-    if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+    // 4. Modul Berfase & Sub-Fitur Dinamis dari Roadmap Tree
+    if (prd.roadmap_tree && prd.roadmap_tree.length > 0) {
+      const processedFeatIds = new Set<string>();
+
+      prd.roadmap_tree.forEach((node, nodeIdx) => {
+        const phaseLabel = node.phase || (nodeIdx < 2 ? 'FASE 1' : nodeIdx < 4 ? 'FASE 2' : 'FASE 3');
+        const phasePriority: 'P0' | 'P1' | 'P2' = phaseLabel.includes('1') ? 'P0' : 'P1';
+        const nodeSlug = node.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `mod-${nodeIdx + 1}`;
+        const nodeStatus: 'todo' | 'in_progress' | 'review' | 'done' =
+          node.status === 'Selesai' ? 'done' : node.status === 'Sedang Dikerjakan' ? 'in_progress' : 'todo';
+
+        const matchingFeat = prd.feature_breakdown?.find(
+          (f) =>
+            f.id === node.id ||
+            f.name.toLowerCase().includes(node.title.toLowerCase()) ||
+            node.title.toLowerCase().includes(f.name.toLowerCase())
+        );
+
+        if (matchingFeat?.id) {
+          processedFeatIds.add(matchingFeat.id);
+        }
+
+        const subList = (node.sub_features || []).map((s) => (typeof s === 'string' ? s : s.label)).filter(Boolean);
+
+        // 4a. Task Arsitektur & Shell Modul Utama
+        list.push({
+          id: `task-mod-${node.id || nodeIdx + 1}`,
+          title: `[${phaseLabel}] Arsitektur & Shell Modul: ${node.title}`,
+          priority: phasePriority,
+          phase: `${phaseLabel}: ${node.title}`,
+          status: nodeStatus,
+          userStory:
+            matchingFeat?.user_story ||
+            node.description ||
+            `Membangun pondasi arsitektur, state management, dan alur kerja utama modul ${node.title} untuk aplikasi ${prd.title}.`,
+          happyPath: matchingFeat?.happy_path,
+          businessRules: matchingFeat?.business_rules,
+          edgeCases: matchingFeat?.edge_cases,
+          techMapping: {
+            frontend: matchingFeat?.tech_mapping?.frontend_components || [`components/${nodeSlug}/MainView.tsx`, `components/${nodeSlug}/ActionModal.tsx`],
+            backend: matchingFeat?.tech_mapping?.api_endpoints || [`/api/${nodeSlug}`, `/api/${nodeSlug}/route.ts`],
+            database: matchingFeat?.tech_mapping?.db_tables || [`${nodeSlug.replace(/-/g, '_')}_records`, 'audit_logs'],
+          },
+          agentPrompt:
+            matchingFeat?.agent_prompt ||
+            `TUGAS ARSITEKTUR MODUL: ${node.title} (${phaseLabel})
+Aplikasi: ${prd.title}
+
+Spesifikasi & Kebutuhan:
+- Alur Utama: ${node.description || `Integrasi alur modul ${node.title}`}
+- Komponen Frontend: components/${nodeSlug}/MainView.tsx
+- API Routes: /api/${nodeSlug}
+- Cakupan Sub-Fitur:
+${subList.map((s, i) => `  ${i + 1}. ${s}`).join('\n')}
+
+Instruksi Agen AI:
+1. Bangun shell kontainer dan layout modul pada Next.js 16 App Router.
+2. Terapkan validasi skema Zod dan buat API Route handler / Server Actions.
+3. Hubungkan data relasional dengan database dan pastikan handling loading state & error boundary.`,
+        });
+
+        // 4b. Task Khusus untuk Setiap Sub-Fitur
+        (node.sub_features || []).forEach((sub, sIdx) => {
+          const subTitle = typeof sub === 'string' ? sub : sub.label;
+          if (!subTitle) return;
+          const cleanSubTitle = subTitle.replace(/^[-*•\d.]+\s*/, '').trim();
+          const subPriority: 'P0' | 'P1' | 'P2' =
+            typeof sub === 'object' && sub.priority
+              ? sub.priority
+              : phasePriority;
+          const subSlug = cleanSubTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 25) || `sub-${sIdx + 1}`;
+          const subId =
+            typeof sub === 'object' && sub.id
+              ? `task-sub-${sub.id}`
+              : `task-sub-${node.id || nodeIdx + 1}-${sIdx + 1}`;
+
+          list.push({
+            id: subId,
+            title: `[${phaseLabel}] ${node.title} — ${cleanSubTitle}`,
+            priority: subPriority,
+            phase: `${phaseLabel}: ${node.title}`,
+            status: 'todo',
+            userStory: `Sebagai pengguna ${prd.title}, saya ingin fitur "${cleanSubTitle}" pada modul "${node.title}" berfungsi dengan lancar dan intuitif.`,
+            techMapping: {
+              frontend: [`components/${nodeSlug}/${subSlug}.tsx`],
+              backend: [`/api/${nodeSlug}/${subSlug}`],
+              database: [`${nodeSlug.replace(/-/g, '_')}_data`],
+            },
+            agentPrompt: `TUGAS IMPLEMENTASI SUB-FITUR: ${cleanSubTitle}
+Modul Induk: ${node.title} (${phaseLabel})
+Aplikasi: ${prd.title}
+Prioritas: ${subPriority}
+
+Instruksi Agen AI:
+1. Panggil MCP 'update_task_status' untuk menandai tugas '${subId}' menjadi 'in_progress'.
+2. Buat komponen antarmuka mandiri di 'components/${nodeSlug}/${subSlug}.tsx' dengan aksesibilitas tinggi dan feedback interaktif.
+3. Sediakan rute backend / Server Action terkait dengan validasi input menyeluruh.
+4. Lakukan pengujian skenario normal dan penanganan error.
+5. Panggil MCP 'update_task_status' ke 'done' setelah verifikasi selesai.`,
+          });
+        });
+      });
+
+      // Tambahkan sisa feature_breakdown jika ada yang belum terpetakan
+      if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+        prd.feature_breakdown.forEach((feat, idx) => {
+          if (!processedFeatIds.has(feat.id)) {
+            list.push({
+              id: feat.id || `task-feat-extra-${idx + 1}`,
+              title: feat.name || `Fitur Inti: Modul ${idx + 1}`,
+              priority: feat.priority || 'P1',
+              phase: 'Fase 3: Fitur Pendukung',
+              status: 'todo',
+              userStory: feat.user_story || `Implementasikan fitur ${feat.name} secara menyeluruh.`,
+              happyPath: feat.happy_path,
+              businessRules: feat.business_rules,
+              edgeCases: feat.edge_cases,
+              techMapping: {
+                frontend: feat.tech_mapping?.frontend_components,
+                backend: feat.tech_mapping?.api_endpoints,
+                database: feat.tech_mapping?.db_tables,
+              },
+              agentPrompt: feat.agent_prompt || `TUGAS FITUR: ${feat.name}\n\nSpesifikasi: ${feat.user_story}`,
+            });
+          }
+        });
+      }
+    } else if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+      // Fallback jika roadmap_tree belum ada
       prd.feature_breakdown.forEach((feat, idx) => {
         list.push({
           id: feat.id || `task-feat-${idx + 1}`,
@@ -250,13 +380,15 @@ export const StudioKanbanView: React.FC<StudioKanbanViewProps> = ({
   onAddTask,
   onOpenMcpModal,
   theme = 'dark',
+  isTasksGenerated = true,
+  onGenerateTasks,
 }) => {
   const isLight = theme === 'light';
   const initialTasks = useMemo(() => generateComprehensiveKanbanTasks(prd), [prd]);
   const [internalTasks, setInternalTasks] = useState<KanbanTask[]>(initialTasks);
-  const activeTasks = controlledTasks || internalTasks;
+  const activeTasks = controlledTasks !== undefined ? controlledTasks : internalTasks;
 
-  const [selectedPriority, setSelectedPriority] = useState<'all' | 'P0' | 'P1'>('all');
+  const [selectedPriority, setSelectedPriority] = useState<'all' | 'P0' | 'P1' | 'P2'>('all');
   const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isCopiedAll, setIsCopiedAll] = useState<boolean>(false);
@@ -415,6 +547,17 @@ Instruksi Agen:
               >
                 P1 Fitur
               </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPriority('P2')}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                  selectedPriority === 'P2'
+                    ? 'bg-[#ea580c] text-white font-semibold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                P2 Pendukung
+              </button>
             </div>
 
             {/* Add Custom Task Button */}
@@ -477,6 +620,35 @@ Instruksi Agen:
           </div>
         </div>
       </div>
+
+      {/* Empty State when no tasks generated yet */}
+      {totalCount === 0 && (
+        <div
+          className={`p-8 rounded-2xl border border-dashed flex flex-col items-center justify-center text-center my-4 ${
+            isLight ? 'border-amber-400 bg-amber-50/50' : 'border-amber-500/30 bg-amber-500/5'
+          }`}
+        >
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+            <ListTodo className="w-6 h-6 text-amber-400" />
+          </div>
+          <h3 className="text-base font-semibold text-white mb-1">
+            Daftar Task Belum Dibuat
+          </h3>
+          <p className="text-xs text-zinc-400 max-w-md mb-4 leading-relaxed">
+            PRD Anda sudah siap. Klik tombol di bawah untuk menyusun breakdown coding task berfase siap dieksekusi oleh AI Agent.
+          </p>
+          {onGenerateTasks && (
+            <button
+              type="button"
+              onClick={onGenerateTasks}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-xs shadow-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Bikin Task Sekarang
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 4-Column Kanban Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">

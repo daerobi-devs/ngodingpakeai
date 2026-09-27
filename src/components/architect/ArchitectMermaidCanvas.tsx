@@ -17,8 +17,11 @@ import {
   Lock,
   Unlock,
   Wrench,
+  PenTool,
 } from 'lucide-react';
 import { sanitizeAndFixMermaidCode } from '@/lib/academic-architect/mermaid-sanitizer';
+import { InAppExcalidrawModal } from './InAppExcalidrawModal';
+import { convertMermaidToExcalidraw } from '@/lib/excalidraw/excalidraw-converter';
 
 interface ArchitectMermaidCanvasProps {
   chart: string;
@@ -45,6 +48,7 @@ export const ArchitectMermaidCanvas: React.FC<ArchitectMermaidCanvasProps> = ({
   const [showRawCode, setShowRawCode] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [isScrollLocked, setIsScrollLocked] = useState<boolean>(false);
+  const [isExcalidrawModalOpen, setIsExcalidrawModalOpen] = useState<boolean>(false);
 
   // Update active code when chart prop changes
   useEffect(() => {
@@ -365,6 +369,17 @@ export const ArchitectMermaidCanvas: React.FC<ArchitectMermaidCanvasProps> = ({
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Coret & Edit di Excalidraw */}
+          <button
+            type="button"
+            onClick={() => setIsExcalidrawModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/40 text-indigo-300 font-semibold text-xs transition-colors cursor-pointer"
+            title="Buka atau Coret di Excalidraw"
+          >
+            <PenTool className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Excalidraw</span>
+          </button>
+
           {/* Download SVG */}
           <button
             type="button"
@@ -460,6 +475,14 @@ export const ArchitectMermaidCanvas: React.FC<ArchitectMermaidCanvasProps> = ({
           Skala: {Math.round(zoom * 100)}% | Geser Mouse untuk Pan
         </div>
       </div>
+
+      {/* Modal Kanvas Papan Tulis Live In-App Excalidraw */}
+      <InAppExcalidrawModal
+        isOpen={isExcalidrawModalOpen}
+        onClose={() => setIsExcalidrawModalOpen(false)}
+        scene={convertMermaidToExcalidraw(activeChartCode, title)}
+        title={title}
+      />
     </div>
   );
 };

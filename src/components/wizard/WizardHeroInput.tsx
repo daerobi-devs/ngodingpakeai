@@ -12,9 +12,12 @@ import {
   SlidersHorizontal,
   Wrench,
   Lock,
-  Sparkles,
+  Wand2,
+  Mic,
+  MicOff,
   RotateCcw,
 } from 'lucide-react';
+import { useVoiceDictation } from '@/hooks/useVoiceDictation';
 import {
   TEMPLATE_ARCHETYPES,
   DEFAULT_ARCHETYPE_ID,
@@ -140,6 +143,47 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+
+  // Voice Dictation (Web Speech API) in Indonesian
+  const { isListening, toggleListening, isSupported } = useVoiceDictation({
+    lang: 'id-ID',
+    onResult: (spokenText) => {
+      setIdea(spokenText);
+      setCustomError(null);
+    },
+    onError: (errMsg) => {
+      setCustomError(errMsg);
+      setTimeout(() => setCustomError(null), 8000);
+    },
+  });
+
+  // Restore idea draft if user reloaded the page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedDraft = sessionStorage.getItem('temp_wizard_hero_idea');
+        if (savedDraft && !idea) {
+          setIdea(savedDraft);
+          sessionStorage.removeItem('temp_wizard_hero_idea');
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [idea]);
+
+  const handleReloadPage = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (idea.trim()) {
+          sessionStorage.setItem('temp_wizard_hero_idea', idea);
+        }
+      } catch {
+        // ignore
+      }
+      window.location.reload();
+    }
+  };
 
   // Auto-enrich idea states
   const [isEnriching, setIsEnriching] = useState(false);
@@ -634,6 +678,36 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                 </button>
               )}
 
+              {/* Tombol Dikte Suara (Web Speech API - Bahasa Indonesia) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomError(null);
+                  toggleListening(idea);
+                }}
+                disabled={isLoading}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-40 ${
+                  isListening
+                    ? 'border-red-500 bg-red-500/20 text-red-300 ring-2 ring-red-500/30 animate-pulse'
+                    : isLight
+                    ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 hover:text-amber-600'
+                    : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-amber-400'
+                }`}
+                title={isListening ? 'Hentikan rekaman suara' : 'Dikte ide kamu lewat suara (Bahasa Indonesia)'}
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="h-3.5 w-3.5 text-red-400" />
+                    <span className="text-red-300">Merekam...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Dikte Suara</span>
+                  </>
+                )}
+              </button>
+
               {/* Tombol Perkaya Ide (AI) */}
               <button
                 type="button"
@@ -649,7 +723,7 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                 {isEnriching ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
                 ) : (
-                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  <Wand2 className="h-3.5 w-3.5 text-blue-400" />
                 )}
                 <span>{isEnriching ? 'Memperkaya...' : 'Perkaya Ide (AI)'}</span>
               </button>
@@ -688,6 +762,23 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
           </div>
         </div>
 
+        {/* Listening Voice Indicator Banner */}
+        {isListening && (
+          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium bg-red-500/10 text-red-300 border border-red-500/30 animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+              <span>Mendengarkan suara kamu dalam Bahasa Indonesia... Silakan bicara.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleListening()}
+              className="text-[10px] font-bold text-red-400 hover:underline cursor-pointer"
+            >
+              Selesai
+            </button>
+          </div>
+        )}
+
         {/* Notifikasi Sukses Perkaya Ide */}
         {enrichNotification && (
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-blue-500/10 text-blue-300 border border-blue-500/30 animate-in fade-in slide-in-from-top-1">
@@ -696,8 +787,34 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
           </div>
         )}
 
+        {/* Sleek, Non-Intrusive Notification Banner */}
         {customError && (
-          <p className="text-xs text-red-400 px-2 font-medium">{customError}</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-medium bg-[#161b22] text-zinc-300 border border-zinc-700/80 shadow-lg animate-in fade-in">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+              <span className="leading-relaxed text-zinc-300">{customError}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              {(customError.toLowerCase().includes('muat ulang') || customError.toLowerCase().includes('f5')) && (
+                <button
+                  type="button"
+                  onClick={handleReloadPage}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Muat Ulang Halaman</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setCustomError(null)}
+                className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-zinc-800 transition-colors cursor-pointer"
+                title="Tutup pesan"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         )}
 
         {/* 4. Sleek Compact Tech Stack Strip & Action Button */}

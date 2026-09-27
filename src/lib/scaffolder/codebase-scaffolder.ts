@@ -1,5 +1,6 @@
 import type { PRDOutput } from "@/types/prd";
 import { getDesignPalette, generateDesignDoc } from "@/lib/design-template";
+import { generateStudioTasksMarkdown } from "@/components/studio/studio-markdown";
 import { packDiagramsToZip } from "./templates/diagrams-packer";
 import { packAgentRulesToZip } from "./templates/agent-rules-generator";
 import { resolveNextJsStack } from "./stack-resolvers/nextjs-resolver";
@@ -224,12 +225,16 @@ export async function generateStarterCodebaseZip(
   const prdMarkdown = formatPrdAsMarkdown(prd);
   const palette = getDesignPalette(prd);
   const designMarkdown = generateDesignDoc(prd, palette);
+  const tasksMarkdown = generateStudioTasksMarkdown(prd);
 
   const docsFolder = rootFolder.folder("docs");
   if (docsFolder) {
     docsFolder.file("PRD.md", prdMarkdown);
+    docsFolder.file("TASKS.md", tasksMarkdown);
     docsFolder.file("DESIGN.md", designMarkdown);
   }
+  // Also provide TASKS.md in root for direct AI Agent recognition
+  rootFolder.file("TASKS.md", tasksMarkdown);
 
   // 2. Pack Architecture Diagrams
   packDiagramsToZip(rootFolder, prd);

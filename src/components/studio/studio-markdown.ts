@@ -1,5 +1,6 @@
 import { PRDOutput } from '@/types/prd';
 import { TEMPLATE_ARCHETYPES } from '@/lib/templates/archetypes';
+import { generateDynamicUserFlowSteps, generateArchitectureOverview, generateDatabaseSchemaDictionary, generateCleanCoreFeatures, generateCleanRequirements, generateRichTechStack } from '@/lib/prd-narratives';
 
 export interface StudioOutlineItem {
   id: string;
@@ -97,129 +98,227 @@ export function generateStudioFullMarkdown(prd: PRDOutput): string {
     md += `\n`;
   }
 
-  // 2. Requirements (In Scope, Non-Goals, Non-Functional)
+  // 2. Requirements
+  const cleanReqs = generateCleanRequirements(prd);
   md += `## 2. Requirements\n\n`;
-  md += `### 2.1 Functional Requirements (Lingkup MVP)\n\n`;
-  if (prd.boundaries?.scope && prd.boundaries.scope.length > 0) {
-    prd.boundaries.scope.forEach((item, idx) => {
-      if (item.startsWith('[REQ-') || item.startsWith('REQ-')) {
-        md += `- ${item}\n`;
-      } else {
-        const reqCode = `[REQ-${String(idx + 1).padStart(2, '0')}]`;
-        md += `- **${reqCode}** ${item}\n`;
-      }
-    });
-    md += `\n`;
-  }
 
-  if (prd.boundaries?.non_goals && prd.boundaries.non_goals.length > 0) {
-    md += `### 2.2 Batasan & Non-Goals (Out of Scope MVP)\n\n`;
-    prd.boundaries.non_goals.forEach((item) => {
-      md += `- **[OUT-OF-SCOPE]** ${item}\n`;
-    });
-    md += `\n`;
-  }
+  md += `### Persyaratan Fungsional\n\n`;
+  cleanReqs.functional.forEach((item) => {
+    md += `- ${item}\n`;
+  });
+  md += `\n`;
 
-  if (prd.ai_specific?.guardrails || prd.risk_management?.detection || prd.risk_management?.fallback_kill_switch) {
-    md += `### 2.3 Non-Functional Requirements (NFR & Keamanan)\n\n`;
-    if (prd.ai_specific?.guardrails && prd.ai_specific.guardrails.length > 0) {
-      md += `- **Keamanan & Validasi**: ${prd.ai_specific.guardrails.join(', ')}\n`;
-    }
-    if (prd.risk_management?.detection) {
-      md += `- **Pemantauan & Audit**: ${prd.risk_management.detection}\n`;
-    }
-    if (prd.risk_management?.fallback_kill_switch) {
-      md += `- **Mitigasi & Failover**: ${prd.risk_management.fallback_kill_switch}\n`;
-    }
+  md += `### Persyaratan Non-Fungsional\n\n`;
+  cleanReqs.nonFunctional.forEach((item) => {
+    md += `- ${item}\n`;
+  });
+  md += `\n`;
+
+  if (cleanReqs.assumptionsAndConstraints.length > 0) {
+    md += `### Asumsi & Batasan\n\n`;
+    cleanReqs.assumptionsAndConstraints.forEach((item) => {
+      md += `- ${item}\n`;
+    });
     md += `\n`;
   }
 
   // 3. Core Features
+  const cleanFeatures = generateCleanCoreFeatures(prd);
   md += `## 3. Core Features\n\n`;
-  if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
-    prd.feature_breakdown.forEach((feat, idx) => {
-      md += `### 3.${idx + 1} ${feat.name} (${feat.priority || 'P0'})\n\n`;
-      md += `**User Story:** ${feat.user_story}\n\n`;
+  md += `Fitur di bawah ini disusun mengikuti urutan fase pada kerangka fitur yang sudah disetujui.\n\n`;
 
-      if (feat.happy_path && feat.happy_path.length > 0) {
-        md += `**Alur Eksekusi (Happy Path):**\n`;
-        feat.happy_path.forEach((step, sIdx) => {
-          md += `${sIdx + 1}. ${step}\n`;
-        });
-        md += `\n`;
-      }
-
-      if (feat.business_rules && feat.business_rules.length > 0) {
-        md += `**Aturan Bisnis & Validasi:**\n`;
-        feat.business_rules.forEach((rule) => {
-          md += `- ${rule}\n`;
-        });
-        md += `\n`;
-      }
-
-      if (feat.edge_cases && feat.edge_cases.length > 0) {
-        md += `**Penanganan Edge Cases:**\n`;
-        feat.edge_cases.forEach((edge) => {
-          md += `- ${edge}\n`;
-        });
-        md += `\n`;
-      }
-
-      if (feat.tech_mapping) {
-        md += `**Technical Mapping:**\n`;
-        if (feat.tech_mapping.frontend_components && feat.tech_mapping.frontend_components.length > 0) {
-          md += `- *Frontend Components*: \`${feat.tech_mapping.frontend_components.join('`, `')}\`\n`;
-        }
-        if (feat.tech_mapping.api_endpoints && feat.tech_mapping.api_endpoints.length > 0) {
-          md += `- *API Endpoints*: \`${feat.tech_mapping.api_endpoints.join('`, `')}\`\n`;
-        }
-        if (feat.tech_mapping.db_tables && feat.tech_mapping.db_tables.length > 0) {
-          md += `- *Database Tables*: \`${feat.tech_mapping.db_tables.join('`, `')}\`\n`;
-        }
-        md += `\n`;
-      }
-
-      if (feat.agent_prompt) {
-        md += `**AI Coding Agent Prompt:**\n\n`;
-        md += `\`\`\`text\n${feat.agent_prompt}\n\`\`\`\n\n`;
-      }
-
+  cleanFeatures.forEach((phase) => {
+    md += `### ${phase.phaseTitle}\n\n`;
+    if (phase.moduleSummary) {
+      md += `${phase.moduleSummary}\n\n`;
+    }
+    if (phase.subFeatures && phase.subFeatures.length > 0) {
+      phase.subFeatures.forEach((sub) => {
+        md += `- **${sub.name}** — ${sub.description}\n`;
+      });
       md += `\n`;
-    });
-  } else {
-    md += `Fitur utama terinci mencakup alur registrasi, dashboard manajemen, dan integrasi data.\n\n`;
-  }
+    }
+  });
 
   // 4. User Flow
+  const userFlowSteps = generateDynamicUserFlowSteps(prd);
   md += `## 4. User Flow\n\n`;
-  md += `\`\`\`mermaid\n${defaultUserJourney}\n\`\`\`\n\n`;
+  md += `Alur utama yang akan dilalui pengguna, disusun mengikuti urutan fase:\n\n`;
+  userFlowSteps.forEach((s) => {
+    md += `${s.step}. **${s.title} (${s.phaseTag})**: ${s.description}\n\n`;
+  });
 
   // 5. Architecture
+  const archOverview = generateArchitectureOverview(prd);
   md += `## 5. Architecture\n\n`;
-  md += `\`\`\`mermaid\n${defaultFlowchart}\n\`\`\`\n\n`;
+  md += `${archOverview.intro}\n\n`;
+  md += `### Gambaran sistem:\n\n`;
+  md += `- **Antarmuka pengguna**: ${archOverview.systemComponents.frontend}\n`;
+  md += `- **Logika server**: ${archOverview.systemComponents.backend}\n`;
+  md += `- **Basis data**: ${archOverview.systemComponents.database}\n`;
+  md += `- **Penyimpanan file**: ${archOverview.systemComponents.storage}\n`;
+  md += `- **Layanan autentikasi**: ${archOverview.systemComponents.auth}\n`;
+  md += `- **Generator laporan**: ${archOverview.systemComponents.reports}\n\n`;
+  md += `### Diagram alur sistem:\n\n`;
+  md += `\`\`\`mermaid\n${archOverview.systemFlowchartMermaid}\n\`\`\`\n\n`;
 
-  // 6. Database Schema & SQL Migration
-  md += `## 6. Database Schema & SQL Migration\n\n`;
-  md += `### 6.1 Entity-Relationship Diagram (ERD)\n\n`;
-  md += `\`\`\`mermaid\n${defaultERD}\n\`\`\`\n\n`;
+  // 6. Database Schema
+  const schemaDict = generateDatabaseSchemaDictionary(prd);
+  md += `## 6. Database Schema\n\n`;
+  md += `${schemaDict.intro}\n\n`;
 
-  const defaultSql = diagrams.sql_migration_script || prd.sql_migration_script || '';
-  if (defaultSql) {
-    md += `### 6.2 Skrip Migrasi Database (PostgreSQL / Supabase DDL)\n\n`;
-    md += `\`\`\`sql\n${defaultSql}\n\`\`\`\n\n`;
-  }
+  schemaDict.tables.forEach((t) => {
+    md += `### ${t.number}. ${t.name}${t.description ? ` — ${t.description}` : ''}\n\n`;
+    md += `| Kolom | Tipe | Kegunaan |\n`;
+    md += `| :--- | :--- | :--- |\n`;
+    t.columns.forEach((col) => {
+      md += `| \`${col.name}\` | \`${col.type}\` | ${col.purpose} |\n`;
+    });
+    md += `\n`;
+  });
+
+  md += `### Diagram hubungan antar tabel (ER):\n\n`;
+  md += `\`\`\`mermaid\n${schemaDict.erdDiagram || defaultERD}\n\`\`\`\n\n`;
 
   // 7. Tech Stack
-  const resolvedStack = resolvePrdTechStack(prd);
+  const richStack = generateRichTechStack(prd);
   md += `## 7. Tech Stack\n\n`;
-  md += `- **Frontend**: ${resolvedStack.frontend}\n`;
-  md += `- **Backend & API**: ${resolvedStack.backend}\n`;
-  md += `- **Database**: ${resolvedStack.database}\n`;
-  if (resolvedStack.aiIntegration) {
-    md += `- **AI Integration**: ${resolvedStack.aiIntegration}\n`;
+  md += `${richStack.intro}\n\n`;
+  richStack.items.forEach((item) => {
+    if (item.rationale) {
+      md += `- **${item.category}:** ${item.name} — ${item.rationale}\n`;
+    } else {
+      md += `- **${item.category}:** ${item.name}\n`;
+    }
+  });
+  if (richStack.closingNote) {
+    md += `\n${richStack.closingNote}\n\n`;
+  } else {
+    md += `\n`;
   }
-  md += `- **Authentication**: ${resolvedStack.auth}\n`;
-  md += `- **Deployment**: ${resolvedStack.deployment}\n`;
 
   return md;
+}
+
+/**
+ * Generates actionable TASKS.md for AI Coding Agent or developer checklist.
+ */
+export function generateStudioTasksMarkdown(prd: PRDOutput): string {
+  let md = `# Implementation Tasks & Execution Backlog: ${prd.title}\n\n`;
+  md += `> Dokumen rincian tugas koding berfase yang diekstrak dari Pohon Fitur & PRD.\n`;
+  md += `> Gunakan checklist ini sebagai panduan eksekusi untuk AI Coding Agent (Claude Code, Cursor, Aider, Devin) atau Software Engineer.\n\n`;
+
+  // 1. Fondasi & Arsitektur
+  md += `## FASE 1: Fondasi & Arsitektur Sistem (P0)\n\n`;
+  md += `- [ ] **[TASK-FOUNDATION-01] Inisialisasi Project, Design Tokens & Shell Layout** (Prioritas: P0)\n`;
+  md += `  - **User Story**: Membangun kerangka dasar aplikasi ${prd.title}, navigasi responsif, layout header-footer, dan mock data interaktif.\n`;
+  md += `  - **Target Komponen**: \`App Router Layout\`, \`Navigation Shell\`, \`Theme Provider\`, \`UI Design System\`\n\n`;
+
+  md += `- [ ] **[TASK-DB-01] Skema Database, Relasi, Indeks & RLS Policies** (Prioritas: P0)\n`;
+  md += `  - **User Story**: Merancang tabel relasional PostgreSQL di Supabase lengkap dengan Row-Level Security dan indeks performa mengacu pada skema PRD.\n`;
+  md += `  - **Target Entitas**: Tabel relasional sesuai spesifikasi PRD\n\n`;
+
+  md += `- [ ] **[TASK-AUTH-01] Sistem Autentikasi Pengguna & Route Guards** (Prioritas: P0)\n`;
+  md += `  - **User Story**: Menyediakan alur login/register, sinkronisasi profil pengguna, dan proteksi rute middleware server-side.\n`;
+  md += `  - **Target Komponen**: \`Auth Modal / Page\`, \`Session Verifier\`, \`Auth Middleware Route Guard\`\n\n`;
+
+  // 2. Modul Berfase & Sub-Fitur
+  if (prd.roadmap_tree && prd.roadmap_tree.length > 0) {
+    prd.roadmap_tree.forEach((node, nodeIdx) => {
+      const phaseLabel = node.phase || (nodeIdx < 2 ? 'FASE 1' : nodeIdx < 4 ? 'FASE 2' : 'FASE 3');
+      const phasePriority = phaseLabel.includes('1') ? 'P0' : 'P1';
+      const nodeSlug = node.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `mod-${nodeIdx + 1}`;
+      const subList = (node.sub_features || []).map((s) => (typeof s === 'string' ? s : s.label)).filter(Boolean);
+
+      md += `## [${phaseLabel}] Modul ${nodeIdx + 1}: ${node.title}\n\n`;
+      md += `- [ ] **[TASK-MOD-${nodeIdx + 1}] Arsitektur & Shell Modul: ${node.title}** (Prioritas: ${phasePriority})\n`;
+      md += `  - **Deskripsi**: ${node.description || `Membangun alur utama modul ${node.title} untuk aplikasi ${prd.title}.`}\n`;
+      md += `  - **Komponen Target**: \`components/${nodeSlug}/MainView.tsx\`, \`/api/${nodeSlug}\`\n\n`;
+
+      if (subList.length > 0) {
+        subList.forEach((subTitle, sIdx) => {
+          const cleanSub = subTitle.replace(/^[-*•\d.]+\s*/, '').trim();
+          const subSlug = cleanSub.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 25) || `sub-${sIdx + 1}`;
+          md += `- [ ] **[TASK-SUB-${nodeIdx + 1}.${sIdx + 1}] Sub-Fitur: ${cleanSub}** (Prioritas: ${phasePriority})\n`;
+          md += `  - **User Story**: Mengimplementasikan antarmuka dan alur bisnis "${cleanSub}" pada modul ${node.title}.\n`;
+          md += `  - **File Target**: \`components/${nodeSlug}/${subSlug}.tsx\` & \`/api/${nodeSlug}/${subSlug}\`\n\n`;
+        });
+      }
+    });
+  } else if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
+    prd.feature_breakdown.forEach((feat, idx) => {
+      const p = feat.priority || (idx < 2 ? 'P0' : 'P1');
+      md += `## Fitur Inti ${idx + 1}: ${feat.name} (${p})\n\n`;
+      md += `- [ ] **[TASK-FEAT-${idx + 1}] Implementasi Menyeluruh: ${feat.name}**\n`;
+      md += `  - **User Story**: ${feat.user_story}\n`;
+      if (feat.tech_mapping?.frontend_components) {
+        md += `  - **Frontend**: \`${feat.tech_mapping.frontend_components.join('`, `')}\`\n`;
+      }
+      if (feat.tech_mapping?.api_endpoints) {
+        md += `  - **API**: \`${feat.tech_mapping.api_endpoints.join('`, `')}\`\n`;
+      }
+      md += `\n`;
+    });
+  }
+
+  // 3. Integrasi & Resiliensi
+  md += `## FASE KESIAPAN: Integrasi, Resiliensi & Kesiapan Produksi (P1)\n\n`;
+  md += `- [ ] **[TASK-API-01] Pembangunan Route Handlers, Safe Actions & Validasi Skema Zod** (Prioritas: P1)\n`;
+  md += `  - **Target**: Next.js Route Handlers, Zod Input Schema, dan middleware rate limiting.\n\n`;
+
+  md += `- [ ] **[TASK-EXT-01] Integrasi Transaksional & Webhook Gateway** (Prioritas: P1)\n`;
+  md += `  - **Target**: Webhook Handler, Signature Verifier, dan antrean event atomik.\n\n`;
+
+  md += `- [ ] **[TASK-RESILIENCE-01] Penanganan Edge Cases, Error Boundaries & Fallback UI** (Prioritas: P1)\n`;
+  md += `  - **Target**: Global Error Boundary, Not-Found Page, dan Skeleton Shimmer Loading.\n\n`;
+
+  md += `- [ ] **[TASK-PROD-01] Audit Kualitas Kode, Type Checking, E2E Verification & Kesiapan Rilis** (Prioritas: P1)\n`;
+  md += `  - **Target**: Verifikasi \`npx tsc --noEmit\`, build kompilasi produksi sukses, dan SEO meta tags.\n`;
+
+  return md;
+}
+
+/**
+ * Generates the master CLI prompt for AI Coding Agents (Claude Code, Cursor, Aider, Windsurf).
+ */
+export function generateAgentMasterPrompt(prd: PRDOutput): string {
+  const resolvedStack = resolvePrdTechStack(prd);
+  const tasksMarkdown = generateStudioTasksMarkdown(prd);
+
+  return `# MASTER IMPLEMENTATION PROMPT UNTUK AI CODING AGENT
+
+Kamu adalah Principal Software Engineer dan Autonomous Coding Agent berstandar tinggi.
+Tugas utamamu adalah mengimplementasikan aplikasi "${prd.title}" secara terstruktur, otonom, dan tuntas mengacu pada spesifikasi teknis dan daftar task berikut.
+
+---
+
+## 1. RINGKASAN PROYEK & TECH STACK
+- Judul Proyek: ${prd.title}
+- Arsitektur Tech Stack:
+  * Frontend: ${resolvedStack.frontend}
+  * Backend & API: ${resolvedStack.backend}
+  * Database: ${resolvedStack.database}
+  * Autentikasi: ${resolvedStack.auth}
+  * Deployment: ${resolvedStack.deployment}
+
+---
+
+## 2. ATURAN EKSEKUSI UTAMA (EXECUTION DIRECTIVES)
+1. **Eksekusi Bertahap (Phase-by-Phase)**: Kerjakan tugas secara berurutan mulai dari FASE 1 (Fondasi & Arsitektur) sebelum melanjutkan ke modul fungsional berikutnya.
+2. **Atomic Verification**: Setiap kali menyelesaikan sebuah modul/task, pastikan kode lulus audit tipe (\`npx tsc --noEmit\`) dan tidak ada broken imports.
+3. **Strict Zero-Emoji Policy**: JANGAN gunakan unicode emoji di UI/kode/teks button. Gunakan ikon SVG monokrom (seperti Lucide React).
+4. **Data Integrity**: Ikuti skema tabel relasional PostgreSQL dan relasi foreign key yang telah ditentukan.
+5. **No Placeholders**: Jangan membuat fungsi mock kosong jika fungsionalitas inti dapat langsung diimplementasikan dengan logika bisnis nyata.
+
+---
+
+## 3. DAFTAR TASK EKSEKUSI (WORK BREAKDOWN STRUCTURE)
+
+${tasksMarkdown}
+
+---
+
+## 4. PERINTAH AWAL EKSEKUSI
+Mulai sekarang, bacalah seluruh konteks di atas. Konfirmasikan bahwa kamu memahami struktur proyek, lalu langsung mulai eksekusi [TASK-FOUNDATION-01] dan laporkan progres begitu selesai!
+`;
 }

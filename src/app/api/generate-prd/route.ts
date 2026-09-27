@@ -193,6 +193,19 @@ export async function POST(req: NextRequest) {
       tech_stack: techStack,
     };
 
+    // Preserve the rich feature tree modules from Wizard Step 2 if provided
+    if (selectedModules && Array.isArray(selectedModules) && selectedModules.length > 0) {
+      finalPrdResult.roadmap_tree = selectedModules.map((m: any, idx: number) => ({
+        id: m.id || `node-${idx + 1}`,
+        title: m.name || m.title || `Modul ${idx + 1}`,
+        phase: m.phase || `FASE ${Math.floor(idx / 2) + 1}`,
+        status: 'Direncanakan',
+        sub_features: Array.isArray(m.subFeatures) && m.subFeatures.length > 0
+          ? m.subFeatures
+          : (Array.isArray(m.sub_features) ? m.sub_features : [`Alur Kerja ${m.name || 'Modul'}`]),
+      }));
+    }
+
     const isServerKey = !userGeminiKey || isPaidTier || systemSettings.api_key_mode === 'server_managed';
 
     // Calculate approximate token usage (1 token ~= 3.8 characters for structured technical JSON)

@@ -1,9 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_PRICING_TIERS, SystemSettings } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const OVERRIDE_FILE = path.join(process.cwd(), '.settings_override.json');
+
+function getLocalOverrides(): Partial<SystemSettings> {
+  try {
+    if (fs.existsSync(OVERRIDE_FILE)) {
+      const raw = fs.readFileSync(OVERRIDE_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return {};
+}
+
+function saveLocalOverrides(overrides: Partial<SystemSettings>) {
+  try {
+    const existing = getLocalOverrides();
+    const merged = { ...existing, ...overrides };
+    fs.writeFileSync(OVERRIDE_FILE, JSON.stringify(merged, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to save local settings overrides:', err);
+  }
+}
 
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'default',
@@ -33,10 +57,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
   studio_access_tier: 'paid_only',
   roadmap_access_tier: 'paid_only',
   architect_access_tier: 'paid_only',
+  is_architect_enabled: true,
 };
 
 export async function GET() {
   try {
+    const localOverrides = getLocalOverrides();
     const adminSupabase = createAdminClient();
     const { data, error } = await adminSupabase
       .from('system_settings')
@@ -45,7 +71,10 @@ export async function GET() {
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ success: true, settings: DEFAULT_SETTINGS }, {
+      return NextResponse.json({
+        success: true,
+        settings: { ...DEFAULT_SETTINGS, ...localOverrides },
+      }, {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         },
@@ -59,8 +88,16 @@ export async function GET() {
         }))
       : undefined;
 
+    const isArchitectEnabledFinal =
+      data.is_architect_enabled !== undefined
+        ? data.is_architect_enabled
+        : localOverrides.is_architect_enabled !== undefined
+        ? localOverrides.is_architect_enabled
+        : true;
+
     const publicSettings = {
       ...data,
+      is_architect_enabled: isArchitectEnabledFinal,
       gemini_slots: sanitizedSlots,
       nine_router_key: data.nine_router_key ? '●●●●●●●●' : undefined,
       gemini_master_keys: data.gemini_master_keys ? '●●●●●●●●' : undefined,
@@ -101,6 +138,10 @@ export async function PUT(req: NextRequest) {
     if (updates.mpg_api_key === '●●●●●●●●') delete updates.mpg_api_key;
     if (updates.mpg_webhook_secret === '●●●●●●●●') delete updates.mpg_webhook_secret;
 
+    if (updates.is_architect_enabled !== undefined) {
+      saveLocalOverrides({ is_architect_enabled: updates.is_architect_enabled });
+    }
+
     updates.updated_at = new Date().toISOString();
 
     let { data, error } = await adminSupabase
@@ -109,8 +150,39 @@ export async function PUT(req: NextRequest) {
       .select()
       .single();
 
-    if (error && (error.message?.includes('does not exist') || error.code === '42703')) {
-      // Gracefully retry with core columns if optional extension columns are not yet migrated
+    const isMissingColumnError =
+      Boolean(error) &&
+      (error?.code === '42703' ||
+       error?.code === 'PGRST204' ||
+       error?.message?.includes('does not exist') ||
+       error?.message?.includes('schema cache') ||
+       error?.message?.includes('Could not find the'));
+
+    if (isMissingColumnError && error) {
+      // 1. If error is about is_architect_enabled specifically, retry without removing other valid columns
+      if (error.message?.includes('is_architect_enabled')) {
+        const withoutToggle = { ...updates };
+        delete withoutToggle.is_architect_enabled;
+
+        const retry = await adminSupabase
+          .from('system_settings')
+          .upsert({ id: 'default', ...withoutToggle })
+          .select()
+          .single();
+
+        if (!retry.error) {
+          return NextResponse.json({
+            success: true,
+            settings: {
+              ...retry.data,
+              is_architect_enabled: updates.is_architect_enabled,
+            },
+            note: 'Pengaturan tersimpan. Jalankan supabase_migration_architect_toggle.sql di Supabase SQL Editor jika ingin menyimpannya langsung pada kolom tabel database.',
+          });
+        }
+      }
+
+      // 2. Fallback general retry with core columns
       const coreUpdates = { ...updates };
       delete coreUpdates.gemini_slots;
       delete coreUpdates.global_gemini_slot;
@@ -127,6 +199,7 @@ export async function PUT(req: NextRequest) {
       delete coreUpdates.studio_access_tier;
       delete coreUpdates.roadmap_access_tier;
       delete coreUpdates.architect_access_tier;
+      delete coreUpdates.is_architect_enabled;
 
       const retry = await adminSupabase
         .from('system_settings')
@@ -137,8 +210,11 @@ export async function PUT(req: NextRequest) {
       if (!retry.error) {
         return NextResponse.json({
           success: true,
-          settings: retry.data,
-          note: 'Pengaturan tersimpan. Silakan jalankan supabase_schema.sql di Supabase untuk mengaktifkan kolom multi-slot permanen.',
+          settings: {
+            ...retry.data,
+            is_architect_enabled: updates.is_architect_enabled ?? true,
+          },
+          note: 'Pengaturan tersimpan dengan fallback. Silakan jalankan supabase_migration_architect_toggle.sql di Supabase untuk mengaktifkan kolom database.',
         });
       }
       return NextResponse.json({ success: false, error: retry.error.message }, { status: 500 });
@@ -148,7 +224,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, settings: data });
+    return NextResponse.json({
+      success: true,
+      settings: {
+        ...data,
+        is_architect_enabled: data?.is_architect_enabled ?? updates.is_architect_enabled,
+      },
+    });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Gagal memperbarui pengaturan';
     return NextResponse.json({ success: false, error: err }, { status: 500 });

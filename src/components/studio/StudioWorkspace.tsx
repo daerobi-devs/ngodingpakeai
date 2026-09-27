@@ -9,10 +9,13 @@ import { StudioChatDrawer, StudioChatMessage } from './StudioChatDrawer';
 import { StudioKanbanView, KanbanTask, generateComprehensiveKanbanTasks } from './StudioKanbanView';
 import { StudioMcpModal } from './StudioMcpModal';
 import { StudioAgentConfigModal } from './StudioAgentConfigModal';
+import { ImplementationModal } from './ImplementationModal';
 import { generateStudioFullMarkdown } from './studio-markdown';
 import { StudioUIDesignPromptView } from './StudioUIDesignPromptView';
 import { generateDesignDoc, getDesignPalette } from '@/lib/design-template';
 import { generateStarterCodebaseZip } from '@/lib/scaffolder/codebase-scaffolder';
+import { PhasedFeatureTree } from '@/components/PhasedFeatureTree';
+import { Loader2 } from 'lucide-react';
 
 interface StudioSnapshot {
   versionNumber: number;
@@ -60,6 +63,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
 
   const storageVersionKey = `ngodingpakeprd_studio_versions_${prdId}`;
   const storageChatKey = `ngodingpakeprd_studio_chat_${prdId}`;
+  const storageTasksGeneratedKey = `ngodingpakeprd_tasks_generated_${prdId}`;
 
   const [versions, setVersions] = useState<StudioSnapshot[]>(() => {
     if (typeof window !== 'undefined') {
@@ -102,10 +106,11 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     return 1;
   });
 
-  const [viewMode, setViewMode] = useState<'preview' | 'raw' | 'kanban' | 'ui_prompt'>('preview');
+  const [viewMode, setViewMode] = useState<'preview' | 'tree' | 'split' | 'raw' | 'kanban' | 'ui_prompt'>('preview');
   const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState<boolean>(false);
   const [isAgentConfigModalOpen, setIsAgentConfigModalOpen] = useState<boolean>(false);
+  const [isImplementModalOpen, setIsImplementModalOpen] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<StudioChatMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -125,17 +130,39 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
   const [isExportingZip, setIsExportingZip] = useState<boolean>(false);
   const [activeSectionId, setActiveSectionId] = useState<string>('section-overview');
   const [liveKanbanTasks, setLiveKanbanTasks] = useState<KanbanTask[] | undefined>(undefined);
+  const [hasGeneratedTasks, setHasGeneratedTasks] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(storageTasksGeneratedKey);
+        return saved === 'true';
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+  const [isGeneratingTasks, setIsGeneratingTasks] = useState<boolean>(false);
+  const [generatingProgressText, setGeneratingProgressText] = useState<string>('Menganalisis modul & sub-fitur dari PRD...');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentPrdIdRef = useRef<string | null>(null);
 
-  // Sync versions if prdId changes (i.e. user selected a different PRD from history or created a new PRD)
+  // Sync versions and task generation state if prdId changes (i.e. user selected a different PRD from history or created a new PRD)
   useEffect(() => {
     if (currentPrdIdRef.current === prdId) {
       return;
     }
     currentPrdIdRef.current = prdId;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const savedTasksGen = localStorage.getItem(storageTasksGeneratedKey);
+        setHasGeneratedTasks(savedTasksGen === 'true');
+      } catch {
+        setHasGeneratedTasks(false);
+      }
+    }
 
     if (typeof window !== 'undefined') {
       try {
@@ -239,6 +266,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         'section-architecture',
         'section-database',
         'section-tech-stack',
+        'section-tasks',
       ];
 
       for (const id of sectionIds) {
@@ -271,11 +299,11 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     setTimeout(() => setIsCopiedMarkdown(false), 2000);
   };
 
-  // Initial sync with MCP server using comprehensive task breakdown
+  // Initial sync with MCP server using comprehensive task breakdown (if generated)
   useEffect(() => {
     const syncToMcp = async () => {
       try {
-        const fullTaskList = generateComprehensiveKanbanTasks(currentPrd);
+        const fullTaskList = hasGeneratedTasks ? (liveKanbanTasks || generateComprehensiveKanbanTasks(currentPrd)) : [];
         await fetch('/api/mcp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -293,7 +321,58 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     };
 
     syncToMcp();
-  }, [prdId, currentPrd, fullMarkdown]);
+  }, [prdId, currentPrd, fullMarkdown, hasGeneratedTasks, liveKanbanTasks]);
+
+  const handleBikinTask = useCallback(async () => {
+    if (isGeneratingTasks) return;
+    setIsGeneratingTasks(true);
+    setGeneratingProgressText('Menganalisis arsitektur modul dan fase PRD...');
+
+    try {
+      await new Promise((r) => setTimeout(r, 600));
+      setGeneratingProgressText('Menyusun coding task berfase (Phase 1, 2, 3)...');
+
+      const generatedTasks = generateComprehensiveKanbanTasks(currentPrd);
+      setLiveKanbanTasks(generatedTasks);
+
+      await new Promise((r) => setTimeout(r, 650));
+      setGeneratingProgressText('Menyinkronkan task breakdown ke antarmuka & MCP server...');
+
+      try {
+        await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'sync_project',
+            prdId,
+            title: currentPrd.title,
+            markdownSpec: fullMarkdown,
+            tasks: generatedTasks,
+          }),
+        });
+      } catch {
+        // silent sync fallback
+      }
+
+      await new Promise((r) => setTimeout(r, 450));
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(storageTasksGeneratedKey, 'true');
+        } catch {
+          // silent
+        }
+      }
+      setHasGeneratedTasks(true);
+      setViewMode('split');
+    } finally {
+      setIsGeneratingTasks(false);
+    }
+  }, [isGeneratingTasks, currentPrd, fullMarkdown, prdId, storageTasksGeneratedKey]);
+
+  const handleRegenerateTasks = useCallback(async () => {
+    await handleBikinTask();
+  }, [handleBikinTask]);
 
   // Polling MCP when in Kanban view mode
   useEffect(() => {
@@ -560,11 +639,22 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         onSelectVersion={(vNum) => setActiveVersionNumber(vNum)}
         viewMode={viewMode}
         onToggleViewMode={(mode) => setViewMode(mode)}
+        onBikinTask={() => {
+          if (!hasGeneratedTasks) {
+            handleBikinTask();
+          } else {
+            setViewMode((prev) => (prev === 'split' ? 'kanban' : 'split'));
+          }
+        }}
+        hasGeneratedTasks={hasGeneratedTasks}
+        isGeneratingTasks={isGeneratingTasks}
+        onRegenerateTasks={handleRegenerateTasks}
         onExportZip={handleExportZip}
         onDownloadMarkdown={handleDownloadMarkdown}
         onCopyMarkdown={handleCopyMarkdown}
         isCopiedMarkdown={isCopiedMarkdown}
         isExportingZip={isExportingZip}
+        onOpenImplementModal={() => setIsImplementModalOpen(true)}
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
         onOpenMcpModal={() => setIsMcpModalOpen(true)}
@@ -574,39 +664,94 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         theme={theme}
       />
 
-      {/* 2. Main 3-Column Content Body matching video layout */}
+      {/* 2. Main Content Body with dynamic layout modes */}
       <div className="flex-1 flex min-h-0 relative overflow-hidden bg-[#0b0f17]">
-        {/* Left Column: Outline Table of Contents (Hidden in Kanban and UI Prompt mode for full board/prompt view) */}
-        {viewMode !== 'kanban' && viewMode !== 'ui_prompt' && (
+        {/* Left Column: Outline Table of Contents (Visible only in single document preview mode) */}
+        {viewMode === 'preview' && (
           <div className="hidden lg:block pl-6 pr-2 py-6 overflow-y-auto shrink-0">
             <StudioOutline
               activeSectionId={activeSectionId}
               onSelectSection={handleSelectSection}
               theme={theme}
+              prd={currentPrd}
             />
           </div>
         )}
 
-        {/* Center Column: Scrollable Document Canvas OR Kanban Board OR UI Design Prompt */}
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-8 scroll-smooth"
-        >
-          {viewMode === 'kanban' ? (
+        {/* Center Column / Main View Panes */}
+        {viewMode === 'kanban' ? (
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-8 scroll-smooth"
+          >
             <StudioKanbanView
               prd={currentPrd}
-              tasks={liveKanbanTasks}
+              tasks={hasGeneratedTasks ? (liveKanbanTasks || generateComprehensiveKanbanTasks(currentPrd)) : []}
               onUpdateTaskStatus={handleUpdateTaskStatus}
               onAddTask={handleAddTask}
               onOpenMcpModal={() => setIsMcpModalOpen(true)}
               theme={theme}
+              isTasksGenerated={hasGeneratedTasks}
+              onGenerateTasks={handleBikinTask}
             />
-          ) : viewMode === 'ui_prompt' ? (
+          </div>
+        ) : viewMode === 'ui_prompt' ? (
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-8 scroll-smooth"
+          >
             <StudioUIDesignPromptView
               prd={currentPrd}
               theme={theme}
             />
-          ) : (
+          </div>
+        ) : viewMode === 'tree' ? (
+          <div className="flex-1 h-full w-full overflow-hidden p-3 sm:p-5">
+            <PhasedFeatureTree
+              prd={currentPrd}
+              theme={theme}
+              mode="studio"
+              isTasksGenerated={hasGeneratedTasks}
+              onGenerateTasks={handleBikinTask}
+            />
+          </div>
+        ) : viewMode === 'split' ? (
+          <div className="flex-1 flex flex-col xl:flex-row h-full w-full overflow-hidden divide-y xl:divide-y-0 xl:divide-x divide-zinc-800">
+            {/* Left Pane: Dokumen PRD */}
+            <div
+              ref={scrollContainerRef}
+              className="w-full xl:w-1/2 h-1/2 xl:h-full overflow-y-auto px-4 sm:px-6 py-6 scroll-smooth"
+            >
+              <StudioDocumentView
+                prd={currentPrd}
+                fullMarkdown={fullMarkdown}
+                viewMode="preview"
+                theme={theme}
+                onUpdateDiagrams={handleUpdateDiagrams}
+                apiKeyHeader={apiKeyHeader}
+                onOpenTree={() => setViewMode('tree')}
+                onBikinTask={handleBikinTask}
+                hasGeneratedTasks={hasGeneratedTasks}
+                isGeneratingTasks={isGeneratingTasks}
+              />
+            </div>
+
+            {/* Right Pane: Pohon Fitur & Tasks Canvas */}
+            <div className="w-full xl:w-1/2 h-1/2 xl:h-full overflow-hidden p-2 sm:p-4 bg-[#090b10]">
+              <PhasedFeatureTree
+                prd={currentPrd}
+                theme={theme}
+                mode="split"
+                isTasksGenerated={hasGeneratedTasks}
+                onGenerateTasks={handleBikinTask}
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-8 scroll-smooth"
+          >
             <StudioDocumentView
               prd={currentPrd}
               fullMarkdown={fullMarkdown}
@@ -614,9 +759,13 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               theme={theme}
               onUpdateDiagrams={handleUpdateDiagrams}
               apiKeyHeader={apiKeyHeader}
+              onOpenTree={() => setViewMode('tree')}
+              onBikinTask={handleBikinTask}
+              hasGeneratedTasks={hasGeneratedTasks}
+              isGeneratingTasks={isGeneratingTasks}
             />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Right Column: AI Co-Pilot Chat Drawer */}
         <StudioChatDrawer
@@ -646,6 +795,41 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         onClose={() => setIsAgentConfigModalOpen(false)}
         prd={currentPrd}
       />
+
+      {/* Mulai Implementasi Modal (matching ngodingpakeai Image 2) */}
+      <ImplementationModal
+        isOpen={isImplementModalOpen}
+        onClose={() => setIsImplementModalOpen(false)}
+        prd={currentPrd}
+        versionNumber={activeVersionNumber}
+        onDownloadPrd={handleDownloadMarkdown}
+        onDownloadZip={() => handleExportZip('full_starter')}
+        isExportingZip={isExportingZip}
+        theme={theme}
+      />
+
+      {/* Task Generation Progress Modal Overlay */}
+      {isGeneratingTasks && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md mx-4 p-6 rounded-2xl bg-zinc-900 border border-zinc-700/80 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4">
+              <Loader2 className="w-7 h-7 text-amber-400 animate-spin" />
+            </div>
+            <h3 className="text-base font-semibold text-zinc-100 mb-1">
+              Menyusun Breakdown Task
+            </h3>
+            <p className="text-xs text-zinc-400 mb-4">
+              Mengonversi modul, sub-fitur, dan alur PRD menjadi coding task berfase siap eksekusi.
+            </p>
+            <div className="w-full bg-zinc-800/80 rounded-full h-1.5 overflow-hidden mb-3 border border-zinc-700/50">
+              <div className="bg-amber-400 h-full w-2/3 animate-pulse rounded-full transition-all duration-500" />
+            </div>
+            <p className="text-[11px] font-mono text-amber-400/90">
+              {generatingProgressText}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

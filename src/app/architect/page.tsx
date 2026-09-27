@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Network, ArrowLeft } from 'lucide-react';
 import { ArchitectProject, RawExtractedBlueprint, AcademicDiagramSet } from '@/lib/academic-architect/types';
 import { ArchitectEntryHub } from '@/components/architect/ArchitectEntryHub';
 import { ArchitectWorkspace } from '@/components/architect/ArchitectWorkspace';
@@ -179,6 +181,35 @@ function ArchitectStudioContent() {
     }
   };
 
+  const isFeatureEnabled = systemSettings?.is_architect_enabled !== false || isAdmin;
+
+  if (!isFeatureEnabled) {
+    return (
+      <div className="min-h-screen bg-[#07090e] text-zinc-100 flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="max-w-md w-full p-8 rounded-3xl border border-zinc-800 bg-[#0c0e14] shadow-2xl space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto shadow-inner">
+            <Network className="w-7 h-7" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">Studio Arsitek Sedang Dinonaktifkan</h2>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Fitur Studio Arsitek saat ini sedang dinonaktifkan sementara oleh pengelola sistem untuk pemeliharaan atau optimasi server.
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/generator"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali ke Studio Generator</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#07090e] text-zinc-100 flex flex-col font-sans">
       {activeProject ? (
@@ -203,6 +234,11 @@ function ArchitectStudioContent() {
               </a>
               <span className="text-zinc-600">/</span>
               <span className="text-xs font-mono font-semibold text-blue-400">architect</span>
+              {isAdmin && systemSettings?.is_architect_enabled === false && (
+                <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                  Admin Preview (Fitur Hidden Publik)
+                </span>
+              )}
             </div>
             <button
               type="button"

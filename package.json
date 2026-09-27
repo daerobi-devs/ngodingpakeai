@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@google/genai": "^2.22.0",
     "@google/generative-ai": "^0.24.1",
     "@supabase/ssr": "^0.12.7",

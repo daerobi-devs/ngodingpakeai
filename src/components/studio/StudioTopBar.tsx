@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Eye,
   Code2,
@@ -16,6 +16,12 @@ import {
   FileText,
   Palette,
   Terminal,
+  FolderTree,
+  Columns,
+  ListTodo,
+  Loader2,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 
 export interface DocumentVersionInfo {
@@ -29,13 +35,18 @@ interface StudioTopBarProps {
   versions: DocumentVersionInfo[];
   activeVersion: number;
   onSelectVersion: (versionNumber: number) => void;
-  viewMode: 'preview' | 'raw' | 'kanban' | 'ui_prompt';
-  onToggleViewMode: (mode: 'preview' | 'raw' | 'kanban' | 'ui_prompt') => void;
+  viewMode: 'preview' | 'tree' | 'split' | 'raw' | 'kanban' | 'ui_prompt';
+  onToggleViewMode: (mode: 'preview' | 'tree' | 'split' | 'raw' | 'kanban' | 'ui_prompt') => void;
+  onBikinTask?: () => void;
+  hasGeneratedTasks?: boolean;
+  isGeneratingTasks?: boolean;
+  onRegenerateTasks?: () => void;
   onExportZip: (mode?: 'full_starter' | 'docs_only') => void;
   onDownloadMarkdown?: () => void;
   onCopyMarkdown: () => void;
   isCopiedMarkdown: boolean;
   isExportingZip: boolean;
+  onOpenImplementModal?: () => void;
   isChatOpen: boolean;
   onToggleChat: () => void;
   onOpenMcpModal?: () => void;
@@ -52,11 +63,16 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
   onSelectVersion,
   viewMode,
   onToggleViewMode,
+  onBikinTask,
+  hasGeneratedTasks = false,
+  isGeneratingTasks = false,
+  onRegenerateTasks,
   onExportZip,
   onDownloadMarkdown,
   onCopyMarkdown,
   isCopiedMarkdown,
   isExportingZip,
+  onOpenImplementModal,
   isChatOpen,
   onToggleChat,
   onOpenMcpModal,
@@ -66,18 +82,17 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
   theme = 'dark',
 }) => {
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
-  const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const downloadDropdownRef = useRef<HTMLDivElement>(null);
   const isLight = theme === 'light';
+
+  const latestVersionNumber = useMemo(() => {
+    return Math.max(...versions.map((v) => v.versionNumber), 1);
+  }, [versions]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsVersionDropdownOpen(false);
-      }
-      if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
-        setIsDownloadDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -92,7 +107,7 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           : 'border-zinc-800/80 bg-[#0d1117] text-zinc-100'
       }`}
     >
-      {/* Left: Hamburger + Logo + Version selector pill */}
+      {/* Left: Hamburger + Logo + Version selector pill + Bikin Task pill */}
       <div className="flex items-center gap-3 min-w-0">
         {onToggleSidebar && (
           <button
@@ -111,7 +126,7 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           <span className="text-amber-500 font-extrabold">prd</span>
         </div>
 
-        {/* Version dropdown pill matching video: Version 3 ⌄ */}
+        {/* Version dropdown pill matching video: Version 2 (terbaru) ⌄ */}
         <div className="relative ml-1" ref={dropdownRef}>
           <button
             type="button"
@@ -123,7 +138,10 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
             }`}
             title="Pilih Versi PRD"
           >
-            <span>Version {activeVersion}</span>
+            <span>
+              Version {activeVersion}
+              {activeVersion === latestVersionNumber ? ' (terbaru)' : ''}
+            </span>
             <ChevronDown className="h-3 w-3 text-zinc-400" />
           </button>
 
@@ -141,6 +159,7 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
               <div className="max-h-56 overflow-y-auto py-1 text-xs">
                 {versions.map((ver) => {
                   const isCurrent = ver.versionNumber === activeVersion;
+                  const isLatest = ver.versionNumber === latestVersionNumber;
                   return (
                     <button
                       key={ver.versionNumber}
@@ -151,12 +170,14 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
                       }}
                       className={`w-full flex flex-col items-start px-3 py-1.5 transition-colors cursor-pointer ${
                         isCurrent
-                          ? 'bg-[#f97316]/20 text-[#f97316] font-semibold'
+                          ? 'bg-[#ea580c]/20 text-[#ea580c] font-semibold'
                           : 'hover:bg-zinc-800/60 text-zinc-300'
                       }`}
                     >
                       <div className="w-full flex items-center justify-between">
-                        <span>Version {ver.versionNumber}</span>
+                        <span>
+                          Version {ver.versionNumber} {isLatest ? '(terbaru)' : ''}
+                        </span>
                         <span className="text-[10px] text-zinc-500">{ver.timestamp}</span>
                       </div>
                       <span className="text-[11px] text-zinc-400 truncate w-full mt-0.5">
@@ -169,11 +190,65 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Bikin Task Pill Button */}
+        {onBikinTask && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={isGeneratingTasks}
+              onClick={onBikinTask}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isGeneratingTasks
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 animate-pulse cursor-wait'
+                  : hasGeneratedTasks
+                  ? 'border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300'
+                  : 'border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 shadow-sm shadow-amber-500/10'
+              }`}
+              title={
+                isGeneratingTasks
+                  ? 'Sedang menyusun daftar tugas dari PRD...'
+                  : hasGeneratedTasks
+                  ? 'Lihat Task di Split View / Pohon Fitur'
+                  : 'Bikin Task otomatis dari PRD & tampilkan pohon tugas'
+              }
+            >
+              {isGeneratingTasks ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 text-amber-400 animate-spin" />
+                  <span>Menyusun Task...</span>
+                </>
+              ) : hasGeneratedTasks ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Task Siap ({viewMode === 'split' ? 'Split View' : 'Buka Task'})</span>
+                </>
+              ) : (
+                <>
+                  <ListTodo className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Bikin Task</span>
+                </>
+              )}
+            </button>
+
+            {hasGeneratedTasks && onRegenerateTasks && (
+              <button
+                type="button"
+                onClick={onRegenerateTasks}
+                disabled={isGeneratingTasks}
+                className="p-1 rounded-full border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 transition-colors cursor-pointer"
+                title="Perbarui / Regenerate Task dari PRD terbaru"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Right: Action Buttons Grouped: [Eye] [Code] [Kanban] [MCP] [Download] [Copy] [Chat] */}
+      {/* Right: Action Buttons Grouped: [Eye] [Tree] [Split] [Kanban] [UI Prompt] [Code] [MCP] [Download] [Copy] [Chat] */}
       <div className="flex items-center gap-1.5">
-        {/* Eye Preview button */}
+        {/* Eye Preview button (Dokumen PRD) */}
         <button
           type="button"
           onClick={() => onToggleViewMode('preview')}
@@ -182,23 +257,37 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
               ? 'bg-[#ea580c] text-white border-[#ea580c]'
               : 'border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200'
           }`}
-          title="Tampilan Pratinjau (Preview)"
+          title="Tampilan Dokumen PRD"
         >
           <Eye className="h-4 w-4" />
         </button>
 
-        {/* Code Markdown button */}
+        {/* Tree Canvas button (Pohon Fitur) */}
         <button
           type="button"
-          onClick={() => onToggleViewMode('raw')}
+          onClick={() => onToggleViewMode('tree')}
           className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-            viewMode === 'raw'
+            viewMode === 'tree'
               ? 'bg-[#ea580c] text-white border-[#ea580c]'
               : 'border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200'
           }`}
-          title="Tampilan Markdown (Code)"
+          title="Pohon Fitur Interaktif (Tree Canvas)"
         >
-          <Code2 className="h-4 w-4" />
+          <FolderTree className="h-4 w-4" />
+        </button>
+
+        {/* Split View button (Dokumen & Pohon Fitur) */}
+        <button
+          type="button"
+          onClick={() => onToggleViewMode('split')}
+          className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+            viewMode === 'split'
+              ? 'bg-[#ea580c] text-white border-[#ea580c]'
+              : 'border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200'
+          }`}
+          title="Split View (Dokumen PRD & Pohon Fitur)"
+        >
+          <Columns className="h-4 w-4" />
         </button>
 
         {/* Kanban Board button */}
@@ -229,6 +318,20 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           <Palette className="h-4 w-4" />
         </button>
 
+        {/* Code Markdown button */}
+        <button
+          type="button"
+          onClick={() => onToggleViewMode('raw')}
+          className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+            viewMode === 'raw'
+              ? 'bg-[#ea580c] text-white border-[#ea580c]'
+              : 'border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200'
+          }`}
+          title="Tampilan Markdown (Code)"
+        >
+          <Code2 className="h-4 w-4" />
+        </button>
+
         {/* MCP Server Integration button */}
         {onOpenMcpModal && (
           <button
@@ -253,99 +356,17 @@ export const StudioTopBar: React.FC<StudioTopBarProps> = ({
           </button>
         )}
 
-        {/* Download Button Group (Direct PRD .MD & ZIP Options) */}
-        <div className="relative" ref={downloadDropdownRef}>
-          <div className="inline-flex items-center">
-            <button
-              type="button"
-              onClick={() => {
-                if (onDownloadMarkdown) {
-                  onDownloadMarkdown();
-                } else {
-                  onExportZip('full_starter');
-                }
-              }}
-              disabled={isExportingZip}
-              className="p-1.5 rounded-l-lg border border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 transition-all cursor-pointer"
-              title="Download Dokumen PRD (.md) Langsung"
-            >
-              <Download className={`h-4 w-4 ${isExportingZip ? 'animate-bounce text-[#f97316]' : ''}`} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
-              disabled={isExportingZip}
-              className="p-1.5 rounded-r-lg border-y border-r border-l-0 border-zinc-800 bg-[#161b22] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
-              title="Pilihan Format Download (PRD .MD / Starter .ZIP)"
-            >
-              <ChevronDown className={`h-3 w-3 transition-transform ${isDownloadDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-
-          {isDownloadDropdownOpen && (
-            <div
-              className={`absolute right-0 top-full mt-1.5 w-72 rounded-xl border shadow-2xl z-50 overflow-hidden text-left p-1.5 ${
-                isLight
-                  ? 'border-zinc-200 bg-white text-zinc-800'
-                  : 'border-zinc-800 bg-[#161b22] text-zinc-200'
-              }`}
-            >
-              {/* Opsi 1: Download PRD .MD Saja (Tepat seperti yang ditanyakan user) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDownloadDropdownOpen(false);
-                  if (onDownloadMarkdown) onDownloadMarkdown();
-                }}
-                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-amber-500/10 text-left transition cursor-pointer group"
-              >
-                <span className="text-xs font-semibold text-white group-hover:text-amber-400 flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-amber-400" />
-                  Dokumen PRD (.MD)
-                </span>
-                <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
-                  Download berkas PRD murni format Markdown (.md) tanpa arsip ZIP
-                </span>
-              </button>
-
-              {/* Opsi 2: Starter Repo .ZIP */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDownloadDropdownOpen(false);
-                  onExportZip('full_starter');
-                }}
-                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition border-t border-zinc-800/80 mt-1 cursor-pointer"
-              >
-                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                  <Package className="h-3.5 w-3.5 text-emerald-400" />
-                  Starter Proyek (.ZIP)
-                </span>
-                <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
-                  Repo koding utuh siap jalankan dev server + PRD + rules + diagram
-                </span>
-              </button>
-
-              {/* Opsi 3: Paket Dokumen .ZIP */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDownloadDropdownOpen(false);
-                  onExportZip('docs_only');
-                }}
-                className="w-full flex flex-col items-start p-2 rounded-lg hover:bg-zinc-800/70 text-left transition border-t border-zinc-800/80 mt-1 cursor-pointer"
-              >
-                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                  <Download className="h-3.5 w-3.5 text-blue-400" />
-                  Paket Dokumen (.ZIP)
-                </span>
-                <span className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
-                  Arsip ZIP berisi PRD.md, DESIGN.md, diagram .mmd, dan rules
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Implemen Hero Button (matching ngodingpakeai Image 1 & 2) */}
+        {onOpenImplementModal && (
+          <button
+            type="button"
+            onClick={onOpenImplementModal}
+            className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-xl bg-[#ea580c] hover:bg-[#d94e08] text-white text-xs font-semibold shadow-md shadow-orange-950/30 transition-all cursor-pointer active:scale-95 shrink-0"
+            title="Buka Menu Implementasi (Download PRD, ZIP, & Prompt AI Agent)"
+          >
+            <span>Implemen</span>
+          </button>
+        )}
 
         {/* Copy Markdown button */}
         <button

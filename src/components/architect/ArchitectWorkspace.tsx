@@ -23,6 +23,8 @@ import {
   PanelRightOpen,
   Maximize2,
   X,
+  LayoutGrid,
+  PenTool,
 } from 'lucide-react';
 import {
   ArchitectProject,
@@ -33,6 +35,8 @@ import {
 import { ArchitectMermaidCanvas } from './ArchitectMermaidCanvas';
 import { ArchitectProjectSwitcher } from './ArchitectProjectSwitcher';
 import { generateThesisBab3Docx } from '@/lib/academic-architect/docx-generator';
+import { InAppExcalidrawModal } from './InAppExcalidrawModal';
+import { convertAllDiagramsToMasterExcalidraw } from '@/lib/excalidraw/excalidraw-converter';
 
 interface ArchitectWorkspaceProps {
   project: ArchitectProject;
@@ -70,6 +74,7 @@ export const ArchitectWorkspace: React.FC<ArchitectWorkspaceProps> = ({
   const [isRevising, setIsRevising] = useState<boolean>(false);
   const [isExportingDocx, setIsExportingDocx] = useState<boolean>(false);
   const [isRevisionBarOpen, setIsRevisionBarOpen] = useState<boolean>(true);
+  const [isMasterExcalidrawOpen, setIsMasterExcalidrawOpen] = useState<boolean>(false);
 
   const diagrams: AcademicDiagramSet = project.diagrams;
 
@@ -365,6 +370,20 @@ export const ArchitectWorkspace: React.FC<ArchitectWorkspaceProps> = ({
           >
             <Printer className="w-3.5 h-3.5" />
             <span className="hidden xl:inline">{isPrintMode ? 'Mode Cetak Aktif' : 'Cetak A4'}</span>
+          </button>
+
+          {/* Master Whiteboard 6 Diagram */}
+          <button
+            type="button"
+            onClick={() => setIsMasterExcalidrawOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-purple-200 text-xs font-mono font-bold transition-all shadow-xs cursor-pointer"
+            title="Buka Seluruh 6 Diagram di Kanvas Excalidraw Sekaligus"
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">Whiteboard Master</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-900/80 text-purple-300 font-mono hidden md:inline">
+              6 Diagram
+            </span>
           </button>
 
           {/* MCP Modal Button */}
@@ -870,6 +889,15 @@ export const ArchitectWorkspace: React.FC<ArchitectWorkspaceProps> = ({
           </aside>
         )}
       </div>
+
+      {/* Modal Whiteboard Master (6 Diagram Sekaligus) */}
+      <InAppExcalidrawModal
+        isOpen={isMasterExcalidrawOpen}
+        onClose={() => setIsMasterExcalidrawOpen(false)}
+        scene={convertAllDiagramsToMasterExcalidraw(project.title, project.diagrams)}
+        title={`Master Blueprint 6 Diagram: ${project.title}`}
+        isMasterMode={true}
+      />
     </div>
   );
 };

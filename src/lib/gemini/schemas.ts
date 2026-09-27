@@ -707,15 +707,38 @@ export function synthesizeDynamicArchitectureDiagrams(
     result.user_journey_flow = journey;
   }
 
-  // 3. System Flowchart: check if existing is empty
-  if (!result.system_flowchart) {
-    const archName = archetypeDetection?.archetype || 'Layanan Web Modern';
-    result.system_flowchart = `graph TD
-  Client([Klien Pengguna]) --> WebUI[Frontend UI Responsif]
-  WebUI --> APIRoutes[Backend API Endpoints]
-  APIRoutes --> CoreLogic[Logika Bisnis ${archName.slice(0, 20)}]
-  CoreLogic --> MainDB[(Database Utama)]
-  CoreLogic --> ExtServices[Integrasi Layanan & Notifikasi]`;
+  // 3. System Flowchart: pastikan diagram terstruktur vertikal, bersih dan berstandar tinggi
+  const hasGenericSystemFlowchart =
+    !result.system_flowchart ||
+    result.system_flowchart.includes('Client([Klien Pengguna])') ||
+    result.system_flowchart.trim().length < 50;
+
+  if (hasGenericSystemFlowchart) {
+    const safeAudience = (archetypeDetection?.target_audience || 'Pemilik Usaha / Pengguna')
+      .replace(/["'[\]]/g, '')
+      .slice(0, 30);
+    const actionTerms =
+      featureBreakdown.length > 0
+        ? featureBreakdown
+            .slice(0, 4)
+            .map((f: any) => (f.name || '').replace(/^modul\s*\d*[:\s-]*/i, '').trim())
+            .filter(Boolean)
+            .join(', ')
+            .slice(0, 40)
+        : 'stok, katalog, opname, laporan';
+
+    result.system_flowchart = `flowchart TD
+  User["Pengguna - ${safeAudience}"]
+  User -->|Buka di browser| WebUI["Antarmuka Web - Next.js + Tailwind CSS"]
+  
+  WebUI -->|Daftar / Login / Ganti Sandi| Auth["Layanan Autentikasi"]
+  Auth --> DB[("Basis Data - PostgreSQL / Supabase")]
+  
+  WebUI -->|Aksi ${actionTerms}| Server["Logika Server - Server Actions / API Route"]
+  Server -->|Query & Mutasi SQL| DB
+  Server -->|Simpan nota & lampiran| Storage["Penyimpanan File"]
+  Server -->|Minta laporan PDF & Excel| Reporter["Generator Laporan"]
+  Reporter -->|File siap unduh| WebUI`;
   }
 
   return result;

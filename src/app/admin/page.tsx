@@ -141,6 +141,9 @@ export default function AdminDashboard() {
     pro_price_rp: 49000,
     pro_price_formatted: 'Rp 49.000 / Lifetime Access',
     studio_access_tier: 'paid_only',
+    roadmap_access_tier: 'paid_only',
+    architect_access_tier: 'paid_only',
+    is_architect_enabled: true,
   });
 
   const [usersList, setUsersList] = useState<Profile[]>([]);
@@ -2126,16 +2129,47 @@ CREATE INDEX IF NOT EXISTS idx_prd_history_user_id ON public.prd_history(user_id
                   </div>
                 </div>
 
-                {/* Studio Arsitek & Bab 3 Access Policy */}
+                {/* Studio Arsitek & Bab 3 Access Policy & Visibility Toggle */}
                 <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
-                    <Network className="h-4 w-4" />
-                    <span>Studio Arsitek &amp; Bab 3 Policy</span>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
+                      <Network className="h-4 w-4" />
+                      <span>Studio Arsitek &amp; Bab 3 Policy</span>
+                    </div>
+                    {/* Master Visibility Toggle */}
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                        settings.is_architect_enabled !== false
+                          ? 'bg-purple-500/15 border-purple-500/30 text-purple-300'
+                          : 'bg-zinc-800/80 border-zinc-700 text-zinc-400'
+                      }`}>
+                        {settings.is_architect_enabled !== false ? 'Aktif (Tampil)' : 'Sembunyi (Hide)'}
+                      </span>
+                      <div className="relative inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.is_architect_enabled !== false}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              is_architect_enabled: e.target.checked,
+                            })
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-zinc-850 border border-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:border-purple-500"></div>
+                      </div>
+                    </label>
                   </div>
-                  <p className="text-xs text-zinc-400">
-                    Atur hak akses ke Studio Arsitek (6 Diagram UML/ERD, Ekspor Word DOCX Bab 3, &amp; AI Dosen).
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    {settings.is_architect_enabled !== false
+                      ? 'Studio Arsitek aktif dan ditampilkan pada Landing Page, Dashboard User (Mode Hub), dan Topbar Generator.'
+                      : 'Studio Arsitek saat ini DISEMBUNYIKAN secara menyeluruh dari Landing Page, Dashboard User, dan Topbar. User umum tidak dapat melihat atau membukanya.'}
                   </p>
-                  <div className="space-y-2 text-xs">
+                  <div className={`space-y-2 text-xs transition-opacity ${settings.is_architect_enabled === false ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                      Tingkat Akses (Ketika Fitur Aktif):
+                    </div>
                     {[
                       {
                         id: 'paid_only',

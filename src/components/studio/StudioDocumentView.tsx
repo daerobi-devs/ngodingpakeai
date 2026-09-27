@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PRDOutput } from '@/types/prd';
 import { MermaidRenderer } from '@/components/MermaidRenderer';
 import { resolvePrdTechStack } from './studio-markdown';
 import { synthesizeDynamicArchitectureDiagrams } from '@/lib/gemini/schemas';
-import { Copy, Check, Terminal, Shield, Zap, Target, Layers, Database, Code2 } from 'lucide-react';
+import { generateDynamicUserFlowSteps, generateArchitectureOverview, generateDatabaseSchemaDictionary, generateCleanCoreFeatures, generateCleanRequirements, generateRichTechStack } from '@/lib/prd-narratives';
+import { Copy, Check, Terminal, Shield, Zap, Target, Layers, Database, Code2, FolderTree, ArrowRight, ListTodo, Kanban } from 'lucide-react';
 
 interface StudioDocumentViewProps {
   prd: PRDOutput;
@@ -14,6 +15,46 @@ interface StudioDocumentViewProps {
   theme?: 'dark' | 'light';
   onUpdateDiagrams?: (diagrams: any) => void;
   apiKeyHeader?: string;
+  onOpenTree?: () => void;
+  onBikinTask?: () => void;
+  hasGeneratedTasks?: boolean;
+  isGeneratingTasks?: boolean;
+}
+
+function cleanLeadText(text: string, prefixes: string[] = []): string {
+  if (!text) return '';
+  let cleaned = text.trim();
+  const allPrefixes = [
+    ...prefixes,
+    'masalah yang diselesaikan:',
+    'masalah yang diselesaikan',
+    'masalah yang dihadapi:',
+    'problem statement:',
+    'masalah:',
+    'tujuan aplikasi:',
+    'tujuan aplikasi',
+    'tujuan produk:',
+    'tujuan:',
+    'working hypothesis:',
+    'hipotesis:',
+    'keunggulan strategis:',
+    'tujuan akhirnya:',
+    'keselarasan strategi:',
+  ];
+  for (const p of allPrefixes) {
+    if (cleaned.toLowerCase().startsWith(p.toLowerCase())) {
+      cleaned = cleaned.slice(p.length).replace(/^[:\s\-—]+/, '').trim();
+      break;
+    }
+  }
+  return cleaned;
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '') || 'module';
 }
 
 export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
@@ -23,12 +64,21 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
   theme = 'dark',
   onUpdateDiagrams,
   apiKeyHeader = '',
+  onOpenTree,
+  onBikinTask,
+  hasGeneratedTasks = false,
+  isGeneratingTasks = false,
 }) => {
   const isLight = theme === 'light';
   const resolvedStack = resolvePrdTechStack(prd);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
-  const [databaseViewMode, setDatabaseViewMode] = useState<'erd' | 'sql'>('erd');
   const [copiedSql, setCopiedSql] = useState(false);
+  const userFlowSteps = useMemo(() => generateDynamicUserFlowSteps(prd), [prd]);
+  const archOverview = useMemo(() => generateArchitectureOverview(prd), [prd]);
+  const schemaDict = useMemo(() => generateDatabaseSchemaDictionary(prd), [prd]);
+  const cleanFeatures = useMemo(() => generateCleanCoreFeatures(prd), [prd]);
+  const cleanReqs = useMemo(() => generateCleanRequirements(prd), [prd]);
+  const richTechStack = useMemo(() => generateRichTechStack(prd), [prd]);
 
   const [diagramsState, setDiagramsState] = useState(() =>
     synthesizeDynamicArchitectureDiagrams(
@@ -66,9 +116,10 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
   const defaultSql = diagramsState.sql_migration_script || prd.sql_migration_script || '';
 
   const handleCopySql = () => {
-    if (!defaultSql) return;
+    const sqlToCopy = schemaDict.rawSqlMigration || defaultSql;
+    if (!sqlToCopy) return;
     try {
-      navigator.clipboard.writeText(defaultSql);
+      navigator.clipboard.writeText(sqlToCopy);
       setCopiedSql(true);
       setTimeout(() => setCopiedSql(false), 2000);
     } catch {
@@ -110,55 +161,74 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
       {/* 1. Overview */}
       <section id="section-overview" className="scroll-mt-20 mb-12">
         <h2
-          className={`text-lg sm:text-xl font-bold tracking-tight mb-4 flex items-center gap-2 ${
+          className={`text-xl sm:text-2xl font-bold tracking-tight mb-5 ${
             isLight ? 'text-zinc-950' : 'text-white'
           }`}
         >
-          <Target className="w-5 h-5 text-amber-400" />
-          <span>1. Overview</span>
+          1. Overview
         </h2>
 
-        <div className="space-y-4 text-sm leading-relaxed text-zinc-300">
-          {/* Problem Statement */}
-          <div className={`p-4 rounded-xl border ${isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'}`}>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2">Problem Statement & Konteks Lapangan</h4>
-            <div className="space-y-2 text-zinc-300 leading-relaxed whitespace-pre-line">
-              {prd.opportunity_framing.core_problem}
-            </div>
-          </div>
+        <div className="space-y-6 text-sm sm:text-base leading-relaxed">
+          {/* Masalah yang diselesaikan */}
+          {prd.opportunity_framing?.core_problem && (
+            <p className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+              <strong className={`font-semibold ${isLight ? 'text-zinc-950' : 'text-white'}`}>
+                Masalah yang diselesaikan
+              </strong>{' '}
+              {cleanLeadText(prd.opportunity_framing.core_problem, ['masalah yang diselesaikan', 'problem statement'])}
+            </p>
+          )}
 
-          {/* Working Hypothesis */}
-          <div className={`p-4 rounded-xl border ${isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'}`}>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-1">Hipotesis Solusi & Alur Kunci</h4>
-            <p className="text-zinc-300 leading-relaxed">{prd.opportunity_framing.working_hypothesis}</p>
-          </div>
+          {/* Tujuan aplikasi */}
+          {prd.opportunity_framing?.working_hypothesis && (
+            <div>
+              <p className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+                <strong className={`font-semibold ${isLight ? 'text-zinc-950' : 'text-white'}`}>
+                  Tujuan aplikasi
+                </strong>{' '}
+                {cleanLeadText(prd.opportunity_framing.working_hypothesis, ['tujuan aplikasi', 'working hypothesis'])}
+              </p>
 
-          {/* Strategy Fit */}
-          {prd.opportunity_framing.strategy_fit && (
-            <div className={`p-4 rounded-xl border ${isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'}`}>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Keunggulan Strategis & Keselarasan Solusi</h4>
-              <p className="text-zinc-300 leading-relaxed">{prd.opportunity_framing.strategy_fit}</p>
+              {/* Bullet points jika ada lingkup MVP */}
+              {Array.isArray(prd.boundaries?.scope) && prd.boundaries.scope.length > 0 && (
+                <ul className="mt-3 space-y-1.5 pl-5 list-disc text-sm sm:text-base">
+                  {prd.boundaries.scope.slice(0, 5).map((sc, scIdx) => (
+                    <li key={scIdx} className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+                      {sc.replace(/^[-*•\d.]+\s*/, '').replace(/^\[REQ-\d+\]\s*/i, '')}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
-          {/* Target Audience & Personas */}
-          {prd.archetype_detection?.target_audience && (
-            <div className={`p-4 rounded-xl border ${isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'}`}>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-1">Target Persona & Pengguna Sistem</h4>
-              <p className="text-zinc-300 leading-relaxed">{prd.archetype_detection.target_audience}</p>
-            </div>
+          {/* Tujuan akhirnya / Strategy Fit */}
+          {prd.opportunity_framing?.strategy_fit && (
+            <p className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+              <strong className={`font-semibold ${isLight ? 'text-zinc-950' : 'text-white'}`}>
+                Tujuan akhirnya:
+              </strong>{' '}
+              {cleanLeadText(prd.opportunity_framing.strategy_fit, ['tujuan akhirnya', 'strategy fit'])}
+            </p>
           )}
 
-          {/* Target KPI / Success Metrics */}
-          {prd.success_measurement?.online_metrics && (
-            <div className={`p-4 rounded-xl border ${isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'}`}>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2">Target Metrik & KPI Produksi</h4>
-              <div className="space-y-1 text-xs">
-                <p><strong className="text-white">Metrik Online / KPI:</strong> {prd.success_measurement.online_metrics}</p>
-                {prd.success_measurement.offline_golden_set && (
-                  <p><strong className="text-white">Validasi Fungsional:</strong> {prd.success_measurement.offline_golden_set}</p>
-                )}
-              </div>
+          {/* Target Persona & Metrik dalam strip minimalis halus */}
+          {(prd.archetype_detection?.target_audience || prd.success_measurement?.online_metrics) && (
+            <div className={`pt-4 border-t text-xs sm:text-sm space-y-1.5 ${
+              isLight ? 'border-zinc-200 text-zinc-600' : 'border-zinc-800/80 text-zinc-400'
+            }`}>
+              {prd.archetype_detection?.target_audience && (
+                <p>
+                  <strong className={isLight ? 'text-zinc-900' : 'text-zinc-200'}>Target Persona:</strong>{' '}
+                  {prd.archetype_detection.target_audience}
+                </p>
+              )}
+              {prd.success_measurement?.online_metrics && (
+                <p>
+                  <strong className={isLight ? 'text-zinc-900' : 'text-zinc-200'}>Target Metrik &amp; KPI:</strong>{' '}
+                  {prd.success_measurement.online_metrics}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -167,263 +237,153 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
       {/* 2. Requirements */}
       <section id="section-requirements" className="scroll-mt-20 mb-12">
         <h2
-          className={`text-lg sm:text-xl font-bold tracking-tight mb-4 flex items-center gap-2 ${
+          className={`text-lg sm:text-xl font-bold tracking-tight mb-5 ${
             isLight ? 'text-zinc-950' : 'text-white'
           }`}
         >
-          <Layers className="w-5 h-5 text-indigo-400" />
-          <span>2. Requirements</span>
+          2. Requirements
         </h2>
 
-        {/* 2.1 Functional Requirements */}
+        {/* Persyaratan Fungsional */}
         <div className="mb-6">
-          <h3 className="text-sm font-semibold text-zinc-200 mb-3">2.1 Functional Requirements (Lingkup MVP)</h3>
-          <ul className="space-y-2.5 text-sm leading-relaxed pl-1">
-            {Array.isArray(prd.boundaries.scope) ? (
-              prd.boundaries.scope.map((item, idx) => {
-                const isCodePrefixed = item.startsWith('[REQ-') || item.startsWith('REQ-');
-                const reqCode = isCodePrefixed ? '' : `[REQ-${String(idx + 1).padStart(2, '0')}]`;
-                return (
-                  <li key={idx} className="flex items-start gap-2 text-zinc-300">
-                    <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
-                      {isCodePrefixed ? item.split(']')[0] + ']' : reqCode}
-                    </span>
-                    <span>{isCodePrefixed ? item.split(']').slice(1).join(']').trim() : item}</span>
-                  </li>
-                );
-              })
-            ) : (
-              <li className="text-zinc-300">{prd.boundaries.scope}</li>
-            )}
+          <h3 className={`text-base font-semibold mb-3 ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>
+            Persyaratan Fungsional
+          </h3>
+          <ul className="space-y-2 text-sm leading-relaxed pl-5 list-disc">
+            {cleanReqs.functional.map((item, idx) => (
+              <li key={idx} className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+                {item}
+              </li>
+            ))}
           </ul>
         </div>
 
-        {/* 2.2 Out-of-Scope Non-Goals */}
-        {Array.isArray(prd.boundaries.non_goals) && prd.boundaries.non_goals.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-zinc-400 mb-3">2.2 Batasan & Non-Goals (Out of Scope MVP)</h3>
-            <ul className="space-y-2 text-sm leading-relaxed pl-1">
-              {prd.boundaries.non_goals.map((ng, idx) => (
-                <li key={`ng-${idx}`} className="flex items-start gap-2 text-zinc-400">
-                  <span className="font-mono text-[10px] font-bold text-zinc-400 bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
-                    NON-GOAL
-                  </span>
-                  <span>{ng}</span>
+        {/* Persyaratan Non-Fungsional */}
+        <div className="mb-6">
+          <h3 className={`text-base font-semibold mb-3 ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>
+            Persyaratan Non-Fungsional
+          </h3>
+          <ul className="space-y-2 text-sm leading-relaxed pl-5 list-disc">
+            {cleanReqs.nonFunctional.map((item, idx) => (
+              <li key={idx} className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Asumsi & Batasan */}
+        {cleanReqs.assumptionsAndConstraints.length > 0 && (
+          <div>
+            <h3 className={`text-base font-semibold mb-3 ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>
+              Asumsi &amp; Batasan
+            </h3>
+            <ul className="space-y-2 text-sm leading-relaxed pl-5 list-disc">
+              {cleanReqs.assumptionsAndConstraints.map((item, idx) => (
+                <li key={idx} className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+                  {item}
                 </li>
               ))}
             </ul>
-          </div>
-        )}
-
-        {/* 2.3 Non-Functional Requirements & Keamanan */}
-        {(prd.ai_specific?.guardrails || prd.risk_management?.detection || prd.risk_management?.fallback_kill_switch) && (
-          <div className={`p-4 rounded-xl border ${isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'}`}>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 mb-2 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-rose-400" />
-              <span>2.3 Non-Functional Requirements & Keamanan</span>
-            </h3>
-            <div className="space-y-2 text-xs leading-relaxed text-zinc-300">
-              {prd.ai_specific?.guardrails && prd.ai_specific.guardrails.length > 0 && (
-                <p><strong className="text-white">Standar Keamanan & Validasi:</strong> {prd.ai_specific.guardrails.join(', ')}</p>
-              )}
-              {prd.risk_management?.detection && (
-                <p><strong className="text-white">Pemantauan & Audit Trail:</strong> {prd.risk_management.detection}</p>
-              )}
-              {prd.risk_management?.fallback_kill_switch && (
-                <p><strong className="text-white">Mitigasi Risiko & Failover:</strong> {prd.risk_management.fallback_kill_switch}</p>
-              )}
-            </div>
           </div>
         )}
       </section>
 
       {/* 3. Core Features */}
       <section id="section-features" className="scroll-mt-20 mb-12">
-        <h2
-          className={`text-lg sm:text-xl font-bold tracking-tight mb-4 flex items-center gap-2 ${
-            isLight ? 'text-zinc-950' : 'text-white'
-          }`}
-        >
-          <Zap className="w-5 h-5 text-amber-400" />
-          <span>3. Core Features</span>
-        </h2>
-
-        <div className="space-y-8 text-sm leading-relaxed">
-          {prd.feature_breakdown && prd.feature_breakdown.length > 0 ? (
-            prd.feature_breakdown.map((feat, idx) => (
-              <div
-                key={feat.id || idx}
-                className={`p-5 rounded-2xl border transition-colors ${
-                  isLight ? 'bg-zinc-50/80 border-zinc-200' : 'bg-zinc-900/40 border-zinc-800/80'
-                } space-y-4`}
-              >
-                {/* Header Feature & Priority */}
-                <div className="flex items-center justify-between gap-3 border-b border-zinc-800/60 pb-3">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/15 text-amber-400 text-xs font-mono font-bold">
-                      {idx + 1}
-                    </span>
-                    <span>{feat.name}</span>
-                  </h3>
-                  <span
-                    className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                      feat.priority === 'P0'
-                        ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                        : 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                    }`}
-                  >
-                    {feat.priority || 'P0'}
-                  </span>
-                </div>
-
-                {/* User Story */}
-                <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800/50 text-xs leading-relaxed">
-                  <span className="font-semibold text-zinc-400 uppercase tracking-wider block mb-1">User Story:</span>
-                  <p className="text-zinc-200 italic">{feat.user_story}</p>
-                </div>
-
-                {/* Happy Path */}
-                {feat.happy_path && feat.happy_path.length > 0 && (
-                  <div>
-                    <span className="text-zinc-200 font-semibold block mb-1.5 text-xs uppercase tracking-wider text-amber-400">
-                      Alur Kerja Interaktif (Happy Path):
-                    </span>
-                    <ol className="list-decimal pl-5 space-y-1 text-xs text-zinc-300">
-                      {feat.happy_path.map((step, sIdx) => (
-                        <li key={sIdx} className="leading-relaxed">{step}</li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
-
-                {/* Business Rules */}
-                {feat.business_rules && feat.business_rules.length > 0 && (
-                  <div>
-                    <span className="text-zinc-200 font-semibold block mb-1.5 text-xs uppercase tracking-wider text-indigo-400">
-                      Aturan Bisnis & Validasi:
-                    </span>
-                    <ul className="list-disc pl-5 space-y-1 text-xs text-zinc-300">
-                      {feat.business_rules.map((rule, rIdx) => (
-                        <li key={rIdx} className="leading-relaxed">{rule}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Edge Cases */}
-                {feat.edge_cases && feat.edge_cases.length > 0 && (
-                  <div>
-                    <span className="text-zinc-200 font-semibold block mb-1.5 text-xs uppercase tracking-wider text-rose-400">
-                      Penanganan Edge Cases & Pemulihan:
-                    </span>
-                    <ul className="list-disc pl-5 space-y-1 text-xs text-zinc-400">
-                      {feat.edge_cases.map((edge, eIdx) => (
-                        <li key={eIdx} className="leading-relaxed">{edge}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Tech Mapping */}
-                {feat.tech_mapping && (
-                  <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80 space-y-2 text-xs">
-                    <span className="font-semibold text-zinc-300 uppercase tracking-wider block text-[11px]">
-                      Technical Mapping (Komponen, API & DB):
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {feat.tech_mapping.frontend_components && feat.tech_mapping.frontend_components.length > 0 && (
-                        <div>
-                          <span className="text-[10px] text-zinc-400 font-medium block mb-1">Frontend:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {feat.tech_mapping.frontend_components.map((c, cIdx) => (
-                              <span key={cIdx} className="font-mono text-[10px] bg-zinc-800 text-indigo-300 px-1.5 py-0.5 rounded border border-zinc-700 truncate max-w-full">
-                                {c}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {feat.tech_mapping.api_endpoints && feat.tech_mapping.api_endpoints.length > 0 && (
-                        <div>
-                          <span className="text-[10px] text-zinc-400 font-medium block mb-1">API Routes:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {feat.tech_mapping.api_endpoints.map((a, aIdx) => (
-                              <span key={aIdx} className="font-mono text-[10px] bg-zinc-800 text-emerald-300 px-1.5 py-0.5 rounded border border-zinc-700 truncate max-w-full">
-                                {a}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {feat.tech_mapping.db_tables && feat.tech_mapping.db_tables.length > 0 && (
-                        <div>
-                          <span className="text-[10px] text-zinc-400 font-medium block mb-1">Database Tables:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {feat.tech_mapping.db_tables.map((t, tIdx) => (
-                              <span key={tIdx} className="font-mono text-[10px] bg-zinc-800 text-amber-300 px-1.5 py-0.5 rounded border border-zinc-700 truncate max-w-full">
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* AI Coding Agent Prompt */}
-                {feat.agent_prompt && (
-                  <div className="border border-zinc-800 rounded-xl bg-zinc-950 p-3 text-xs">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5 text-zinc-400">
-                        <Terminal className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="font-mono text-[11px] font-semibold text-zinc-300">Prompt Siap Pakai (Cursor / Claude Code)</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyPrompt(feat.id || String(idx), feat.agent_prompt)}
-                        className="inline-flex items-center gap-1 text-[10px] text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        {copiedPromptId === (feat.id || String(idx)) ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400 font-semibold">Tersalin!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Salin Prompt</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <pre className="font-mono text-[11px] text-zinc-300 bg-zinc-900/80 p-2.5 rounded border border-zinc-800/80 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
-                      {feat.agent_prompt}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            ))
-          ) : (
-            <p className="text-zinc-300">
-              Fitur utama terinci mencakup alur registrasi pengguna, dashboard operasional, dan pemrosesan data real-time.
-            </p>
+        <div className="flex items-center justify-between mb-2">
+          <h2
+            className={`text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2 ${
+              isLight ? 'text-zinc-950' : 'text-white'
+            }`}
+          >
+            <Zap className="w-5 h-5 text-amber-400" />
+            <span>3. Core Features</span>
+          </h2>
+          {onOpenTree && (
+            <button
+              type="button"
+              onClick={onOpenTree}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                isLight
+                  ? 'border-zinc-300 bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
+                  : 'border-zinc-800 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white'
+              }`}
+              title="Buka Pohon Fitur Interaktif"
+            >
+              <FolderTree className="h-3.5 w-3.5 text-amber-400" />
+              <span>Pohon Fitur</span>
+            </button>
           )}
+        </div>
+
+        <p className={`text-sm mb-6 leading-relaxed ${isLight ? 'text-zinc-600' : 'text-zinc-400'}`}>
+          Fitur di bawah ini disusun mengikuti urutan fase pada kerangka fitur yang sudah disetujui.
+        </p>
+
+        <div className="space-y-8">
+          {cleanFeatures.map((phase, idx) => (
+            <div
+              key={phase.id || idx}
+              id={`feature-module-${phase.id || idx}`}
+              className="scroll-mt-24 space-y-3"
+            >
+              <h3
+                className={`text-base font-bold tracking-tight ${
+                  isLight ? 'text-zinc-900' : 'text-white'
+                }`}
+              >
+                {phase.phaseTitle}
+              </h3>
+
+              {phase.moduleSummary && (
+                <p className={`text-sm leading-relaxed ${isLight ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                  {phase.moduleSummary}
+                </p>
+              )}
+
+              {phase.subFeatures && phase.subFeatures.length > 0 && (
+                <ul className="space-y-2 text-sm list-disc pl-5">
+                  {phase.subFeatures.map((sub, sIdx) => (
+                    <li key={sIdx} className="leading-relaxed pl-1">
+                      <strong className={isLight ? 'text-zinc-900 font-semibold' : 'text-white font-semibold'}>
+                        {sub.name}
+                      </strong>
+                      <span className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
+                        {' '}— {sub.description}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
       </section>
 
       {/* 4. User Flow */}
       <section id="section-user-flow" className="scroll-mt-20 mb-10">
         <h2
-          className={`text-lg sm:text-xl font-bold tracking-tight mb-4 ${
+          className={`text-lg sm:text-xl font-bold tracking-tight mb-2 ${
             isLight ? 'text-zinc-950' : 'text-white'
           }`}
         >
           4. User Flow
         </h2>
-        <div className="py-2">
-          <MermaidRenderer chart={defaultUserJourney} title="User Flow" theme={theme} />
-        </div>
+        <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
+          Alur utama yang akan dilalui pengguna, disusun mengikuti urutan fase:
+        </p>
+
+        <ol className="space-y-4 text-sm text-zinc-300 list-decimal pl-5">
+          {userFlowSteps.map((s) => (
+            <li key={s.step} className="leading-relaxed pl-1">
+              <strong className="text-white font-semibold">
+                {s.title} ({s.phaseTag}):
+              </strong>{' '}
+              <span className="text-zinc-300">{s.description}</span>
+            </li>
+          ))}
+        </ol>
       </section>
 
       {/* 5. Architecture */}
@@ -435,124 +395,210 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
         >
           5. Architecture
         </h2>
-        <div className="py-2">
-          <MermaidRenderer chart={defaultFlowchart} title="Architecture Diagram" theme={theme} />
+
+        {/* Narrative Intro */}
+        <p className="text-sm text-zinc-300 leading-relaxed mb-6">
+          {archOverview.intro}
+        </p>
+
+        {/* Gambaran Sistem */}
+        <div className="mb-6 space-y-2.5">
+          <h3 className="text-sm font-bold text-white mb-2">Gambaran sistem:</h3>
+          <ul className="space-y-2 text-sm text-zinc-300 list-disc pl-5">
+            <li>
+              <strong className="text-white font-semibold">Antarmuka pengguna:</strong>{' '}
+              {archOverview.systemComponents.frontend}
+            </li>
+            <li>
+              <strong className="text-white font-semibold">Logika server:</strong>{' '}
+              {archOverview.systemComponents.backend}
+            </li>
+            <li>
+              <strong className="text-white font-semibold">Basis data:</strong>{' '}
+              {archOverview.systemComponents.database}
+            </li>
+            <li>
+              <strong className="text-white font-semibold">Penyimpanan file:</strong>{' '}
+              {archOverview.systemComponents.storage}
+            </li>
+            <li>
+              <strong className="text-white font-semibold">Layanan autentikasi:</strong>{' '}
+              {archOverview.systemComponents.auth}
+            </li>
+            <li>
+              <strong className="text-white font-semibold">Generator laporan:</strong>{' '}
+              {archOverview.systemComponents.reports}
+            </li>
+          </ul>
+        </div>
+
+        {/* Diagram Alur Sistem */}
+        <div className="space-y-3 pt-2">
+          <h3 className="text-sm font-bold text-white">Diagram alur sistem:</h3>
+          <div className="py-1">
+            <MermaidRenderer
+              chart={archOverview.systemFlowchartMermaid}
+              title="Diagram Alur Sistem"
+              theme={theme}
+            />
+          </div>
         </div>
       </section>
 
-      {/* 6. Database Schema & SQL Migration */}
-      <section id="section-database" className="scroll-mt-20 mb-10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      {/* 6. Database Schema */}
+      <section id="section-database" className="scroll-mt-20 mb-12">
+        <div className="pb-3 mb-6 border-b border-zinc-800/70">
           <h2
-            className={`text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2 ${
+            className={`text-xl sm:text-2xl font-bold tracking-tight ${
               isLight ? 'text-zinc-950' : 'text-white'
             }`}
           >
-            <Database className="w-5 h-5 text-blue-400" />
-            <span>6. Database Schema &amp; SQL Migration</span>
+            6. Database Schema
           </h2>
-
-          {/* Toggle Switch ERD vs SQL */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800 self-start sm:self-auto text-xs font-mono">
-            <button
-              type="button"
-              onClick={() => setDatabaseViewMode('erd')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                databaseViewMode === 'erd'
-                  ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Diagram ERD Visual
-            </button>
-            <button
-              type="button"
-              onClick={() => setDatabaseViewMode('sql')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                databaseViewMode === 'sql'
-                  ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Skrip SQL Migration
-            </button>
-          </div>
+          <p className={`text-xs sm:text-sm mt-1.5 leading-relaxed ${isLight ? 'text-zinc-600' : 'text-zinc-400'}`}>
+            Berikut tabel-tabel utama yang dibutuhkan. Nama kolom memakai huruf kecil dengan garis bawah.
+          </p>
         </div>
 
-        {databaseViewMode === 'erd' ? (
-          <div className="py-2">
-            <MermaidRenderer chart={defaultERD} title="Database Schema (ERD)" theme={theme} />
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-zinc-800 bg-[#090b10] overflow-hidden shadow-xl">
-            {/* Header Toolbar SQL */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/60">
-              <div className="flex items-center gap-2">
-                <Code2 className="w-4 h-4 text-amber-400" />
-                <span className="font-mono text-xs font-bold text-zinc-200">schema.sql</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                  PostgreSQL / Supabase DDL
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopySql}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors cursor-pointer"
+        {/* Data Dictionary Tables List */}
+        <div className="space-y-8">
+          {schemaDict.tables.map((table) => (
+            <div key={table.name} className="space-y-2.5">
+              {/* Table Title Heading */}
+              <h3
+                className={`text-sm sm:text-base font-semibold ${
+                  isLight ? 'text-zinc-900' : 'text-zinc-100'
+                }`}
               >
-                {copiedSql ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-400">Tersalin!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Salin SQL Migration</span>
-                  </>
+                {table.number}. {table.name}
+                {table.description && (
+                  <span className={`font-normal ${isLight ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {' '}— {table.description}
+                  </span>
                 )}
-              </button>
+              </h3>
+
+              {/* Table Container */}
+              <div
+                className={`overflow-x-auto rounded-lg border ${
+                  isLight
+                    ? 'border-zinc-300 bg-white'
+                    : 'border-zinc-800/80 bg-[#0d121c]/50'
+                }`}
+              >
+                <table className="w-full text-left text-xs sm:text-sm border-collapse">
+                  <thead>
+                    <tr
+                      className={`border-b ${
+                        isLight
+                          ? 'border-zinc-200 bg-zinc-100/80 text-zinc-700'
+                          : 'border-zinc-800/80 bg-[#141b27]/80 text-zinc-200'
+                      }`}
+                    >
+                      <th className="py-2.5 px-4 font-medium w-[22%] border-r border-zinc-800/60">
+                        Kolom
+                      </th>
+                      <th className="py-2.5 px-4 font-medium w-[20%] border-r border-zinc-800/60">
+                        Tipe
+                      </th>
+                      <th className="py-2.5 px-4 font-medium w-[58%]">
+                        Kegunaan
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    className={`divide-y ${
+                      isLight ? 'divide-zinc-200 text-zinc-800' : 'divide-zinc-800/60 text-zinc-300'
+                    }`}
+                  >
+                    {table.columns.map((col) => (
+                      <tr
+                        key={col.name}
+                        className="hover:bg-zinc-500/5 transition-colors"
+                      >
+                        <td className="py-2.5 px-4 border-r border-zinc-800/50 text-zinc-200">
+                          {col.name}
+                        </td>
+                        <td className="py-2.5 px-4 border-r border-zinc-800/50 text-zinc-300">
+                          {col.type}
+                        </td>
+                        <td className="py-2.5 px-4 text-zinc-300/90 leading-relaxed">
+                          {col.purpose}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            {/* Code Block Content */}
-            <pre className="p-4 text-xs font-mono text-zinc-300 overflow-x-auto max-h-[500px] overflow-y-auto leading-relaxed whitespace-pre selection:bg-amber-500/30">
-              {defaultSql}
-            </pre>
+          ))}
+        </div>
+
+        {/* ERD Diagram Sub-section */}
+        <div className="mt-10 pt-4">
+          <h3
+            className={`text-sm sm:text-base font-semibold mb-3 ${
+              isLight ? 'text-zinc-900' : 'text-zinc-100'
+            }`}
+          >
+            Diagram hubungan antar tabel (ER):
+          </h3>
+          <div
+            className={`p-4 rounded-xl border ${
+              isLight ? 'border-zinc-300 bg-zinc-50' : 'border-zinc-800/80 bg-[#0d121c]/40'
+            }`}
+          >
+            <MermaidRenderer
+              chart={schemaDict.erdDiagram || defaultERD}
+              title="Diagram Hubungan Antar Tabel (ER)"
+              theme={theme}
+            />
           </div>
-        )}
+        </div>
       </section>
 
       {/* 7. Tech Stack */}
       <section id="section-tech-stack" className="scroll-mt-20 mb-10">
         <h2
-          className={`text-lg sm:text-xl font-bold tracking-tight mb-4 ${
+          className={`text-lg sm:text-xl font-bold tracking-tight mb-3 ${
             isLight ? 'text-zinc-950' : 'text-white'
           }`}
         >
           7. Tech Stack
         </h2>
 
-        <ul className="space-y-2 text-sm list-disc pl-5 text-zinc-300">
-          <li>
-            <strong className="text-white font-semibold">Frontend:</strong> {resolvedStack.frontend}
-          </li>
-          <li>
-            <strong className="text-white font-semibold">Backend & API:</strong> {resolvedStack.backend}
-          </li>
-          <li>
-            <strong className="text-white font-semibold">Database:</strong> {resolvedStack.database}
-          </li>
-          {resolvedStack.aiIntegration && (
-            <li>
-              <strong className="text-white font-semibold">AI Integration:</strong> {resolvedStack.aiIntegration}
+        {/* Dynamic Contextual Opening Rationale matching Image 2 */}
+        <p className={`text-sm leading-relaxed mb-4 ${isLight ? 'text-zinc-600' : 'text-zinc-400'}`}>
+          {richTechStack.intro}
+        </p>
+
+        {/* Tech Stack List matching Image 2 */}
+        <ul className="space-y-2.5 text-sm list-disc pl-5 text-zinc-300">
+          {richTechStack.items.map((item, idx) => (
+            <li key={idx} className="leading-relaxed">
+              <strong className={isLight ? 'text-zinc-950 font-semibold' : 'text-white font-semibold'}>
+                {item.category}:
+              </strong>{' '}
+              <span className={isLight ? 'text-zinc-900 font-medium' : 'text-zinc-200 font-medium'}>
+                {item.name}
+              </span>
+              {item.rationale && (
+                <span className={isLight ? 'text-zinc-600' : 'text-zinc-400'}>
+                  {' '}— {item.rationale}
+                </span>
+              )}
             </li>
-          )}
-          <li>
-            <strong className="text-white font-semibold">Authentication:</strong> {resolvedStack.auth}
-          </li>
-          <li>
-            <strong className="text-white font-semibold">Deployment:</strong> {resolvedStack.deployment}
-          </li>
+          ))}
         </ul>
+
+        {/* Dynamic Closing Note matching Image 2 */}
+        {richTechStack.closingNote && (
+          <p className={`mt-5 text-xs italic leading-relaxed ${isLight ? 'text-zinc-500' : 'text-zinc-500'}`}>
+            {richTechStack.closingNote}
+          </p>
+        )}
       </section>
-    </article>
+
+      </article>
   );
 };

@@ -204,6 +204,7 @@ export interface SystemSettings {
   studio_access_tier?: 'all' | 'paid_only' | 'pro_only';
   roadmap_access_tier?: 'all' | 'paid_only' | 'pro_only';
   architect_access_tier?: 'all' | 'paid_only' | 'pro_only';
+  is_architect_enabled?: boolean;
   updated_at?: string;
 }
 

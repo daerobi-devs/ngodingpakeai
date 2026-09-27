@@ -398,6 +398,24 @@ Terapkan perubahan dengan tepat ke dalam objek JSON PRD. Berikan atribut revisio
       language: revisedStack.language || baseStack.language || 'id',
     };
 
+    // Deteksi intent eksplisit pengguna untuk database & deployment
+    const lowerInstr = instruction.toLowerCase();
+    if (/\b(postgres|postgresql)\b/i.test(lowerInstr)) {
+      sanitizedPrd.tech_stack.database = 'PostgreSQL';
+    } else if (/\bsqlite\b/i.test(lowerInstr)) {
+      sanitizedPrd.tech_stack.database = 'SQLite (Turso)';
+    } else if (/\bsupabase\b/i.test(lowerInstr)) {
+      sanitizedPrd.tech_stack.database = 'Supabase (PostgreSQL)';
+    } else if (/\bmysql\b/i.test(lowerInstr)) {
+      sanitizedPrd.tech_stack.database = 'MySQL';
+    }
+
+    if (/\bdocker\b/i.test(lowerInstr) || /\bcoolify\b/i.test(lowerInstr)) {
+      sanitizedPrd.tech_stack.deployment = 'Docker (VPS / Coolify)';
+    } else if (/\bvercel\b/i.test(lowerInstr)) {
+      sanitizedPrd.tech_stack.deployment = 'Vercel';
+    }
+
     sanitizedPrd.metadata = {
       ...(currentPrd.metadata || {}),
       ...(parsedJson?.metadata || {}),

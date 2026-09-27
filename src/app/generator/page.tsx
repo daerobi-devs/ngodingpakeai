@@ -219,6 +219,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     return true; // 'all'
   };
 
+  const isArchitectEnabled = systemSettings?.is_architect_enabled !== false;
+
   const isArchitectAllowed = () => {
     const policy = systemSettings?.architect_access_tier || 'paid_only';
     if (policy === 'pro_only') {
@@ -242,6 +244,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
 
   const handleSelectModeFromHub = (mode: 'prd' | 'roadmap' | 'wizard' | 'studio' | 'architect') => {
     if (mode === 'architect') {
+      if (!isArchitectEnabled) return;
       if (!isArchitectAllowed()) {
         setIsPricingModalOpen(true);
         return;
@@ -808,7 +811,25 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         throw new Error(json.error || 'Gagal membuat PRD');
       }
 
-      setGeneratedPRD(json.data);
+      // Ensure client-side preservation of selectedModules and their sub-features
+      const prdToSet: PRDOutput = { ...json.data };
+      const chosenMods = (selectedModules && selectedModules.length > 0)
+        ? selectedModules
+        : (customFeatureModules && customFeatureModules.length > 0 ? customFeatureModules : null);
+
+      if (chosenMods && chosenMods.length > 0) {
+        prdToSet.roadmap_tree = chosenMods.map((m: any, idx: number) => ({
+          id: m.id || `mod-${idx + 1}`,
+          title: m.name || m.title || `Modul ${idx + 1}`,
+          phase: m.phase || `FASE ${Math.floor(idx / 2) + 1}`,
+          status: 'Direncanakan',
+          sub_features: Array.isArray(m.subFeatures) && m.subFeatures.length > 0
+            ? m.subFeatures
+            : (Array.isArray(m.sub_features) ? m.sub_features : [`Alur Kerja ${m.name || 'Modul'}`]),
+        }));
+      }
+
+      setGeneratedPRD(prdToSet);
 
       // Save to history state & local storage with consistent ID from Supabase
       const historyId = json.prdId || json.data?.metadata?.prdId || `prd_${Date.now()}`;
@@ -817,7 +838,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
         title: targetFormData.title || json.data?.title || 'Untitled PRD',
         created_at: new Date().toISOString(),
         model_used: json.data?.metadata?.modelUsed || preferredModel,
-        prd_data: json.data,
+        prd_data: prdToSet,
         project_type: 'prd',
       };
 
@@ -1072,13 +1093,15 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               >
                 <span>Roadmap</span>
               </button>
-              <Link
-                href="/architect"
-                className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all text-zinc-400 hover:text-purple-300 hover:bg-purple-950/40"
-                title="Studio Arsitek & Bab 3"
-              >
-                <span>Studio Arsitek</span>
-              </Link>
+              {isArchitectEnabled && (
+                <Link
+                  href="/architect"
+                  className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all text-zinc-400 hover:text-purple-300 hover:bg-purple-950/40"
+                  title="Studio Arsitek & Bab 3"
+                >
+                  <span>Studio Arsitek</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -1314,6 +1337,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               isStudioLocked={!isStudioAllowed()}
               isRoadmapLocked={!isRoadmapAllowed()}
               isArchitectLocked={!isArchitectAllowed()}
+              isArchitectEnabled={isArchitectEnabled}
               onOpenPricing={() => setIsPricingModalOpen(true)}
             />
           ) : creationMode === 'roadmap' ? (
