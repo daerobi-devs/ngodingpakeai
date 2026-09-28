@@ -46,7 +46,7 @@ export function useVoiceDictation(options: UseVoiceDictationOptions = {}) {
   }, []);
 
   const startListening = useCallback(
-    (initialText: string = '') => {
+    async (initialText: string = '') => {
       if (typeof window === 'undefined') return;
 
       const SpeechRecognition =
@@ -73,6 +73,33 @@ export function useVoiceDictation(options: UseVoiceDictationOptions = {}) {
           // ignore
         }
         recognitionRef.current = null;
+      }
+
+      // Proactive getUserMedia check to trigger browser permission dialog cleanly if needed
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (mediaErr: any) {
+          console.warn('Microphone access verification:', mediaErr);
+          if (mediaErr.name === 'NotAllowedError' || mediaErr.name === 'PermissionDeniedError') {
+            shouldBeListeningRef.current = false;
+            setIsListening(false);
+            const msg =
+              'Izin mikrofon belum aktif di browser atau Windows. Pastikan izin Mikrofon aktif pada ikon gembok browser dan setelan Windows Settings > Privacy > Microphone.';
+            if (onErrorRef.current) onErrorRef.current(msg);
+            else alert(msg);
+            return;
+          }
+          if (mediaErr.name === 'NotFoundError' || mediaErr.name === 'DevicesNotFoundError') {
+            shouldBeListeningRef.current = false;
+            setIsListening(false);
+            const msg = 'Perangkat mikrofon tidak terdeteksi di komputer Anda.';
+            if (onErrorRef.current) onErrorRef.current(msg);
+            else alert(msg);
+            return;
+          }
+        }
       }
 
       try {

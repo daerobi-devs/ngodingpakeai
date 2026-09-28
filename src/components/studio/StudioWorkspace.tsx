@@ -10,7 +10,7 @@ import { StudioKanbanView, KanbanTask, generateComprehensiveKanbanTasks } from '
 import { StudioMcpModal } from './StudioMcpModal';
 import { StudioAgentConfigModal } from './StudioAgentConfigModal';
 import { ImplementationModal } from './ImplementationModal';
-import { generateStudioFullMarkdown } from './studio-markdown';
+import { generateStudioFullMarkdown, generateStudioTasksMarkdown } from './studio-markdown';
 import { StudioUIDesignPromptView } from './StudioUIDesignPromptView';
 import { generateDesignDoc, getDesignPalette } from '@/lib/design-template';
 import { generateStarterCodebaseZip } from '@/lib/scaffolder/codebase-scaffolder';
@@ -34,6 +34,10 @@ interface StudioWorkspaceProps {
   onUpdatePrd?: (updatedPrd: PRDOutput, newVersion?: number) => void;
   onRequireUpgrade?: () => void;
   theme?: 'dark' | 'light';
+  isLoadingPrd?: boolean;
+  loadingPrdMessage?: string;
+  isNewlyGenerated?: boolean;
+  onFinishTyping?: () => void;
 }
 
 export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
@@ -46,6 +50,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
   onUpdatePrd,
   onRequireUpgrade,
   theme = 'dark',
+  isLoadingPrd = false,
+  loadingPrdMessage,
+  isNewlyGenerated = false,
+  onFinishTyping,
 }) => {
   const [internalPrdId] = useState<string>(() => {
     if (prdIdProp) return prdIdProp;
@@ -189,6 +197,23 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     ]);
     setActiveVersionNumber(1);
   }, [prdId, storageVersionKey, initialPrd]);
+
+  // Synchronize when initialPrd transitions from stub to generated PRD
+  useEffect(() => {
+    if (initialPrd && !isLoadingPrd && initialPrd.opportunity_framing?.core_problem) {
+      setVersions((prev) => {
+        if (prev.length === 1 && prev[0].versionNumber === 1) {
+          return [
+            {
+              ...prev[0],
+              prd: initialPrd,
+            },
+          ];
+        }
+        return prev;
+      });
+    }
+  }, [initialPrd, isLoadingPrd]);
 
   // Sync chat messages from localStorage when prdId changes
   useEffect(() => {
@@ -519,6 +544,42 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     }
   };
 
+  const handleDownloadPrdAndTasks = () => {
+    try {
+      const safeTitle = (currentPrd.title || 'PRD')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+      // 1. Download file PRD.md
+      const prdBlob = new Blob([fullMarkdown], { type: 'text/markdown;charset=utf-8' });
+      const prdUrl = URL.createObjectURL(prdBlob);
+      const a1 = document.createElement('a');
+      a1.href = prdUrl;
+      a1.download = `PRD_${safeTitle}_v${activeVersionNumber}.md`;
+      document.body.appendChild(a1);
+      a1.click();
+      document.body.removeChild(a1);
+      URL.revokeObjectURL(prdUrl);
+
+      // 2. Download file TASKS.md
+      setTimeout(() => {
+        const tasksMarkdown = generateStudioTasksMarkdown(currentPrd);
+        const tasksBlob = new Blob([tasksMarkdown], { type: 'text/markdown;charset=utf-8' });
+        const tasksUrl = URL.createObjectURL(tasksBlob);
+        const a2 = document.createElement('a');
+        a2.href = tasksUrl;
+        a2.download = `TASKS_${safeTitle}_v${activeVersionNumber}.md`;
+        document.body.appendChild(a2);
+        a2.click();
+        document.body.removeChild(a2);
+        URL.revokeObjectURL(tasksUrl);
+      }, 200);
+    } catch (err) {
+      console.error('Download PRD & TASKS error:', err);
+    }
+  };
+
   const handleSendMessage = async (instruction: string, mode: 'chat' | 'revise' = 'chat') => {
     setIsRevising(true);
     const userMsg: StudioChatMessage = {
@@ -733,6 +794,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                 onBikinTask={handleBikinTask}
                 hasGeneratedTasks={hasGeneratedTasks}
                 isGeneratingTasks={isGeneratingTasks}
+                isLoading={isLoadingPrd}
+                loadingMessage={loadingPrdMessage}
+                isNewlyGenerated={isNewlyGenerated}
+                onFinishTyping={onFinishTyping}
               />
             </div>
 
@@ -763,6 +828,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               onBikinTask={handleBikinTask}
               hasGeneratedTasks={hasGeneratedTasks}
               isGeneratingTasks={isGeneratingTasks}
+              isLoading={isLoadingPrd}
+              loadingMessage={loadingPrdMessage}
+              isNewlyGenerated={isNewlyGenerated}
+              onFinishTyping={onFinishTyping}
             />
           </div>
         )}
@@ -803,6 +872,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         prd={currentPrd}
         versionNumber={activeVersionNumber}
         onDownloadPrd={handleDownloadMarkdown}
+        onDownloadPrdAndTasks={handleDownloadPrdAndTasks}
         onDownloadZip={() => handleExportZip('full_starter')}
         isExportingZip={isExportingZip}
         theme={theme}

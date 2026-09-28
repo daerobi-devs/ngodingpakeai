@@ -6,7 +6,7 @@ import { MermaidRenderer } from '@/components/MermaidRenderer';
 import { resolvePrdTechStack } from './studio-markdown';
 import { synthesizeDynamicArchitectureDiagrams } from '@/lib/gemini/schemas';
 import { generateDynamicUserFlowSteps, generateArchitectureOverview, generateDatabaseSchemaDictionary, generateCleanCoreFeatures, generateCleanRequirements, generateRichTechStack } from '@/lib/prd-narratives';
-import { Copy, Check, Terminal, Shield, Zap, Target, Layers, Database, Code2, FolderTree, ArrowRight, ListTodo, Kanban } from 'lucide-react';
+import { Copy, Check, Terminal, Shield, Zap, Target, Layers, Database, Code2, FolderTree, ArrowRight, ListTodo, Kanban, Loader2 } from 'lucide-react';
 
 interface StudioDocumentViewProps {
   prd: PRDOutput;
@@ -19,6 +19,10 @@ interface StudioDocumentViewProps {
   onBikinTask?: () => void;
   hasGeneratedTasks?: boolean;
   isGeneratingTasks?: boolean;
+  isLoading?: boolean;
+  loadingMessage?: string;
+  isNewlyGenerated?: boolean;
+  onFinishTyping?: () => void;
 }
 
 function cleanLeadText(text: string, prefixes: string[] = []): string {
@@ -68,6 +72,10 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
   onBikinTask,
   hasGeneratedTasks = false,
   isGeneratingTasks = false,
+  isLoading = false,
+  loadingMessage = 'Menganalisis ide dan menyusun PRD...',
+  isNewlyGenerated = false,
+  onFinishTyping,
 }) => {
   const isLight = theme === 'light';
   const resolvedStack = resolvePrdTechStack(prd);
@@ -79,6 +87,15 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
   const cleanFeatures = useMemo(() => generateCleanCoreFeatures(prd), [prd]);
   const cleanReqs = useMemo(() => generateCleanRequirements(prd), [prd]);
   const richTechStack = useMemo(() => generateRichTechStack(prd), [prd]);
+
+  const coreProblemText = useMemo(() => cleanLeadText(prd.opportunity_framing?.core_problem || '', ['masalah yang diselesaikan', 'problem statement']), [prd]);
+  const workingHypothesisText = useMemo(() => cleanLeadText(prd.opportunity_framing?.working_hypothesis || '', ['tujuan aplikasi', 'working hypothesis']), [prd]);
+  const strategyFitText = useMemo(() => cleanLeadText(prd.opportunity_framing?.strategy_fit || '', ['tujuan akhirnya', 'strategy fit']), [prd]);
+  const scopeBullets = useMemo(() => Array.isArray(prd.boundaries?.scope) ? prd.boundaries.scope.slice(0, 5) : [], [prd]);
+
+  useEffect(() => {
+    if (onFinishTyping) onFinishTyping();
+  }, [onFinishTyping]);
 
   const [diagramsState, setDiagramsState] = useState(() =>
     synthesizeDynamicArchitectureDiagrams(
@@ -143,12 +160,96 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
     );
   }
 
+  {/* SKELETON / LOADING STATE MATCHING IMAGE 3 */}
+  if (isLoading) {
+    return (
+      <article
+        className={`w-full max-w-4xl mx-auto py-6 px-2 sm:px-6 transition-colors duration-200 select-none ${
+          isLight ? 'text-zinc-900' : 'text-zinc-300'
+        }`}
+      >
+        {/* Breadcrumb matching Image 3: ngodingpakeprd · [Project Title] / Dokumen PRD */}
+        <div className="text-xs text-zinc-500 font-medium mb-3 flex items-center gap-1.5 select-none">
+          <span className="text-zinc-400">ngodingpakeprd</span>
+          <span>·</span>
+          <span className="text-zinc-300 font-semibold truncate max-w-xs">{prd.title || 'Proyek Baru'}</span>
+          <span className="text-zinc-600">/</span>
+          <span className="text-amber-500">Dokumen PRD</span>
+        </div>
+
+        {/* Status Pill with Spinner matching Image 3 */}
+        <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-400 mb-8 animate-pulse shadow-lg">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+          <span>{loadingMessage}</span>
+        </div>
+
+        {/* Shimmering Document Skeleton matching Image 3 */}
+        <div className="space-y-8 animate-pulse select-none pointer-events-none">
+          {/* Main Title placeholder */}
+          <div className="h-9 w-3/4 sm:w-1/2 bg-zinc-800/80 rounded-xl" />
+
+          {/* Section 1: Overview Skeleton */}
+          <div className="space-y-4">
+            <div className="h-6 w-36 bg-zinc-800/70 rounded-lg" />
+            <div className="space-y-2.5">
+              <div className="h-4 w-full bg-zinc-800/50 rounded-md" />
+              <div className="h-4 w-11/12 bg-zinc-800/50 rounded-md" />
+              <div className="h-4 w-4/5 bg-zinc-800/50 rounded-md" />
+            </div>
+            <div className="pt-2 space-y-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
+                <div className="h-3.5 w-3/4 bg-zinc-800/40 rounded-md" />
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
+                <div className="h-3.5 w-4/5 bg-zinc-800/40 rounded-md" />
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
+                <div className="h-3.5 w-2/3 bg-zinc-800/40 rounded-md" />
+              </div>
+            </div>
+            <div className="h-4 w-5/6 bg-zinc-800/50 rounded-md mt-3" />
+          </div>
+
+          {/* Section 2: Requirements Skeleton */}
+          <div className="space-y-4 pt-4 border-t border-zinc-800/60">
+            <div className="h-6 w-44 bg-zinc-800/70 rounded-lg" />
+            <div className="space-y-2.5">
+              <div className="h-4 w-full bg-zinc-800/50 rounded-md" />
+              <div className="h-4 w-5/6 bg-zinc-800/50 rounded-md" />
+            </div>
+          </div>
+
+          {/* Section 3: Architecture Canvas Skeleton */}
+          <div className="space-y-4 pt-4 border-t border-zinc-800/60">
+            <div className="h-6 w-52 bg-zinc-800/70 rounded-lg" />
+            <div className="h-44 w-full rounded-2xl border border-dashed border-zinc-800/80 bg-zinc-900/30 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-mono">
+              <div className="w-5 h-5 border-2 border-zinc-600 border-t-amber-400 rounded-full animate-spin" />
+              <span>Merancang Diagram Arsitektur &amp; Relasi Database...</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
-      className={`w-full max-w-4xl mx-auto py-6 px-2 sm:px-6 transition-colors duration-200 select-text leading-relaxed ${
+      className={`w-full max-w-4xl mx-auto py-6 px-2 sm:px-6 transition-colors duration-200 select-text leading-relaxed relative ${
         isLight ? 'text-zinc-900' : 'text-zinc-300'
       }`}
     >
+      {/* Breadcrumb matching Image 2 / Image 3 */}
+      <div className="text-xs text-zinc-500 font-medium mb-3 flex items-center gap-1.5 select-none">
+        <span className="text-zinc-400">ngodingpakeprd</span>
+        <span>·</span>
+        <span className="text-zinc-300 font-semibold truncate max-w-xs">{prd.title || 'Proyek'}</span>
+        <span className="text-zinc-600">/</span>
+        <span className="text-amber-500">Dokumen PRD</span>
+      </div>
+
       {/* 1. Main Document Title matching video: PRD — Project Requirements Document */}
       <h1
         className={`text-2xl sm:text-3xl font-extrabold tracking-tight mb-8 ${
@@ -170,29 +271,29 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
 
         <div className="space-y-6 text-sm sm:text-base leading-relaxed">
           {/* Masalah yang diselesaikan */}
-          {prd.opportunity_framing?.core_problem && (
+          {coreProblemText && (
             <p className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
               <strong className={`font-semibold ${isLight ? 'text-zinc-950' : 'text-white'}`}>
                 Masalah yang diselesaikan
               </strong>{' '}
-              {cleanLeadText(prd.opportunity_framing.core_problem, ['masalah yang diselesaikan', 'problem statement'])}
+              {coreProblemText}
             </p>
           )}
 
           {/* Tujuan aplikasi */}
-          {prd.opportunity_framing?.working_hypothesis && (
+          {workingHypothesisText && (
             <div>
               <p className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
                 <strong className={`font-semibold ${isLight ? 'text-zinc-950' : 'text-white'}`}>
                   Tujuan aplikasi
                 </strong>{' '}
-                {cleanLeadText(prd.opportunity_framing.working_hypothesis, ['tujuan aplikasi', 'working hypothesis'])}
+                {workingHypothesisText}
               </p>
 
               {/* Bullet points jika ada lingkup MVP */}
-              {Array.isArray(prd.boundaries?.scope) && prd.boundaries.scope.length > 0 && (
+              {scopeBullets.length > 0 && (
                 <ul className="mt-3 space-y-1.5 pl-5 list-disc text-sm sm:text-base">
-                  {prd.boundaries.scope.slice(0, 5).map((sc, scIdx) => (
+                  {scopeBullets.map((sc, scIdx) => (
                     <li key={scIdx} className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
                       {sc.replace(/^[-*•\d.]+\s*/, '').replace(/^\[REQ-\d+\]\s*/i, '')}
                     </li>
@@ -203,12 +304,12 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
           )}
 
           {/* Tujuan akhirnya / Strategy Fit */}
-          {prd.opportunity_framing?.strategy_fit && (
+          {strategyFitText && (
             <p className={isLight ? 'text-zinc-700' : 'text-zinc-300'}>
               <strong className={`font-semibold ${isLight ? 'text-zinc-950' : 'text-white'}`}>
                 Tujuan akhirnya:
               </strong>{' '}
-              {cleanLeadText(prd.opportunity_framing.strategy_fit, ['tujuan akhirnya', 'strategy fit'])}
+              {strategyFitText}
             </p>
           )}
 
@@ -405,30 +506,29 @@ export const StudioDocumentView: React.FC<StudioDocumentViewProps> = ({
         <div className="mb-6 space-y-2.5">
           <h3 className="text-sm font-bold text-white mb-2">Gambaran sistem:</h3>
           <ul className="space-y-2 text-sm text-zinc-300 list-disc pl-5">
-            <li>
-              <strong className="text-white font-semibold">Antarmuka pengguna:</strong>{' '}
-              {archOverview.systemComponents.frontend}
-            </li>
-            <li>
-              <strong className="text-white font-semibold">Logika server:</strong>{' '}
-              {archOverview.systemComponents.backend}
-            </li>
-            <li>
-              <strong className="text-white font-semibold">Basis data:</strong>{' '}
-              {archOverview.systemComponents.database}
-            </li>
-            <li>
-              <strong className="text-white font-semibold">Penyimpanan file:</strong>{' '}
-              {archOverview.systemComponents.storage}
-            </li>
-            <li>
-              <strong className="text-white font-semibold">Layanan autentikasi:</strong>{' '}
-              {archOverview.systemComponents.auth}
-            </li>
-            <li>
-              <strong className="text-white font-semibold">Generator laporan:</strong>{' '}
-              {archOverview.systemComponents.reports}
-            </li>
+            {archOverview.systemComponentsList && archOverview.systemComponentsList.length > 0 ? (
+              archOverview.systemComponentsList.map((item, idx) => (
+                <li key={idx}>
+                  <strong className="text-white font-semibold">{item.label}:</strong>{' '}
+                  {item.text}
+                </li>
+              ))
+            ) : (
+              <>
+                <li>
+                  <strong className="text-white font-semibold">Antarmuka pengguna:</strong>{' '}
+                  {archOverview.systemComponents.frontend}
+                </li>
+                <li>
+                  <strong className="text-white font-semibold">Logika server:</strong>{' '}
+                  {archOverview.systemComponents.backend}
+                </li>
+                <li>
+                  <strong className="text-white font-semibold">Basis data:</strong>{' '}
+                  {archOverview.systemComponents.database}
+                </li>
+              </>
+            )}
           </ul>
         </div>
 

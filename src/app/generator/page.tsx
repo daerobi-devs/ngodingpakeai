@@ -173,6 +173,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
   const [loadingClarifications, setLoadingClarifications] = useState(false);
   const [customFeatureModules, setCustomFeatureModules] = useState<FeatureModule[]>([]);
   const [loadingFeatureTree, setLoadingFeatureTree] = useState(false);
+  const [isGeneratingStudioPrd, setIsGeneratingStudioPrd] = useState(false);
+  const [isNewlyGeneratedPrd, setIsNewlyGeneratedPrd] = useState(false);
 
   useEffect(() => {
     if (urlMode === 'roadmap') {
@@ -713,6 +715,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     setFormData(compiledFormData);
     setLoadingFeatureTree(true);
     setErrorMessage(null);
+    setWizardStep('feature_tree');
 
     try {
       const res = await fetch('/api/generate-feature-tree', {
@@ -741,7 +744,6 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       console.warn('Feature tree generation error, continuing to tree step:', err);
     } finally {
       setLoadingFeatureTree(false);
-      setWizardStep('feature_tree');
     }
   };
 
@@ -779,6 +781,33 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     setLoading(true);
     setErrorMessage(null);
     setStatusStep('Menyiapkan konteks produk...');
+
+    // Immediately transition to Studio with stub PRD and skeleton (Image 3)
+    const titleToUse = targetFormData.title || (wizardIdea.length > 50 ? `${wizardIdea.slice(0, 48)}...` : wizardIdea) || 'Project Requirements Document';
+    const stubPrd: PRDOutput = {
+      title: titleToUse,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        modelUsed: preferredModel,
+      },
+      opportunity_framing: {
+        core_problem: '',
+        working_hypothesis: '',
+        strategy_fit: '',
+      },
+      boundaries: {
+        scope: [],
+        non_goals: [],
+      },
+      system_architecture: {
+        overview: '',
+        components: [],
+      },
+    } as any;
+
+    setGeneratedPRD(stubPrd);
+    setIsGeneratingStudioPrd(true);
+    setIsNewlyGeneratedPrd(false);
 
     try {
       setTimeout(() => setStatusStep('Menganalisis boundary & non-goals...'), 2000);
@@ -830,6 +859,8 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       }
 
       setGeneratedPRD(prdToSet);
+      setIsGeneratingStudioPrd(false);
+      setIsNewlyGeneratedPrd(true);
 
       // Save to history state & local storage with consistent ID from Supabase
       const historyId = json.prdId || json.data?.metadata?.prdId || `prd_${Date.now()}`;
@@ -854,6 +885,9 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
       }
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Terjadi kesalahan tidak terduga');
+      setGeneratedPRD(null);
+      setIsGeneratingStudioPrd(false);
+      setIsNewlyGeneratedPrd(false);
     } finally {
       setLoading(false);
       setStatusStep('');
@@ -1377,11 +1411,19 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                 prdId={activePrdId || undefined}
                 apiKeyHeader={keys.join(',')}
                 userId={user?.id}
-                onBackToEdit={() => setGeneratedPRD(null)}
+                onBackToEdit={() => {
+                  setGeneratedPRD(null);
+                  setIsGeneratingStudioPrd(false);
+                  setIsNewlyGeneratedPrd(false);
+                }}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 onUpdatePrd={handleUpdateStudioPrd}
                 onRequireUpgrade={() => setIsPricingModalOpen(true)}
                 theme={theme}
+                isLoadingPrd={isGeneratingStudioPrd}
+                loadingPrdMessage={statusStep}
+                isNewlyGenerated={isNewlyGeneratedPrd}
+                onFinishTyping={() => setIsNewlyGeneratedPrd(false)}
               />
             </div>
           ) : (
@@ -1432,9 +1474,10 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
                     formData={formData}
                     onBack={() => setWizardStep('discovery')}
                     onProceedToStudio={handleFeatureTreeSubmit}
-                    isGeneratingPrd={loading}
+                    isGeneratingPrd={loading || isGeneratingStudioPrd}
                     theme={theme}
                     customModules={customFeatureModules.length > 0 ? customFeatureModules : undefined}
+                    isLoading={loadingFeatureTree}
                   />
                 )}
               </div>

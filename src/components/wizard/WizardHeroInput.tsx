@@ -144,9 +144,9 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
 
-  // Voice Dictation (Web Speech API) in Indonesian
+  // Voice Dictation (Web Speech API) with dynamic language support (ID / EN)
   const { isListening, toggleListening, isSupported } = useVoiceDictation({
-    lang: 'id-ID',
+    lang: selectedLanguage === 'en' ? 'en-US' : 'id-ID',
     onResult: (spokenText) => {
       setIdea(spokenText);
       setCustomError(null);
@@ -678,7 +678,7 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                 </button>
               )}
 
-              {/* Tombol Dikte Suara (Web Speech API - Bahasa Indonesia) */}
+              {/* Tombol Dikte Suara (Web Speech API) */}
               <button
                 type="button"
                 onClick={() => {
@@ -686,19 +686,21 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
                   toggleListening(idea);
                 }}
                 disabled={isLoading}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-40 ${
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer active:scale-95 disabled:opacity-40 ${
                   isListening
-                    ? 'border-red-500 bg-red-500/20 text-red-300 ring-2 ring-red-500/30 animate-pulse'
+                    ? isLight
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 font-semibold'
+                      : 'border-amber-500/50 bg-zinc-900 text-amber-300 font-semibold shadow-xs'
                     : isLight
                     ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 hover:text-amber-600'
                     : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-amber-400'
                 }`}
-                title={isListening ? 'Hentikan rekaman suara' : 'Dikte ide kamu lewat suara (Bahasa Indonesia)'}
+                title={isListening ? 'Klik untuk menghentikan rekaman suara' : 'Dikte ide lewat suara'}
               >
                 {isListening ? (
                   <>
-                    <MicOff className="h-3.5 w-3.5 text-red-400" />
-                    <span className="text-red-300">Merekam...</span>
+                    <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Mendengarkan...</span>
                   </>
                 ) : (
                   <>
@@ -761,23 +763,6 @@ export const WizardHeroInput: React.FC<WizardHeroInputProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Listening Voice Indicator Banner */}
-        {isListening && (
-          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium bg-red-500/10 text-red-300 border border-red-500/30 animate-pulse">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-              <span>Mendengarkan suara kamu dalam Bahasa Indonesia... Silakan bicara.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => toggleListening()}
-              className="text-[10px] font-bold text-red-400 hover:underline cursor-pointer"
-            >
-              Selesai
-            </button>
-          </div>
-        )}
 
         {/* Notifikasi Sukses Perkaya Ide */}
         {enrichNotification && (

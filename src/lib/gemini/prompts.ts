@@ -107,11 +107,21 @@ Tetap lengkapi 7 Kategori berikut secara mendalam:
      - [FASE 3 - INTEGRASI] 2-3 task menghubungkan frontend ke API backend, penanganan state & error
      - [FASE 4 - DEPLOY & TEST] 2-3 task testing end-to-end, setup CI/CD, dan deployment
 
-9. ARCHITECTURE DIAGRAMS (Mermaid.js murni tanpa backticks — WAJIB 8 BLUEPRINT LENGKAP):
-   - 'system_flowchart': flowchart TD (alur lengkap dari user, frontend, API backend, DB, cache, service eksternal)
+9. ARCHITECTURE DIAGRAMS (Mermaid.js murni tanpa backticks — WAJIB LEVEL PRODUKSI & DINAMIS):
+   - 'system_flowchart': flowchart TD tingkat arsitektur riil (Production-Ready).
+     * WAJIB memetakan "CRITICAL PATH" (Alur Transaksi Inti) produk ini dari aksi user hingga persistence, background processing, hardware/driver, atau external service.
+     * DILARANG membuat flowchart klise/statis (seperti User -> WebUI -> Auth -> Server -> DB).
+     * WAJIB menyertakan node teknis spesifik untuk produk ini: misal jika POS/Kafe (KasirTouchUI, KDS_Barista, ThermalPrinter, WebSocket, SupabaseDB); jika Gaming/Slot (LobbyWeb, WalletEngine, GameAggregatorAPI, ExternalGameProvider, USDTRail, AuditLogDB); jika Logistik (OrderDashboard, ShippingEngine, RajaOngkirAPI, AWBGenerator, WhatsAppGateway); jika IoT (SensorEdge, MQTTBroker, IngestWorker, TimeSeriesDB, AlertNotifier).
+     * Setiap panah WAJIB berlabel aksi konkret bernomor urut: contoh "-->|1. Tap Checkout & Bayar|", "-->|2. Validasi & Lock Stok|", "-->|3. Cetak Struk Struk|".
+     * Node format wajib quote ganda: NodeId["Nama Komponen (Teknologi)"] agar Mermaid tidak error.
+   - 'system_components': array objek komponen arsitektur inti (3-6 komponen nyata):
+     * 'name': nama komponen (contoh: 'Terminal Kasir & KDS', 'Game Aggregator Adapter', 'Thermal Receipt Driver', 'Engine Perhitungan Ongkir')
+     * 'role': tanggung jawab teknis spesifik komponen ini
+     * 'tech': teknologi atau protokol (contoh: 'Next.js 16 + WebSockets', 'REST Webhook + HMAC-SHA256', 'ESC/POS Driver', 'PostgreSQL Row Locking')
+     * 'type': 'frontend' | 'backend' | 'database' | 'external_api' | 'hardware' | 'realtime' | 'queue'
    - 'user_journey_flow': flowchart LR atau stateDiagram-v2 (peta navigasi pengguna dari landing page hingga fitur inti)
-   - 'database_erd': erDiagram (relasi entitas tabel yang realistis, tipe data kolom, dan foreign key spesifik produk. PENTING: Gunakan tipe data bersih tanpa tanda kurung seperti string, int, boolean, datetime, decimal, uuid. DILARANG menulis varchar(255) atau decimal(10,2)).
-   - 'sql_migration_script': WAJIB DIISI! Skrip migrasi SQL DDL PostgreSQL / Supabase lengkap level produksi yang 100% siap dijalankan (CREATE EXTENSION IF NOT EXISTS "uuid-ossp", CREATE TABLE dengan id UUID PRIMARY KEY DEFAULT gen_random_uuid(), foreign key constraints REFERENCES ... ON DELETE CASCADE, CREATE INDEX idx_..., dan ALTER TABLE ... ENABLE ROW LEVEL SECURITY; beserta RLS policies).
+   - 'database_erd': erDiagram (WAJIB MEMODELKAN MINIMAL 6 HINGGA 10 TABEL RELASIONAL LENGKAP yang mencakup seluruh modul fitur dan alur operasional! DILARANG KERAS hanya membuat 2 atau 3 tabel ringkas! Setiap modul pada feature_breakdown dan roadmap_tree WAJIB memiliki entitas tabel database penampung data. Gunakan tipe data bersih tanpa tanda kurung: string, int, boolean, datetime, decimal, uuid. DILARANG menulis varchar(255) atau decimal(10,2)).
+   - 'sql_migration_script': WAJIB DIISI LENGKAP! Skrip migrasi SQL DDL PostgreSQL / Supabase untuk SEMUA 6-10 TABEL di database_erd di atas (CREATE EXTENSION IF NOT EXISTS "uuid-ossp", CREATE TABLE dengan id UUID PRIMARY KEY DEFAULT gen_random_uuid(), foreign key constraints REFERENCES ... ON DELETE CASCADE, CREATE INDEX idx_..., dan ALTER TABLE ... ENABLE ROW LEVEL SECURITY; beserta RLS policies). DILARANG memotong skrip atau hanya menulis 2-3 tabel!
    - 'api_integration_matrix': flowchart TD atau classDiagram (daftar rute API REST/tRPC, webhook, dan integrasi)
    - 'sequence_diagram': sequenceDiagram autonumber (transaksi inti paling kritikal langkah demi langkah)
    - 'infrastructure_topology': flowchart LR (topologi server: CDN/Cloudflare -> Nginx -> Docker App -> DB -> Redis)
@@ -232,13 +242,14 @@ STANDAR KUALITAS: LANGSUNG LEVEL MATANG VERSI 3 (PRODUCTION-READY):
 1. Analisis dan isi 'archetype_detection' (apakah sekolah, katalog UMKM, SaaS, rental, dll beserta warna & target audiens).
 2. Bedah 5-8 fitur MVP inti ke dalam 'feature_breakdown' secara mendalam: minimal 5 langkah Happy Path, 4 Business Rules ketat, 3 Edge Cases nyata, Tech Mapping file paths, dan Agent Prompt siap pakai untuk Cursor / Claude.
 3. Susun 'roadmap_tree' berfase dinamis sesuai kompleksitas produk dengan rincian sub_features yang atomic untuk visual tree node roadmap.
-4. WAJIB ISI SEMUA 8 DIAGRAM PADA 'architecture_diagrams' (system_flowchart, user_journey_flow, database_erd, api_integration_matrix, sequence_diagram, infrastructure_topology, rbac_permission_matrix, data_pipeline_flow).
+4. WAJIB ISI SEMUA 8 DIAGRAM PADA 'architecture_diagrams' (system_flowchart, user_journey_flow, database_erd, api_integration_matrix, sequence_diagram, infrastructure_topology, rbac_permission_matrix, data_pipeline_flow) serta array 'system_components'.
 DILARANG KERAS menggunakan diagram template klise generik (seperti tabel USERS/TRANSACTIONS/LOGS jika produknya bukan marketplace murni, atau flowchart login dasar).
-- 'database_erd' WAJIB memodelkan tabel-tabel nyata yang 100% SPESIFIK untuk domain ide user ini (misal jika sekolah/PPDB: SISWA, WALI_MURID, PENDAFTARAN, BERKAS_DOKUMEN, GELOMBANG_MASUK; jika kasir/POS: OUTLETS, PRODUK, KATEGORI, TRANSAKSI, ITEM_TRANSAKSI, SHIFT_KASIR; jika rental: PELANGGAN, ALAT_RENTAL, PENYEWAAN, PEMBAYARAN, DENDA).
+- 'database_erd' WAJIB memodelkan MINIMAL 6 HINGGA 10 TABEL RELASIONAL LENGKAP yang 100% SPESIFIK dan BERKAITAN LANGSUNG dengan seluruh modul fitur di 'feature_breakdown' dan 'roadmap_tree'. DILARANG KERAS hanya menghasilkan 2 atau 3 tabel (seperti hanya tabel users dan orders/transactions)! Setiap modul fitur wajib memiliki entitas tabel database penampung data (misal jika sekolah/PPDB: users, students, guardians, registrations, document_files, registration_batches, payment_bills; jika kasir/POS: users, outlets, categories, products, orders, order_items, cash_shifts, payment_records; jika rental: users, rental_items, item_units, bookings, payments, deposits, fines; jika booking/salon: users, services, staff_schedules, bookings, booking_items, payments, customer_reviews).
   ATURAN SINTAKS MERMAID ERD: Gunakan tipe data bersih TANPA tanda kurung (contoh: string, int, boolean, datetime, decimal, uuid). DILARANG menulis varchar(255) atau decimal(10,2) agar visual diagram selalu ter-render sempurna tanpa error.
-- 'sql_migration_script' WAJIB menghasilkan skrip migrasi SQL PostgreSQL / Supabase DDL lengkap (CREATE EXTENSION, CREATE TABLE, UUID, Indexes, RLS Policies) yang 100% selaras dengan tabel-tabel pada 'database_erd' di atas agar developer bisa langsung copy-paste ke SQL Editor.
+- 'sql_migration_script' WAJIB menghasilkan skrip migrasi SQL PostgreSQL / Supabase DDL LENGKAP untuk SEMUA 6-10 tabel di atas (CREATE EXTENSION, CREATE TABLE, UUID, Indexes, RLS Policies) yang 100% selaras dengan tabel-tabel pada 'database_erd'. DILARANG memotong skrip atau hanya menulis 2-3 tabel!
 - 'user_journey_flow' WAJIB menggambarkan tahapan interaksi unik dari masalah pengguna awal, penggunaan fitur utama produk, hingga tujuan akhir tercapai.
-- 'system_flowchart' WAJIB memetakan komponen teknis frontend, backend, database, queue, dan third-party API spesifik.
+- 'system_flowchart' WAJIB memetakan "CRITICAL PATH" (Alur Transaksi Inti) dengan panah bernomor urut aksi dan komponen teknis spesifik (Hardware, Webhooks, Third-Party APIs, Realtime Engine, Database Lock).
+- 'system_components' WAJIB merinci 3-6 komponen arsitektur nyata (name, role, tech, type) yang relevan 100% dengan ide produk user.
 Berikan elaborasi teknis yang matang, berbobot, dan berstandar Silicon Valley untuk setiap kategori!`;
 }
 

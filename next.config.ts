@@ -7,8 +7,8 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Kontrol info Referer yang dikirim saat pindah halaman
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  // Matikan fitur browser yang tidak dipakai
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // Izinkan mikrofon untuk domain sendiri (self) agar fitur Dikte Suara (Web Speech API) berfungsi
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
   // DNS prefetch untuk performa
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   // Paksa HTTPS (aktif setelah deploy ke domain real)

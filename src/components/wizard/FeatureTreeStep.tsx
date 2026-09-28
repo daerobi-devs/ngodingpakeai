@@ -3,13 +3,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PRDFormData } from '@/types/prd';
 import { TechStackConfig } from './WizardHeroInput';
-import {
-  ArrowLeft,
-  ArrowRight,
-  FolderTree,
-  Kanban,
-  Loader2,
-} from 'lucide-react';
 import { InteractiveTreeCanvas, TreeCanvasModule } from '@/components/tree/InteractiveTreeCanvas';
 
 export interface FeatureModule {
@@ -32,6 +25,8 @@ interface FeatureTreeStepProps {
   isGeneratingPrd?: boolean;
   theme?: 'dark' | 'light';
   customModules?: FeatureModule[];
+  isLoading?: boolean;
+  loadingMessage?: string;
 }
 
 export const FeatureTreeStep: React.FC<FeatureTreeStepProps> = ({
@@ -43,6 +38,8 @@ export const FeatureTreeStep: React.FC<FeatureTreeStepProps> = ({
   isGeneratingPrd = false,
   theme = 'dark',
   customModules,
+  isLoading = false,
+  loadingMessage,
 }) => {
   const isLight = theme === 'light';
 
@@ -240,8 +237,8 @@ export const FeatureTreeStep: React.FC<FeatureTreeStepProps> = ({
   }, [modules]);
 
   return (
-    <div className="w-full h-[calc(100vh-8rem)] min-h-[650px] flex flex-col animate-in fade-in duration-300 relative">
-      {/* 1. Main Interactive Infinite Tree Canvas */}
+    <div className="w-full h-[calc(100vh-6rem)] min-h-[660px] flex flex-col animate-in fade-in duration-300 relative">
+      {/* Main Interactive Infinite Tree Canvas */}
       <div className="flex-1 w-full h-full relative overflow-hidden rounded-2xl border border-zinc-800/90 shadow-2xl flex flex-col">
         <InteractiveTreeCanvas
           title={displayTitle}
@@ -254,61 +251,11 @@ export const FeatureTreeStep: React.FC<FeatureTreeStepProps> = ({
           onAddSubFeature={handleAddSubFeature}
           onRemoveSubFeature={handleRemoveSubFeature}
           onProceedWizard={handleFinalGenerate}
+          onBackWizard={onBack}
           isGeneratingPrd={isGeneratingPrd}
+          isLoading={isLoading}
+          loadingMessage={loadingMessage}
         />
-      </div>
-
-      {/* 2. Floating Bottom Action Bar */}
-      <div
-        className={`mt-4 p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 transition-all ${
-          isLight
-            ? 'bg-white/95 border-zinc-300 shadow-xl text-zinc-900'
-            : 'bg-[#0e1118]/95 border-zinc-800 shadow-2xl text-white'
-        }`}
-      >
-        <div className="space-y-0.5 text-center sm:text-left">
-          <div className="flex items-center justify-center sm:justify-start gap-2 font-bold text-sm text-zinc-100">
-            <Kanban className="h-4 w-4 text-amber-500" />
-            <span>Pohon Fitur Siap Dikomposisikan ke Dokumen Studio PRD</span>
-          </div>
-          <p className="text-xs text-zinc-400">
-            {enabledCount} dari {modules.length} modul aktif terpilih. Kamu bisa geser (pan) canvas dan atur skala perbesaran bebas.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={isGeneratingPrd}
-            className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-              isLight
-                ? 'bg-zinc-100 border-zinc-300 text-zinc-700'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
-            }`}
-          >
-            Ubah Tanya Jawab
-          </button>
-
-          <button
-            type="button"
-            onClick={handleFinalGenerate}
-            disabled={isGeneratingPrd || enabledCount === 0}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 px-6 py-2.5 text-xs font-extrabold text-zinc-950 shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
-          >
-            {isGeneratingPrd ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-950" />
-                <span>Menyusun Dokumen Studio...</span>
-              </>
-            ) : (
-              <>
-                <span>Generate Dokumen PRD di Studio</span>
-                <ArrowRight className="h-4 w-4" />
-              </>
-            )}
-          </button>
-        </div>
       </div>
     </div>
   );

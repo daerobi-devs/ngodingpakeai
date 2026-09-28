@@ -153,14 +153,18 @@ export function generateStudioFullMarkdown(prd: PRDOutput): string {
   md += `## 5. Architecture\n\n`;
   md += `${archOverview.intro}\n\n`;
   md += `### Gambaran sistem:\n\n`;
-  md += `- **Antarmuka pengguna**: ${archOverview.systemComponents.frontend}\n`;
-  md += `- **Logika server**: ${archOverview.systemComponents.backend}\n`;
-  md += `- **Basis data**: ${archOverview.systemComponents.database}\n`;
-  md += `- **Penyimpanan file**: ${archOverview.systemComponents.storage}\n`;
-  md += `- **Layanan autentikasi**: ${archOverview.systemComponents.auth}\n`;
-  md += `- **Generator laporan**: ${archOverview.systemComponents.reports}\n\n`;
+  if (archOverview.systemComponentsList && archOverview.systemComponentsList.length > 0) {
+    archOverview.systemComponentsList.forEach((item) => {
+      md += `- **${item.label}**: ${item.text}\n`;
+    });
+    md += `\n`;
+  } else {
+    md += `- **Antarmuka pengguna**: ${archOverview.systemComponents.frontend}\n`;
+    md += `- **Logika server**: ${archOverview.systemComponents.backend}\n`;
+    md += `- **Basis data**: ${archOverview.systemComponents.database}\n\n`;
+  }
   md += `### Diagram alur sistem:\n\n`;
-  md += `\`\`\`mermaid\n${archOverview.systemFlowchartMermaid}\n\`\`\`\n\n`;
+  md += "```mermaid\n" + archOverview.systemFlowchartMermaid + "\n```\n\n";
 
   // 6. Database Schema
   const schemaDict = generateDatabaseSchemaDictionary(prd);

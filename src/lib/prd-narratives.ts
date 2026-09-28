@@ -30,9 +30,12 @@ export interface ArchitectureOverview {
     storage: string;
     auth: string;
     reports: string;
+    [key: string]: string;
   };
+  systemComponentsList: Array<{ label: string; text: string }>;
   systemFlowchartMermaid: string;
 }
+
 
 export interface CleanRequirements {
   functional: string[];
@@ -588,8 +591,254 @@ export function generateDynamicUserFlowSteps(prd: PRDOutput): UserFlowStep[] {
 }
 
 /**
+ * Helper untuk memperkaya Mermaid flowchart yang dibuat oleh AI atau menyusun flowchart dinamis yang spesifik untuk domain produk.
+ */
+function enrichOrSynthesizeSystemFlowchart(
+  rawChart: string | undefined,
+  context: {
+    audience: string;
+    frontend: string;
+    backend: string;
+    database: string;
+    moduleNames: string[];
+    isPOS: boolean;
+    isGaming: boolean;
+    isCrypto: boolean;
+    isLogistics: boolean;
+    isWhatsApp: boolean;
+    isSchool: boolean;
+    isHealthcare: boolean;
+    isRealtime: boolean;
+    hasFileUpload: boolean;
+    hasReports: boolean;
+    hasPaymentGateway: boolean;
+  }
+): string {
+  // Bersihkan markdown fence backticks dan spasi
+  let cleanChart = (rawChart || '')
+    .trim()
+    .replace(/^```(?:mermaid)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  const isStaleTemplate =
+    Boolean(cleanChart) &&
+    (cleanChart.includes('Simpan nota & lampiran') ||
+      cleanChart.includes('Client([Klien Pengguna])') ||
+      (cleanChart.includes('Layanan Autentikasi') &&
+        cleanChart.includes('Penyimpanan File') &&
+        cleanChart.includes('Generator Laporan')));
+
+  // Jika AI sudah menghasilkan diagram kustom yang valid dan BUKAN template basi
+  if (cleanChart.length >= 40 && !isStaleTemplate) {
+    const bracketCount = (cleanChart.match(/\[.*?\]/g) || []).length;
+
+    // Jika sudah memiliki label deskriptif di dalam bracket (misal A[Client] --> B[Server])
+    if (bracketCount >= 3) {
+      // Pastikan label node yang memuat tanda kurung / slash tidak memecahkan parser Mermaid
+      cleanChart = cleanChart.replace(/\[([^"\]]+)\]/g, (match, inner) => {
+        if (inner.includes('(') || inner.includes(')') || inner.includes('/') || inner.includes('&')) {
+          return `["${inner.replace(/"/g, "'")}"]`;
+        }
+        return match;
+      });
+
+      if (!cleanChart.startsWith('flowchart') && !cleanChart.startsWith('graph')) {
+        return `flowchart TD\n${cleanChart}`;
+      }
+      return cleanChart;
+    }
+
+    // Jika berupa diagram relasi identifier polos (misal User --> Frontend\nFrontend --> API...)
+    const lines = cleanChart.split('\n').map((l) => l.trim()).filter(Boolean);
+    const arrowLines = lines.filter((l) => l.includes('-->') || l.includes('---'));
+
+    if (arrowLines.length > 0) {
+      const nodeIds = new Set<string>();
+      arrowLines.forEach((line) => {
+        const parts = line.split(/-->|---|\|.*?\|/);
+        parts.forEach((p) => {
+          const id = p.trim().replace(/^\[|\]$/g, '').split('[')[0].trim();
+          if (id && /^[a-zA-Z0-9_]+$/.test(id)) {
+            nodeIds.add(id);
+          }
+        });
+      });
+
+      const definitions: string[] = [];
+      nodeIds.forEach((id) => {
+        const lower = id.toLowerCase();
+        if (lower.includes('websocket') || lower.includes('realtime')) {
+          definitions.push(`  ${id}["Layanan Realtime (WebSocket / Supabase Realtime)"]`);
+        } else if (lower.includes('aggregator')) {
+          definitions.push(`  ${id}["Game Aggregator API"]`);
+        } else if (lower.includes('provider')) {
+          definitions.push(`  ${id}["Provider Game Eksternal"]`);
+        } else if (lower.includes('printer')) {
+          definitions.push(`  ${id}["Thermal Receipt & Kitchen Printer"]`);
+        } else if (lower.includes('logistics') || lower.includes('kurir') || lower.includes('ongkir')) {
+          definitions.push(`  ${id}["Logistics API (Kurir & Ekspedisi)"]`);
+        } else if (lower.includes('whatsapp') || lower.includes('wa_') || lower === 'wa' || lower.includes('notif')) {
+          definitions.push(`  ${id}["WhatsApp Gateway & Notification Service"]`);
+        } else if (lower.includes('payment') || lower.includes('qris') || lower.includes('gateway_pay')) {
+          definitions.push(`  ${id}["Payment Gateway (QRIS / Midtrans)"]`);
+        } else if (lower.includes('gateway') && lower.includes('api')) {
+          definitions.push(`  ${id}["API Gateway & Logika Server - ${context.backend}"]`);
+        } else if (lower.includes('storage') || lower.includes('file')) {
+          definitions.push(`  ${id}["Penyimpanan Berkas (Cloud Storage)"]`);
+        } else if (lower.includes('report') || lower.includes('laporan')) {
+          definitions.push(`  ${id}["Generator Laporan (PDF & Excel)"]`);
+        } else if (lower.includes('auth')) {
+          definitions.push(`  ${id}["Layanan Autentikasi & Keamanan"]`);
+        } else if (
+          lower.includes('db') ||
+          lower.includes('database') ||
+          lower.includes('supabase') ||
+          lower.includes('postgres') ||
+          lower.includes('sqlite') ||
+          lower.includes('sql')
+        ) {
+          definitions.push(`  ${id}[("Basis Data - ${context.database}")]`);
+        } else if (
+          lower.includes('server') ||
+          lower.includes('api') ||
+          lower.includes('action') ||
+          lower.includes('backend')
+        ) {
+          definitions.push(`  ${id}["Logika Server - ${context.backend}"]`);
+        } else if (lower.includes('front') || lower.includes('web') || lower.includes('ui') || lower === 'app') {
+          definitions.push(`  ${id}["Antarmuka Web - ${context.frontend}"]`);
+        } else if (lower === 'user' || lower === 'pengguna' || lower === 'client') {
+          definitions.push(`  ${id}["Pengguna - ${context.audience}"]`);
+        } else {
+          const readable = id.replace(/_/g, ' ');
+          definitions.push(`  ${id}["${readable}"]`);
+        }
+      });
+
+      return `flowchart TD\n${definitions.join('\n')}\n\n${arrowLines.map((l) => '  ' + l).join('\n')}`;
+    }
+  }
+
+  // JIKA TIDAK ADA DIAGRAM DARI AI ATAU BERUPA TEMPLATE STENCIL LAMA:
+  // Bangun flowchart alur kritis bernomor urut yang 100% spesifik untuk domain produk!
+  if (context.isGaming || context.isCrypto) {
+    return `flowchart TD
+  User["Pengguna - ${context.audience}"]
+  User -->|1. Akses platform & buka lobby| WebUI["Antarmuka Web - ${context.frontend}"]
+  
+  WebUI -->|2. Autentikasi akun & PIN sesi| Auth["Layanan Autentikasi (2FA & Session Guard)"]
+  Auth --> DB[("Basis Data - ${context.database}")]
+  
+  WebUI -->|3. Luncurkan game & pasang taruhan| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Validasi taruhan & lock saldo wallet| DB
+  Server -->|5. Panggil sesi game via token| Aggregator["Game Aggregator API"]
+  Aggregator -->|6. Streaming RNG & callback hasil game| GameProvider["Provider Game Eksternal"]
+  
+  WebUI -->|7. Deposit & penarikan instan| Crypto["Crypto / USDT Payment Rail (TRC20/ERC20)"]
+  Crypto -->|8. Webhook konfirmasi transfer on-chain| Server`;
+  }
+
+  if (context.isPOS) {
+    return `flowchart TD
+  User["Pengguna - ${context.audience}"]
+  User -->|1. Akses terminal kasir & pilih menu| WebUI["Antarmuka Kasir & Tablet POS - ${context.frontend}"]
+  
+  WebUI -->|2. Quick-switch PIN kasir/barista| Auth["Otorisasi Terminal & Role Guard"]
+  Auth --> DB[("Basis Data - ${context.database}")]
+  
+  WebUI -->|3. Konfirmasi pesanan & bayar| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Catat transaksi atomik & potong stok| DB
+  Server -->|5. Tampilkan QRIS dinamis di layar pelanggan| Payment["Dynamic QRIS Customer Display"]
+  Server -->|6. Kirim antrean pesanan seketika| Realtime["Realtime Engine (WebSocket / SSE)"]
+  Realtime -->|7. Tampilkan tiket antrean dapur| KDS["Kitchen Display System (Layar Barista)"]
+  Server -->|8. Cetak struk belanja & tiket dapur| Printer["Thermal Receipt & Kitchen Printer"]`;
+  }
+
+  if (context.isLogistics) {
+    return `flowchart TD
+  User["Pengguna - ${context.audience}"]
+  User -->|1. Buka dashboard pengiriman & pesanan| WebUI["Dashboard Operasional - ${context.frontend}"]
+  
+  WebUI -->|2. Login staf gudang & admin| Auth["Layanan Autentikasi"]
+  Auth --> DB[("Basis Data - ${context.database}")]
+  
+  WebUI -->|3. Proses order & verifikasi stok| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Query & mutasi inventaris gudang| DB
+  Server -->|5. Cek tarif ongkir & generate resi AWB| Logistics["Logistics API (J&T / SiCepat / RajaOngkir)"]
+  Server -->|6. Kirim update resi otomatis| WhatsApp["WhatsApp Gateway Notification"]${
+    context.hasFileUpload ? '\n  Server -->|7. Unggah foto paket & resi fisik| Storage["Penyimpanan Berkas (Cloud Storage)"]' : ''
+  }${
+    context.hasReports ? '\n  Server -->|8. Export rekap mutasi & penjualan| Reporter["Generator Laporan (Excel & PDF)"]\n  Reporter -->|File siap unduh| WebUI' : ''
+  }`;
+  }
+
+  if (context.isSchool) {
+    return `flowchart TD
+  User["Pengguna - ${context.audience}"]
+  User -->|1. Buka portal pendaftaran siswa| WebUI["Portal Web - ${context.frontend}"]
+  
+  WebUI -->|2. Daftar akun & login NISN/email| Auth["Layanan Autentikasi Siswa & Panitia"]
+  Auth --> DB[("Basis Data - ${context.database}")]
+  
+  WebUI -->|3. Pengisian formulir & pilih jalur| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Simpan data pendaftaran siswa| DB
+  Server -->|5. Unggah berkas ijazah, KK, akta| Storage["Penyimpanan Berkas (Cloud Storage)"]
+  Server -->|6. Bayar biaya seleksi/formulir| Payment["Payment Gateway (VA / QRIS)"]
+  Server -->|7. Notifikasi kelulusan & kartu ujian| WhatsApp["WhatsApp / Email Notifier"]${
+    context.hasReports ? '\n  Server -->|8. Cetak kartu peserta & rekap kelulusan| Reporter["Generator Dokumen PDF"]\n  Reporter -->|File siap unduh| WebUI' : ''
+  }`;
+  }
+
+  if (context.isHealthcare) {
+    return `flowchart TD
+  User["Pengguna - ${context.audience}"]
+  User -->|1. Buka portal rekam medis & antrean| WebUI["Antarmuka Web - ${context.frontend}"]
+  
+  WebUI -->|2. Login dokter, perawat, & staf| Auth["Autentikasi & RBAC Tenaga Medis"]
+  Auth --> DB[("Basis Data Rekam Medis - ${context.database}")]
+  
+  WebUI -->|3. Input diagnosa & resep obat| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Simpan rekam medis (EMR) & mutasi obat| DB
+  Server -->|5. Panggil nomor antrean poliklinik| Queue["Display Antrean Poli (Realtime)"]${
+    context.hasFileUpload ? '\n  Server -->|6. Simpan foto rontgen & hasil lab| Storage["Penyimpanan Berkas Medis (S3 Enkripsi)"]' : ''
+  }${
+    context.hasReports ? '\n  Server -->|7. Cetak resume medis & rujukan| Reporter["Generator Resume Medis (PDF)"]\n  Reporter -->|File siap unduh| WebUI' : ''
+  }`;
+  }
+
+  // Default: General SaaS / Modern Web Application dengan alur transaksi bernomor urut
+  const actionList = context.moduleNames.slice(0, 4).join(', ') || 'data & transaksi';
+  let chart = `flowchart TD
+  User["Pengguna - ${context.audience}"]
+  User -->|1. Akses dashboard di browser| WebUI["Antarmuka Web - ${context.frontend}"]
+  
+  WebUI -->|2. Autentikasi & manajemen sesi aman| Auth["Layanan Autentikasi"]
+  Auth --> DB[("Basis Data - ${context.database}")]
+  
+  WebUI -->|3. Eksekusi alur ${actionList}| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Validasi skema Zod & mutasi data| DB`;
+
+  let stepCounter = 5;
+  if (context.hasPaymentGateway) {
+    chart += `\n  Server -->|${stepCounter++}. Proses pembayaran digital| Payment["Payment Gateway (QRIS / Midtrans)"]`;
+  }
+  if (context.hasFileUpload) {
+    chart += `\n  Server -->|${stepCounter++}. Unggah berkas lampiran & dokumen| Storage["Penyimpanan Berkas (Cloud Storage)"]`;
+  }
+  if (context.isRealtime) {
+    chart += `\n  Server -->|${stepCounter++}. Push update status seketika| Realtime["Layanan Realtime (WebSocket / SSE)"]\n  Realtime --> WebUI`;
+  }
+  if (context.hasReports) {
+    chart += `\n  Server -->|${stepCounter++}. Minta laporan analitik & rekap| Reporter["Generator Laporan (PDF & Excel)"]\n  Reporter -->|File siap unduh| WebUI`;
+  }
+
+  return chart;
+}
+
+/**
  * Menghasilkan ringkasan arsitektur (teks narasi dan komponen sistem)
- * sesuai tata letak elegan pada gambar referensi.
+ * sesuai tata letak elegan dan 100% dinamis sesuai domain produk.
  */
 export function generateArchitectureOverview(prd: PRDOutput): ArchitectureOverview {
   const resolvedStack = resolvePrdTechStack(prd);
@@ -637,48 +886,226 @@ export function generateArchitectureOverview(prd: PRDOutput): ArchitectureOvervi
       ? detectedTables.slice(0, 6).join(', ')
       : 'akun pengguna, profil organisasi, entitas katalog, pergerakan data, dan riwayat audit';
 
-  const intro =
-    'Aplikasi dibangun sebagai aplikasi web full stack dalam satu proyek. Bagian antarmuka (yang dilihat pengguna) dan bagian logika server dijalankan dalam satu kerangka kerja, sehingga lebih sederhana untuk dikembangkan dan dipelihara oleh tim kecil.';
+  // Analisis domain produk secara mendalam
+  const fullContext = (
+    (prd.title || '') +
+    ' ' +
+    (prd.opportunity_framing?.core_problem || '') +
+    ' ' +
+    targetAudience +
+    ' ' +
+    (prd.feature_breakdown || []).map((f) => (f.name || '') + ' ' + (f.user_story || '')).join(' ')
+  ).toLowerCase();
 
-  const systemComponents = {
-    frontend: `Halaman web responsif yang menampilkan ${moduleDisplayList}.`,
-    backend:
-      'Menangani aturan bisnis — penambahan/pengurangan data otomatis, validasi skema Zod, otorisasi sesi, dan penyusunan laporan.',
-    database: `Menyimpan data ${tablesDisplayList}.`,
-    storage: 'Menyimpan berkas lampiran, nota bukti fisik (foto/file), dan aset statis.',
-    auth: 'Mengatur pendaftaran akun, login/logout sesi aman (session cookies), dan ganti kata sandi.',
-    reports: 'Membuat berkas PDF dan Excel dari data yang sudah difilter serta integrasi notifikasi.',
-  };
+  const isPOS = /\b(pos|kasir|point of sale|barista|cafe|coffee|restoran|kitchen|dapur|struk|nota thermal|meja|kds|dine.in|takeaway)\b/i.test(
+    fullContext
+  );
+  const isGaming = /\b(slot|game|gaming|casino|judi|taruhan|bet|betting|aggregator|pragmatic|pgsoft|provider|spin|jackpot|rtp)\b/i.test(
+    fullContext
+  );
+  const isCrypto = /\b(crypto|kripto|usdt|bitcoin|ethereum|wallet|web3|blockchain|token|metamask|smart contract|trc20|erc20)\b/i.test(
+    fullContext
+  );
+  const isLogistics = /\b(ekspedisi|kurir|ongkir|resi|awb|shipping|logistik|j&t|sicepat|jne|rajaongkir|pengiriman|gudang)\b/i.test(
+    fullContext
+  );
+  const isWhatsApp = /\b(whatsapp|wa gateway|chat|pesan|broadcast|sms|twilio|fonnte|notifikasi wa)\b/i.test(
+    fullContext
+  );
+  const isSchool = /\b(sekolah|siswa|santri|guru|ppdb|peserta didik|ujian|cbt|rapor|mapel|kelas|akademik)\b/i.test(
+    fullContext
+  );
+  const isHealthcare = /\b(klinik|rekam medis|pasien|dokter|obat|apotek|rumahsakit|antrean pasien|poli)\b/i.test(
+    fullContext
+  );
+  const hasFileUpload = /\b(lampiran|upload|unggah|foto|gambar|nota bukti|bukti bayar|ktp|ijazah|berkas|dokumen|avatar|pdf file)\b/i.test(
+    fullContext
+  );
+  const hasReports = /\b(laporan|rekap|export|unduh|pdf|excel|spreadsheet|pembukuan|omzet|analitik)\b/i.test(
+    fullContext
+  );
+  const hasPaymentGateway = /\b(payment gateway|qris|midtrans|xendit|tripay|doku|pembayaran online|va bank|virtual account)\b/i.test(
+    fullContext
+  );
+  const isRealtime =
+    /\b(websocket|realtime|real-time|sse|live tracking|live update|sensor|iot|telemetry)\b/i.test(
+      fullContext
+    ) || isPOS || isGaming;
 
-  // Bangun Mermaid diagram alur sistem yang bersih dan vertikal (flowchart TD)
-  const safeAudience = targetAudience.replace(/["'[\]]/g, '').slice(0, 35);
   const cleanFrontendTech = resolvedStack.frontend.split(',')[0].trim() || 'Next.js 16 + Tailwind CSS';
   const cleanDbTech = resolvedStack.database.split('(')[0].trim() || 'PostgreSQL / Supabase';
+  const cleanBackendTech = resolvedStack.backend.split('(')[0].trim() || 'Server Actions & API Routes';
+  const safeAudience = targetAudience.replace(/["'[\]]/g, '').slice(0, 35);
 
-  const actionKeywords =
-    moduleNames.length > 0
-      ? moduleNames.slice(0, 4).join(', ')
-      : 'stok, katalog, opname, laporan';
+  const intro =
+    'Arsitektur sistem dirancang dengan prinsip pemisahan tanggung jawab (separation of concerns), keamanan tingkat produksi, dan pemetaan alur transaksi inti (critical path) yang jelas. Komponen di bawah memetakan bagaimana antarmuka pengguna, logika server, basis data, dan integrasi eksternal berinteraksi secara efisien.';
 
-  const systemFlowchartMermaid = `flowchart TD
-  User["Pengguna - ${safeAudience}"]
-  User -->|Buka di browser| WebUI["Antarmuka Web - ${cleanFrontendTech}"]
-  
-  WebUI -->|Daftar / Login / Ganti Sandi| Auth["Layanan Autentikasi"]
-  Auth --> DB[("Basis Data - ${cleanDbTech}")]
-  
-  WebUI -->|Aksi ${actionKeywords}| Server["Logika Server - Server Actions / API Route"]
-  Server -->|Query & Mutasi Data| DB
-  Server -->|Simpan nota & lampiran| Storage["Penyimpanan File"]
-  Server -->|Minta laporan PDF & Excel| Reporter["Generator Laporan"]
-  Reporter -->|File siap unduh| WebUI`;
+  // 1. Antarmuka pengguna
+  let frontendDesc = `Halaman web responsif yang menampilkan ${moduleDisplayList}.`;
+  if (isPOS) {
+    frontendDesc = `Antarmuka kasir cepat (POS) berbasis sentuh, kitchen display system (KDS) untuk barista, dan dashboard manajer kafe yang responsif.`;
+  } else if (isGaming) {
+    frontendDesc = `Lobby game interaktif, portal member untuk transaksi wallet, dan dashboard operasional agen dan admin yang aman.`;
+  } else if (isSchool) {
+    frontendDesc = `Portal publik pendaftaran calon siswa (PPDB), panel verifikasi berkas panitia, dan dashboard pengumuman kelulusan.`;
+  } else if (isLogistics) {
+    frontendDesc = `Dashboard monitoring pesanan, pelacakan pengiriman kurir ekspedisi, cetak resi massal, dan manajemen pelanggan.`;
+  }
+
+  // 2. Logika server
+  let backendDesc = `Menangani aturan bisnis — alur ${moduleDisplayList}, validasi skema data Zod, otorisasi sesi, dan integritas data.`;
+  if (isPOS) {
+    backendDesc = `Menangani aturan bisnis — pemesanan kasir, perhitungan diskon & pajak, routing antrean pesanan ke barista, dan mutasi stok bahan baku.`;
+  } else if (isGaming) {
+    backendDesc = `Menangani aturan bisnis — agregasi sesi game dari provider eksternal, validasi taruhan, rekonsiliasi saldo wallet instan, serta verifikasi setoran USDT.`;
+  } else if (isSchool) {
+    backendDesc = `Menangani aturan bisnis — validasi kelengkapan berkas siswa, penentuan kuota jalur pendaftaran, verifikasi panitia, dan publikasi hasil seleksi.`;
+  } else if (isLogistics) {
+    backendDesc = `Menangani aturan bisnis — validasi alamat pengiriman, perhitungan tarif ongkir real-time, penerbitan nomor resi AWB, dan notifikasi pengiriman.`;
+  }
+
+  // 3. Basis data
+  const databaseDesc = `Menyimpan data ${tablesDisplayList} menggunakan ${cleanDbTech}.`;
+
+  // 4. Layanan autentikasi
+  let authDesc = `Mengatur pendaftaran akun pengguna, login/logout sesi aman (session cookies/JWT), dan pembatasan hak akses peran.`;
+  if (isPOS) {
+    authDesc = `Otorisasi multi-role staf (kasir, barista, kepala toko) dengan quick-switch PIN terminal kasir.`;
+  } else if (isGaming) {
+    authDesc = `Autentikasi akun member dengan enkripsi tinggi, sesi login aman, verifikasi PIN transaksi, dan kontrol hak akses agen/operator.`;
+  } else if (isSchool) {
+    authDesc = `Pendaftaran akun calon siswa (berbasis NISN/email) dan proteksi akses panitia seleksi dengan role-based access control (RBAC).`;
+  }
+
+  // Susun daftar komponen dinamis
+  let systemComponentsList: Array<{ label: string; text: string }> = [];
+
+  // PRIORITAS 1: Jika AI Gemini sudah menghasilkan system_components terstruktur dalam skema PRD
+  if (prd.architecture_diagrams?.system_components && prd.architecture_diagrams.system_components.length > 0) {
+    systemComponentsList = prd.architecture_diagrams.system_components.map((comp) => {
+      const techBadge = comp.tech ? ` (${comp.tech})` : '';
+      return {
+        label: `${comp.name}${techBadge}`,
+        text: comp.role,
+      };
+    });
+  }
+
+  // PRIORITAS 2 (FALLBACK DINAMIS): Jika belum ada system_components dari AI, susun secara adaptif berbasis konteks produk nyata
+  if (systemComponentsList.length === 0) {
+    systemComponentsList.push(
+      { label: 'Antarmuka pengguna', text: frontendDesc },
+      { label: 'Logika server', text: backendDesc },
+      { label: 'Basis data', text: databaseDesc },
+      { label: 'Layanan autentikasi', text: authDesc }
+    );
+
+    // Integrasi pihak ketiga & hardware
+    if (isPOS) {
+      systemComponentsList.push({
+        label: 'Integrasi perangkat & pembayaran',
+        text: 'Integrasi hardware thermal receipt printer (struk belanja kasir), kitchen ticket printer (barista), customer QRIS display, dan laci kasir otomatis.',
+      });
+    } else if (isGaming || isCrypto) {
+      systemComponentsList.push({
+        label: 'Integrasi API & provider game',
+        text: 'Integrasi Game Aggregator API untuk peluncuran sesi game provider eksternal, callback webhook RNG, dan direct rail cryptocurrency (USDT TRC20/ERC20).',
+      });
+    } else if (isLogistics) {
+      systemComponentsList.push({
+        label: 'Integrasi kurir & logistik',
+        text: 'Integrasi API kurir ekspedisi (J&T, SiCepat, RajaOngkir) untuk kalkulasi ongkos kirim real-time dan penerbitan nomor resi otomatis.',
+      });
+    } else if (hasPaymentGateway) {
+      systemComponentsList.push({
+        label: 'Layanan pembayaran digital',
+        text: 'Integrasi Payment Gateway (QRIS Dinamis, Virtual Account, dan E-Wallet) untuk verifikasi pembayaran otomatis.',
+      });
+    }
+
+    if (isWhatsApp) {
+      systemComponentsList.push({
+        label: 'Gerbang notifikasi instan',
+        text: 'Integrasi WhatsApp Gateway untuk pengiriman notifikasi instan, konfirmasi transaksi, dan broadcast informasi penting.',
+      });
+    }
+
+    if (isRealtime) {
+      systemComponentsList.push({
+        label: 'Layanan realtime',
+        text: isPOS
+          ? 'WebSocket / Supabase Realtime untuk sinkronisasi seketika antara pesanan kasir dan layar barista di dapur.'
+          : isGaming
+          ? 'WebSocket stream untuk sinkronisasi saldo wallet live, broadcast jackpot, dan status koneksi game.'
+          : 'Koneksi realtime untuk pembaruan status dan sinkronisasi data antar pengguna secara instan.',
+      });
+    }
+
+    if (hasFileUpload) {
+      systemComponentsList.push({
+        label: 'Penyimpanan file',
+        text: `Menyimpan berkas lampiran (${
+          isPOS
+            ? 'foto nota fisik dan gambar produk'
+            : isSchool
+            ? 'berkas pendaftaran, ijazah, KK, dan akta kelahiran'
+            : 'foto bukti transaksi dan dokumen lampiran'
+        }) pada penyimpanan cloud / objek.`,
+      });
+    }
+
+    if (hasReports) {
+      systemComponentsList.push({
+        label: 'Generator laporan',
+        text: `Membuat berkas rekapitulasi (${
+          isPOS
+            ? 'laporan omzet harian, penjualan per kasir, dan mutasi stok'
+            : isGaming
+            ? 'laporan turn-over harian, win/loss, dan rekonsiliasi deposit'
+            : 'laporan performa dan rekapitulasi data'
+        }) dalam format PDF dan Excel.`,
+      });
+    }
+  }
+
+  // Untuk kompatibilitas backward objek systemComponents lama
+  const systemComponents = {
+    frontend: frontendDesc,
+    backend: backendDesc,
+    database: databaseDesc,
+    storage: hasFileUpload ? 'Menyimpan berkas lampiran dan bukti fisik pada penyimpanan objek.' : 'Tidak memerlukan penyimpanan file khusus.',
+    auth: authDesc,
+    reports: hasReports ? 'Membuat berkas laporan PDF dan Excel dari data yang sudah difilter.' : 'Tidak memerlukan generator laporan khusus.',
+  };
+
+  // Bangun Mermaid diagram alur sistem yang bersih, vertikal, dan 100% dinamis!
+  const systemFlowchartMermaid = enrichOrSynthesizeSystemFlowchart(prd.architecture_diagrams?.system_flowchart, {
+    audience: safeAudience,
+    frontend: cleanFrontendTech,
+    backend: cleanBackendTech,
+    database: cleanDbTech,
+    moduleNames,
+    isPOS,
+    isGaming,
+    isCrypto,
+    isLogistics,
+    isWhatsApp,
+    isSchool,
+    isHealthcare,
+    isRealtime,
+    hasFileUpload,
+    hasReports,
+    hasPaymentGateway,
+  });
 
   return {
     intro,
     systemComponents,
+    systemComponentsList,
     systemFlowchartMermaid,
   };
 }
+
 
 export interface DatabaseColumnDef {
   name: string;
@@ -717,7 +1144,29 @@ function getTableDescription(rawTableName: string): string {
   if (t === 'returns' || t === 'retur') return 'pengajuan retur barang dari pelanggan';
   if (t === 'return_videos' || t === 'bukti_retur') return 'lampiran video unboxing bukti komplain retur';
   if (t === 'notifications' || t === 'notifikasi') return 'log notifikasi peringatan & pesan WhatsApp';
+  if (t.includes('blast_campaign') || t.includes('campaign')) return 'kampanye pengiriman pesan massal / broadcast';
+  if (t.includes('blast_message') || t.includes('broadcast_message')) return 'antrean dan riwayat pengiriman pesan blast';
+  if (t.includes('device') || t.includes('session_device')) return 'perangkat WhatsApp gateway yang terhubung';
+  if (t.includes('contact') || t.includes('recipient')) return 'buku kontak dan daftar nomor penerima';
+  if (t.includes('template')) return 'templat pesan broadcast dinamis';
+  if (t.includes('webhook')) return 'log pengiriman callback dan webhook';
   if (t === 'audit_logs') return 'rekam jejak aktivitas audit sistem';
+  if (t === 'services' || t === 'layanan') return 'katalog daftar layanan / jasa dan durasi pengerjaan';
+  if (t === 'bookings' || t === 'reservasi' || t === 'jadwal_booking') return 'transaksi pemesanan jadwal / slot waktu';
+  if (t === 'schedules' || t === 'staff_schedules') return 'jadwal ketersediaan operasional / staf / terapis';
+  if (t === 'payments' || t === 'pembayaran') return 'catatan pembayaran transaksi dan bukti QRIS / transfer';
+  if (t === 'reviews' || t === 'ulasan' || t === 'ratings') return 'ulasan, testimoni, dan penilaian bintang pelanggan';
+  if (t === 'rental_items' || t === 'alat_sewa') return 'katalog alat atau unit aset yang dapat disewa';
+  if (t === 'fines' || t === 'denda') return 'pencatatan denda keterlambatan atau kerusakan barang sewa';
+  if (t === 'deposits' || t === 'uang_jaminan') return 'uang jaminan sewa yang dapat dikembalikan';
+  if (t === 'students' || t === 'siswa') return 'data master profil siswa / pendaftar';
+  if (t === 'guardians' || t === 'wali') return 'data orang tua / wali murid';
+  if (t === 'registrations' || t === 'pendaftaran') return 'berkas pendaftaran dan verifikasi calon siswa';
+  if (t === 'patients' || t === 'pasien') return 'data rekam identitas pasien';
+  if (t === 'appointments' || t === 'antrean') return 'janji temu dokter dan nomor antrean pasien';
+  if (t === 'medical_records' || t === 'rekam_medis') return 'riwayat diagnosis, tindakan medis, dan catatan dokter';
+  if (t === 'cash_shifts' || t === 'shift_kasir') return 'sesi buka/tutup kasir dan rekonsiliasi kas harian';
+  if (t === 'carts' || t === 'keranjang') return 'keranjang belanja sementara pengguna';
   return `data ${t.replace(/_/g, ' ')}`;
 }
 
@@ -750,9 +1199,14 @@ function getColumnPurpose(rawCol: string, rawTable: string): string {
   if (c === 'customer_id') return 'Relasi ke customers';
   if (c === 'batch_id' || c === 'lot_id') return 'Relasi ke batch_lots (FEFO)';
   if (c === 'return_id') return 'Relasi ke returns';
+  if (c === 'campaign_id' || c === 'blast_campaign_id') return 'Relasi ke blast_campaigns';
+  if (c === 'device_id') return 'Relasi ke devices';
 
   if (c === 'name' || c === 'nama') {
     if (t.includes('user')) return 'Nama pengguna';
+    if (t.includes('campaign')) return 'Nama atau judul kampanye blast';
+    if (t.includes('message')) return 'Judul atau ringkasan pesan broadcast';
+    if (t.includes('device')) return 'Nama perangkat WhatsApp gateway';
     if (t.includes('store') || t.includes('toko') || t.includes('warung')) return 'Nama warung';
     if (t.includes('categor') || t.includes('kategori')) return 'Nama kategori (mis. Minuman)';
     if (t.includes('product') || t.includes('item') || t.includes('barang')) return 'Nama barang';
@@ -765,7 +1219,9 @@ function getColumnPurpose(rawCol: string, rawTable: string): string {
   if (c === 'image' || c === 'image_url' || c === 'avatar_url' || c === 'foto') return 'Foto profil (opsional)';
   if (c === 'video_url' || c === 'video') return 'Tautan video unboxing rekaman bukti retur';
   if (c === 'address' || c === 'alamat') return 'Alamat fisik toko';
-  if (c === 'phone' || c === 'phone_number' || c === 'telepon' || c === 'no_hp') return 'Nomor WhatsApp aktif';
+  if (c === 'phone' || c === 'phone_number' || c === 'telepon' || c === 'no_hp' || c === 'recipient_number') return 'Nomor WhatsApp aktif / tujuan';
+  if (c === 'message_body' || c === 'content') return 'Isi teks pesan broadcast';
+  if (c === 'qr_code') return 'Kode QR autentikasi koneksi WhatsApp';
   if (c === 'price' || c === 'harga') return 'Harga barang';
   if (c === 'cost_price' || c === 'harga_beli') return 'Harga beli modal';
   if (c === 'min_stock' || c === 'stok_minimum') return 'Batas stok menipis';
@@ -779,7 +1235,12 @@ function getColumnPurpose(rawCol: string, rawTable: string): string {
   if (c === 'payment_method' || c === 'metode_bayar') return 'Metode pembayaran';
   if (c === 'notes' || c === 'catatan' || c === 'keterangan') return 'Keterangan atau foto nota lampiran';
   if (c === 'reason' || c === 'alasan') return 'Alasan pengajuan retur';
-  if (c === 'status') return 'Status operasional (draft / selesai)';
+  if (c === 'status') {
+    if (t.includes('message')) return 'Status pengiriman (pending / terkirim / gagal)';
+    if (t.includes('campaign')) return 'Status kampanye (draft / berjalan / selesai)';
+    if (t.includes('device')) return 'Status koneksi (terhubung / terputus / scan qr)';
+    return 'Status operasional (draft / selesai)';
+  }
   if (c === 'role' || c === 'peran') return 'Peran: admin (pemilik) atau staff';
   if (c === 'token') return 'Token sesi login unik';
   if (c === 'expires_at' || c === 'kadaluarsa' || c === 'expiry_date') return 'Tanggal masa kadaluarsa (FEFO)';
@@ -971,6 +1432,246 @@ function synthesizeDefaultColumnsForTable(tableName: string): DatabaseColumnDef[
     return cols;
   }
 
+  if (t === 'services' || t === 'layanan') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users (penyedia)' },
+      { name: 'name', type: 'text', purpose: 'Nama layanan / jasa' },
+      { name: 'description', type: 'text', purpose: 'Deskripsi lengkap layanan' },
+      { name: 'price', type: 'numeric', purpose: 'Tarif / harga layanan' },
+      { name: 'duration_minutes', type: 'integer', purpose: 'Estimasi durasi pengerjaan (menit)' },
+      { name: 'is_active', type: 'boolean', purpose: 'Status ketersediaan layanan' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'bookings' || t === 'reservasi' || t === 'jadwal_booking') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users (pemesan)' },
+      { name: 'service_id', type: 'text', purpose: 'Relasi ke services' },
+      { name: 'booking_code', type: 'text', purpose: 'Kode booking unik verifikasi' },
+      { name: 'booking_date', type: 'timestamp', purpose: 'Tanggal reservasi yang dipilih' },
+      { name: 'start_time', type: 'text', purpose: 'Jam mulai sesi' },
+      { name: 'end_time', type: 'text', purpose: 'Jam selesai sesi' },
+      { name: 'status', type: 'text', purpose: 'Status (pending / confirmed / completed / cancelled)' },
+      { name: 'total_amount', type: 'numeric', purpose: 'Total tagihan pembayaran' },
+      { name: 'notes', type: 'text', purpose: 'Catatan permintaan khusus pelanggan' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu pemesanan' }
+    );
+    return cols;
+  }
+
+  if (t === 'schedules' || t === 'staff_schedules') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'day_of_week', type: 'text', purpose: 'Hari operasional (Senin - Minggu)' },
+      { name: 'start_time', type: 'text', purpose: 'Jam buka operasional' },
+      { name: 'end_time', type: 'text', purpose: 'Jam tutup operasional' },
+      { name: 'is_available', type: 'boolean', purpose: 'Apakah slot waktu buka untuk dipesan' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'payments' || t === 'pembayaran') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'order_id', type: 'text', purpose: 'Relasi ke transaksi (orders/bookings)' },
+      { name: 'invoice_number', type: 'text', purpose: 'Nomor faktur / invoice pembayaran' },
+      { name: 'amount', type: 'numeric', purpose: 'Nominal pembayaran' },
+      { name: 'payment_method', type: 'text', purpose: 'Metode (QRIS, Transfer, Cash)' },
+      { name: 'payment_status', type: 'text', purpose: 'Status (unpaid / paid / expired / refunded)' },
+      { name: 'paid_at', type: 'timestamp', purpose: 'Waktu pelunasan pembayaran' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu invoice dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'reviews' || t === 'ulasan' || t === 'ratings') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'target_id', type: 'text', purpose: 'ID produk / layanan yang diulas' },
+      { name: 'rating', type: 'integer', purpose: 'Skor bintang kepuasan (1-5)' },
+      { name: 'comment', type: 'text', purpose: 'Teks ulasan dan feedback pelanggan' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu ulasan dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'rental_items' || t === 'alat_sewa') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'name', type: 'text', purpose: 'Nama barang / alat sewa' },
+      { name: 'category', type: 'text', purpose: 'Kategori barang' },
+      { name: 'daily_rate', type: 'numeric', purpose: 'Tarif sewa per hari' },
+      { name: 'deposit_amount', type: 'numeric', purpose: 'Besaran uang deposit jaminan' },
+      { name: 'available_stock', type: 'integer', purpose: 'Jumlah unit siap disewa' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'fines' || t === 'denda') {
+    cols.push(
+      { name: 'booking_id', type: 'text', purpose: 'Relasi ke pemesanan sewa' },
+      { name: 'fine_type', type: 'text', purpose: 'Jenis denda (keterlambatan / kerusakan)' },
+      { name: 'amount', type: 'numeric', purpose: 'Nominal denda' },
+      { name: 'reason', type: 'text', purpose: 'Keterangan alasan pengenaan denda' },
+      { name: 'is_paid', type: 'boolean', purpose: 'Status apakah denda sudah dilunasi' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu pencatatan denda' }
+    );
+    return cols;
+  }
+
+  if (t === 'students' || t === 'siswa') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke akun pengguna' },
+      { name: 'full_name', type: 'text', purpose: 'Nama lengkap siswa calon peserta' },
+      { name: 'nisn', type: 'text', purpose: 'Nomor Induk Siswa Nasional (NISN)' },
+      { name: 'date_of_birth', type: 'timestamp', purpose: 'Tanggal lahir siswa' },
+      { name: 'gender', type: 'text', purpose: 'Jenis kelamin' },
+      { name: 'address', type: 'text', purpose: 'Alamat tempat tinggal siswa' },
+      { name: 'registration_status', type: 'text', purpose: 'Status (draft / terdaftar / diterima)' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu registrasi' }
+    );
+    return cols;
+  }
+
+  if (t === 'guardians' || t === 'wali') {
+    cols.push(
+      { name: 'student_id', type: 'text', purpose: 'Relasi ke tabel students' },
+      { name: 'full_name', type: 'text', purpose: 'Nama lengkap orang tua / wali' },
+      { name: 'relationship', type: 'text', purpose: 'Hubungan (Ayah / Ibu / Wali)' },
+      { name: 'phone_number', type: 'text', purpose: 'Nomor telepon WhatsApp aktif' },
+      { name: 'occupation', type: 'text', purpose: 'Pekerjaan orang tua / wali' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu pencatatan' }
+    );
+    return cols;
+  }
+
+  if (t === 'registrations' || t === 'pendaftaran') {
+    cols.push(
+      { name: 'student_id', type: 'text', purpose: 'Relasi ke tabel students' },
+      { name: 'registration_code', type: 'text', purpose: 'Nomor registrasi unik pendaftaran' },
+      { name: 'batch_name', type: 'text', purpose: 'Gelombang pendaftaran (mis. Gelombang 1)' },
+      { name: 'status', type: 'text', purpose: 'Status seleksi (menunggu / lolos / gugur)' },
+      { name: 'verified_at', type: 'timestamp', purpose: 'Waktu verifikasi berkas oleh admin' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu formulir diajukan' }
+    );
+    return cols;
+  }
+
+  if (t === 'patients' || t === 'pasien') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'medical_record_number', type: 'text', purpose: 'Nomor Rekam Medis (RM) unik' },
+      { name: 'full_name', type: 'text', purpose: 'Nama lengkap pasien' },
+      { name: 'phone_number', type: 'text', purpose: 'Nomor WhatsApp kontak darurat' },
+      { name: 'blood_type', type: 'text', purpose: 'Golongan darah pasien' },
+      { name: 'address', type: 'text', purpose: 'Alamat tempat tinggal' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu rekam pertama kali dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'appointments' || t === 'antrean') {
+    cols.push(
+      { name: 'patient_id', type: 'text', purpose: 'Relasi ke tabel patients' },
+      { name: 'doctor_id', type: 'text', purpose: 'Relasi ke dokter pemeriksa' },
+      { name: 'appointment_date', type: 'timestamp', purpose: 'Tanggal janji temu' },
+      { name: 'queue_number', type: 'integer', purpose: 'Nomor urut antrean harian' },
+      { name: 'status', type: 'text', purpose: 'Status (menunggu / diperiksa / selesai / batal)' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu pembuatan janji temu' }
+    );
+    return cols;
+  }
+
+  if (t === 'medical_records' || t === 'rekam_medis') {
+    cols.push(
+      { name: 'patient_id', type: 'text', purpose: 'Relasi ke tabel patients' },
+      { name: 'doctor_id', type: 'text', purpose: 'Relasi ke dokter pemeriksa' },
+      { name: 'diagnosis', type: 'text', purpose: 'Diagnosis klinis hasil pemeriksaan' },
+      { name: 'prescription', type: 'text', purpose: 'Resep obat dan instruksi dosis' },
+      { name: 'treatment_notes', type: 'text', purpose: 'Tindakan medis yang diberikan' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu pemeriksaan selesai' }
+    );
+    return cols;
+  }
+
+  if (t === 'devices' || t === 'session_devices') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'session_name', type: 'text', purpose: 'Nama sesi perangkat WhatsApp' },
+      { name: 'phone_number', type: 'text', purpose: 'Nomor WhatsApp yang terhubung' },
+      { name: 'status', type: 'text', purpose: 'Status koneksi (connected / disconnected / qr)' },
+      { name: 'last_seen_at', type: 'timestamp', purpose: 'Waktu aktif terakhir' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu perangkat ditambahkan' }
+    );
+    return cols;
+  }
+
+  if (t === 'contacts' || t === 'recipients') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'name', type: 'text', purpose: 'Nama kontak penerima pesan' },
+      { name: 'phone_number', type: 'text', purpose: 'Nomor WhatsApp aktif' },
+      { name: 'group_name', type: 'text', purpose: 'Grup / label segmentasi kontak' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu kontak disimpan' }
+    );
+    return cols;
+  }
+
+  if (t === 'blast_campaigns' || t === 'campaigns') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'device_id', type: 'text', purpose: 'Relasi ke perangkat gateway' },
+      { name: 'campaign_name', type: 'text', purpose: 'Nama inisiatif kampanye broadcast' },
+      { name: 'total_recipients', type: 'integer', purpose: 'Jumlah target penerima pesan' },
+      { name: 'sent_count', type: 'integer', purpose: 'Jumlah pesan berhasil dikirim' },
+      { name: 'failed_count', type: 'integer', purpose: 'Jumlah pesan gagal dikirim' },
+      { name: 'status', type: 'text', purpose: 'Status (draft / running / completed / paused)' },
+      { name: 'scheduled_at', type: 'timestamp', purpose: 'Jadwal waktu pengiriman otomatis' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu kampanye dibuat' }
+    );
+    return cols;
+  }
+
+  if (t === 'blast_messages' || t === 'messages') {
+    cols.push(
+      { name: 'campaign_id', type: 'text', purpose: 'Relasi ke blast_campaigns' },
+      { name: 'recipient_phone', type: 'text', purpose: 'Nomor telepon tujuan pesan' },
+      { name: 'message_text', type: 'text', purpose: 'Isi teks pesan broadcast' },
+      { name: 'status', type: 'text', purpose: 'Status pengiriman (queued / sent / failed)' },
+      { name: 'sent_at', type: 'timestamp', purpose: 'Waktu pesan terkirim' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu dimasukkan ke antrean' }
+    );
+    return cols;
+  }
+
+  if (t === 'cash_shifts' || t === 'shift_kasir') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users (kasir)' },
+      { name: 'starting_cash', type: 'numeric', purpose: 'Modal kas awal saat shift dibuka' },
+      { name: 'closing_cash', type: 'numeric', purpose: 'Total kas fisik saat shift ditutup' },
+      { name: 'system_cash', type: 'numeric', purpose: 'Total penerimaan menurut sistem kasir' },
+      { name: 'difference', type: 'numeric', purpose: 'Selisih kas (fisik - sistem)' },
+      { name: 'status', type: 'text', purpose: 'Status shift (open / closed)' },
+      { name: 'opened_at', type: 'timestamp', purpose: 'Waktu shift kasir dibuka' },
+      { name: 'closed_at', type: 'timestamp', purpose: 'Waktu shift kasir ditutup' }
+    );
+    return cols;
+  }
+
+  if (t === 'carts' || t === 'keranjang') {
+    cols.push(
+      { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
+      { name: 'product_id', type: 'text', purpose: 'Relasi ke products' },
+      { name: 'quantity', type: 'integer', purpose: 'Jumlah unit barang dalam keranjang' },
+      { name: 'created_at', type: 'timestamp', purpose: 'Waktu dimasukkan ke keranjang' }
+    );
+    return cols;
+  }
+
   // Default fallback for any other table
   cols.push(
     { name: 'user_id', type: 'text', purpose: 'Relasi ke users' },
@@ -1053,8 +1754,8 @@ export function generateDatabaseSchemaDictionary(prd: PRDOutput): DatabaseSchema
     }
   }
 
-  // 2. Ekstraksi Sekunder: Parse Entity Block dari Mermaid ERD secara aman (hindari tanda panah relasi)
-  if (parsedTables.length < 2 && rawErd) {
+  // 2. Ekstraksi Sekunder: Parse Entity Block dari Mermaid ERD jika tabel masih kurang dari 6
+  if (parsedTables.length < 6 && rawErd) {
     let currentEntity: string | null = null;
     let currentCols: DatabaseColumnDef[] = [];
     const lines = rawErd.split('\n');
@@ -1113,9 +1814,10 @@ export function generateDatabaseSchemaDictionary(prd: PRDOutput): DatabaseSchema
     }
   }
 
-  // 3. Sinkronkan dengan Feature Breakdown (jika ada tabel baru dari revisi Workspace Agent)
+  // 3. Sinkronkan dengan Feature Breakdown (ekstraksi tech_mapping.db_tables dan semantik fitur)
   if (prd.feature_breakdown && Array.isArray(prd.feature_breakdown)) {
     prd.feature_breakdown.forEach((f) => {
+      // A. Ambil dari db_tables jika ada
       if (f.tech_mapping?.db_tables && Array.isArray(f.tech_mapping.db_tables)) {
         f.tech_mapping.db_tables.forEach((rawT) => {
           const cleanT = rawT.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -1130,45 +1832,200 @@ export function generateDatabaseSchemaDictionary(prd: PRDOutput): DatabaseSchema
           }
         });
       }
+
+      // B. Deteksi semantik jika tabel masih kurang dari 6
+      if (parsedTables.length < 6) {
+        const fStr = `${f.id || ''} ${f.name || ''} ${f.user_story || ''}`.toLowerCase();
+        const candidateTables: string[] = [];
+        if (fStr.includes('booking') || fStr.includes('reservasi') || fStr.includes('jadwal') || fStr.includes('slot')) {
+          candidateTables.push('bookings', 'schedules');
+        }
+        if (fStr.includes('katalog') || fStr.includes('menu') || fStr.includes('produk') || fStr.includes('barang')) {
+          candidateTables.push('products', 'categories');
+        }
+        if (fStr.includes('layanan') || fStr.includes('service') || fStr.includes('paket')) {
+          candidateTables.push('services');
+        }
+        if (fStr.includes('pembayaran') || fStr.includes('qris') || fStr.includes('bayar') || fStr.includes('order')) {
+          candidateTables.push('orders', 'payments');
+        }
+        if (fStr.includes('notifikasi') || fStr.includes('whatsapp') || fStr.includes('blast')) {
+          candidateTables.push('notifications');
+        }
+        if (fStr.includes('ulasan') || fStr.includes('rating') || fStr.includes('review')) {
+          candidateTables.push('reviews');
+        }
+        if (fStr.includes('rental') || fStr.includes('sewa')) {
+          candidateTables.push('rental_items', 'fines');
+        }
+        if (fStr.includes('siswa') || fStr.includes('santri') || fStr.includes('ppdb')) {
+          candidateTables.push('students', 'registrations');
+        }
+        if (fStr.includes('pasien') || fStr.includes('klinik') || fStr.includes('dokter')) {
+          candidateTables.push('patients', 'appointments');
+        }
+
+        candidateTables.forEach((cand) => {
+          if (!knownTableNames.has(cand)) {
+            knownTableNames.add(cand);
+            parsedTables.push({
+              number: parsedTables.length + 1,
+              name: cand,
+              description: getTableDescription(cand),
+              columns: synthesizeDefaultColumnsForTable(cand),
+            });
+          }
+        });
+      }
     });
   }
 
-  // 4. Pastikan tabel pondasi utama (Core Foundation Tables) selalu tersedia
+  // 4. Pastikan tabel pondasi utama (Core Foundation Tables) selalu tersedia minimal 6-8 tabel
   const titleLower = (prd.title || '').toLowerCase();
-  const isInventory =
-    titleLower.includes('stok') ||
-    titleLower.includes('gudang') ||
-    titleLower.includes('toko') ||
-    titleLower.includes('kasir') ||
-    titleLower.includes('pos') ||
-    titleLower.includes('warung') ||
-    titleLower.includes('fefo') ||
-    titleLower.includes('inventory');
+  const archetypeStr = JSON.stringify(prd.archetype_detection || {}).toLowerCase();
+  const fullDomainStr = `${titleLower} ${archetypeStr}`;
 
-  const baseFoundationList = isInventory
-    ? [
-        'users',
-        'sessions',
-        'stores',
-        'categories',
-        'products',
-        'stock_movements',
-        'opname_sessions',
-        'opname_items',
-      ]
-    : ['users', 'sessions'];
+  let baseFoundationList: string[] = [];
 
-  baseFoundationList.forEach((tName) => {
-    if (!knownTableNames.has(tName)) {
-      knownTableNames.add(tName);
-      parsedTables.push({
-        number: parsedTables.length + 1,
-        name: tName,
-        description: getTableDescription(tName),
-        columns: synthesizeDefaultColumnsForTable(tName),
-      });
-    }
-  });
+  if (
+    fullDomainStr.includes('stok') ||
+    fullDomainStr.includes('gudang') ||
+    fullDomainStr.includes('toko') ||
+    fullDomainStr.includes('kasir') ||
+    fullDomainStr.includes('pos') ||
+    fullDomainStr.includes('warung') ||
+    fullDomainStr.includes('fefo') ||
+    fullDomainStr.includes('inventory')
+  ) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'stores',
+      'categories',
+      'products',
+      'stock_movements',
+      'opname_sessions',
+      'opname_items',
+    ];
+  } else if (
+    fullDomainStr.includes('sekolah') ||
+    fullDomainStr.includes('ppdb') ||
+    fullDomainStr.includes('edukasi') ||
+    fullDomainStr.includes('santri') ||
+    fullDomainStr.includes('pesantren')
+  ) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'students',
+      'guardians',
+      'registrations',
+      'payment_bills',
+      'notifications',
+    ];
+  } else if (
+    fullDomainStr.includes('booking') ||
+    fullDomainStr.includes('salon') ||
+    fullDomainStr.includes('barber') ||
+    fullDomainStr.includes('futsal') ||
+    fullDomainStr.includes('lapangan') ||
+    fullDomainStr.includes('jadwal')
+  ) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'services',
+      'staff_schedules',
+      'bookings',
+      'payments',
+      'reviews',
+      'notifications',
+    ];
+  } else if (fullDomainStr.includes('rental') || fullDomainStr.includes('sewa')) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'rental_items',
+      'bookings',
+      'payments',
+      'deposits',
+      'fines',
+      'notifications',
+    ];
+  } else if (
+    fullDomainStr.includes('klinik') ||
+    fullDomainStr.includes('dokter') ||
+    fullDomainStr.includes('pasien') ||
+    fullDomainStr.includes('kesehatan')
+  ) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'patients',
+      'appointments',
+      'medical_records',
+      'payments',
+      'notifications',
+    ];
+  } else if (
+    fullDomainStr.includes('blast') ||
+    fullDomainStr.includes('broadcast') ||
+    fullDomainStr.includes('whatsapp') ||
+    fullDomainStr.includes('gateway')
+  ) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'devices',
+      'contacts',
+      'blast_campaigns',
+      'blast_messages',
+      'notifications',
+    ];
+  } else if (
+    fullDomainStr.includes('laundry') ||
+    fullDomainStr.includes('cuci') ||
+    fullDomainStr.includes('bengkel') ||
+    fullDomainStr.includes('jasa')
+  ) {
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'services',
+      'orders',
+      'order_items',
+      'payments',
+      'reviews',
+      'notifications',
+    ];
+  } else {
+    // Default E-commerce / SaaS / Aplikasi Modern
+    baseFoundationList = [
+      'users',
+      'sessions',
+      'categories',
+      'products',
+      'orders',
+      'order_items',
+      'payments',
+      'notifications',
+    ];
+  }
+
+  // Jika tabel terurai masih di bawah 6, injeksikan tabel pondasi domain terpilih
+  if (parsedTables.length < 6) {
+    baseFoundationList.forEach((tName) => {
+      if (!knownTableNames.has(tName)) {
+        knownTableNames.add(tName);
+        parsedTables.push({
+          number: parsedTables.length + 1,
+          name: tName,
+          description: getTableDescription(tName),
+          columns: synthesizeDefaultColumnsForTable(tName),
+        });
+      }
+    });
+  }
 
   // Urutkan agar tabel pondasi (users, sessions, stores, categories, products...) selalu muncul rapi di depan
   const priorityOrder = [
@@ -1205,17 +2062,75 @@ export function generateDatabaseSchemaDictionary(prd: PRDOutput): DatabaseSchema
     t.number = idx + 1;
   });
 
-  // 5. Bangun Mermaid ERD diagram yang bersih tanpa atribut di dalam kotak agar proporsional
+  // 5. Bangun Mermaid ERD diagram yang bersih, dinamis, dan menghubungkan seluruh tabel
   let cleanErd = 'erDiagram\n';
   const tableNames = parsedTables.map((t) => t.name.toLowerCase());
+  const connectedTables = new Set<string>();
+  const addedRelationPairs = new Set<string>();
 
   const addRelation = (parent: string, child: string, label: string) => {
+    if (parent === child) return;
+    const pairKey = `${parent}->${child}`;
+    const reversePairKey = `${child}->${parent}`;
+    if (addedRelationPairs.has(pairKey) || addedRelationPairs.has(reversePairKey)) return;
+
     if (tableNames.includes(parent) && tableNames.includes(child)) {
       cleanErd += `  ${parent} ||--o{ ${child} : "${label}"\n`;
+      addedRelationPairs.add(pairKey);
+      connectedTables.add(parent);
+      connectedTables.add(child);
     }
   };
 
+  // Tahap A: Ekstraksi relasi dari diagram AI asli (rawErd) jika ada
+  if (rawErd && rawErd.includes('||--')) {
+    const relRegex = /([a-zA-Z0-9_]+)\s*(?:\|\|--o\{|\|\|--\|\{|--o\{|--\|\{|\|\|--\|\|)\s*([a-zA-Z0-9_]+)\s*(?::\s*["']?([^"'\n]+)["']?)?/gi;
+    let match: RegExpExecArray | null;
+    while ((match = relRegex.exec(rawErd)) !== null) {
+      const p = match[1].trim().toLowerCase();
+      const c = match[2].trim().toLowerCase();
+      const lbl = match[3]?.trim() || 'relates_to';
+      if (p !== c && tableNames.includes(p) && tableNames.includes(c)) {
+        addRelation(p, c, lbl);
+      }
+    }
+  }
+
+  // Tahap B: Deteksi relasi otomatis dari kolom Foreign Key (*_id) pada setiap tabel
+  parsedTables.forEach((table) => {
+    const childName = table.name.toLowerCase();
+    table.columns.forEach((col) => {
+      const colName = col.name.toLowerCase();
+      if (colName.endsWith('_id') && colName !== 'id') {
+        const rawTarget = colName.slice(0, -3); // e.g. 'user', 'campaign', 'device', 'store'
+        // Cari tabel yang cocok di tableNames
+        const matchedParent = tableNames.find((t) => {
+          if (t === childName) return false;
+          if (t === rawTarget) return true;
+          if (t === rawTarget + 's') return true;
+          if (t === rawTarget + 'es') return true;
+          if (t.endsWith(rawTarget + 's')) return true;
+          if (t.endsWith(rawTarget)) return true;
+          if (rawTarget.endsWith(t)) return true;
+          return false;
+        });
+
+        if (matchedParent) {
+          const relLabel = col.purpose?.toLowerCase().includes('relasi')
+            ? 'terhubung'
+            : 'memiliki';
+          addRelation(matchedParent, childName, relLabel);
+        }
+      }
+    });
+  });
+
+  // Tahap C: Relasi domain umum yang lazim
   addRelation('users', 'sessions', 'memiliki');
+  addRelation('users', 'devices', 'menghubungkan');
+  addRelation('users', 'blast_campaigns', 'membuat');
+  addRelation('blast_campaigns', 'blast_messages', 'berisi');
+  addRelation('devices', 'blast_messages', 'mengirim');
   addRelation('users', 'stores', 'memiliki');
   addRelation('users', 'customers', 'mengelola');
   addRelation('users', 'notifications', 'menerima');
@@ -1233,13 +2148,47 @@ export function generateDatabaseSchemaDictionary(prd: PRDOutput): DatabaseSchema
   addRelation('products', 'order_items', 'dipesan pada');
   addRelation('orders', 'returns', 'mengajukan');
   addRelation('returns', 'return_videos', 'melampirkan');
+  addRelation('users', 'services', 'mengelola');
+  addRelation('users', 'staff_schedules', 'memiliki');
+  addRelation('users', 'bookings', 'membuat');
+  addRelation('services', 'bookings', 'dipesan pada');
+  addRelation('bookings', 'payments', 'menghasilkan tagihan');
+  addRelation('orders', 'payments', 'menghasilkan tagihan');
+  addRelation('users', 'payments', 'melakukan');
+  addRelation('users', 'reviews', 'menulis');
+  addRelation('services', 'reviews', 'diulas pada');
+  addRelation('products', 'reviews', 'diulas pada');
+  addRelation('users', 'rental_items', 'mengelola');
+  addRelation('rental_items', 'bookings', 'disewa pada');
+  addRelation('bookings', 'deposits', 'memerlukan');
+  addRelation('bookings', 'fines', 'dikenakan');
+  addRelation('users', 'students', 'mendaftarkan');
+  addRelation('students', 'guardians', 'didampingi');
+  addRelation('students', 'registrations', 'mengajukan berkas');
+  addRelation('registrations', 'document_files', 'melampirkan');
+  addRelation('students', 'payment_bills', 'membayar');
+  addRelation('users', 'patients', 'mendaftarkan');
+  addRelation('doctors', 'appointments', 'menangani');
+  addRelation('patients', 'appointments', 'membuat');
+  addRelation('patients', 'medical_records', 'memiliki');
+  addRelation('doctors', 'medical_records', 'mencatat');
+  addRelation('users', 'carts', 'memiliki');
+  addRelation('products', 'carts', 'disimpan di');
+  addRelation('users', 'cash_shifts', 'menjalankan');
 
-  // Fallback relasi jika belum terpetakan di atas
-  if (cleanErd === 'erDiagram\n') {
+  // Tahap D: JAMINAN 100% - Pastikan SETIAP tabel di parsedTables memiliki relasi agar TIDAK ADA tabel yang hilang dari visual Mermaid!
+  const rootParent = tableNames.includes('users') ? 'users' : parsedTables[0]?.name.toLowerCase() || 'users';
+  parsedTables.forEach((t) => {
+    const tName = t.name.toLowerCase();
+    if (tName !== rootParent && !connectedTables.has(tName)) {
+      addRelation(rootParent, tName, 'mengelola');
+    }
+  });
+
+  // Jika setelah semua tahap di atas hanya ada 1 tabel atau belum ada relasi
+  if (cleanErd.trim() === 'erDiagram' && parsedTables.length > 1) {
     for (let i = 1; i < parsedTables.length; i++) {
-      const p = parsedTables[0].name.toLowerCase();
-      const c = parsedTables[i].name.toLowerCase();
-      cleanErd += `  ${p} ||--o{ ${c} : "memiliki"\n`;
+      addRelation(rootParent, parsedTables[i].name.toLowerCase(), 'memiliki');
     }
   }
 

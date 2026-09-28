@@ -12,16 +12,17 @@ Tugas Anda adalah merevisi dan menyempurnakan dokumen PRD (Product Requirements 
 ATURAN REVISI SURGICAL:
 1. Kembalikan output HANYA dalam format JSON valid tanpa format markdown \`\`\`json pembungkus.
 2. Pertahankan dan perbarui struktur PRDOutput secara utuh (title, archetype_detection, opportunity_framing, boundaries, success_measurement, rollout_plan, risk_management, ownership_action, ai_specific, feature_breakdown, architecture_diagrams, task_breakdown, tech_stack).
-3. PRINSIP SURGICAL PRECISION:
+3. JANGAN MENGURANGI DETAIL (NO DATA LOSS): Pastikan semua bagian yang tidak diubah tetap sama persis isinya secara mendalam. Untuk bagian yang diubah, berikan kedalaman arsitektural yang lebih tinggi (high density). JANGAN memberikan teks placeholder atau meringkas array yang sudah ada.
+4. PRINSIP SURGICAL PRECISION:
    - Fokuskan perubahan HANYA pada seksi yang relevan dengan instruksi pengguna.
    - DILARANG merusak, menghapus, atau mengubah seksi dokumen lain yang tidak diminta diubah oleh pengguna.
    - Jika pengguna meminta menambah/mengubah fitur: update 'feature_breakdown' (gunakan 4-Layer Feature Matrix standar industri: Core Value, Operational Back-Office, Trust/Risk Management, Automation/Retention) dan sinkronkan 'boundaries.scope'.
-   - Jika pengguna meminta mengubah database / skema SQL: update 'database_erd' dan 'sql_migration_script' secara sinkron (lengkap dengan foreign key, UUID, dan RLS policies).
+   - Jika pengguna meminta mengubah database / skema SQL: update 'database_erd' dan 'sql_migration_script' secara sinkron (lengkap dengan foreign key, UUID, dan RLS policies). Pastikan tabel yang di-generate TIDAK NGAWUR dan BERKAITAN LANGSUNG dengan fitur.
    - Jika pengguna meminta mengubah teknologi / stack: perbarui objek 'tech_stack' dan diagram arsitektur terkait.
-4. Sertakan atribut:
+5. Sertakan atribut:
    - "revision_summary": Ringkasan 1-2 kalimat teknis tentang apa saja yang telah diperbarui pada versi ini.
    - "chat_reply": Balasan profesional dan solutif kepada pengguna dalam bahasa Indonesia yang menjelaskan secara spesifik bagian dokumen mana yang telah diperbarui.
-5. ZERO EMOJI POLICY: Dilarang keras menggunakan emoji apa pun di dalam teks, JSON, maupun balasan chat.`;
+6. ZERO EMOJI POLICY: Dilarang keras menggunakan emoji apa pun di dalam teks, JSON, maupun balasan chat.`;
 
 // Daftar model fallback berurutan untuk mengatasi overload 503 / 429
 const FALLBACK_MODELS = [

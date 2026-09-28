@@ -112,6 +112,12 @@ export interface PRDOutput {
     infrastructure_topology?: string; // Mermaid flowchart LR - Cloudflare, Nginx, Docker, DB, Cache
     rbac_permission_matrix?: string;  // Mermaid flowchart TD - RBAC roles & permissions
     data_pipeline_flow?: string;      // Mermaid flowchart LR - Data input, queue, worker, storage
+    system_components?: Array<{
+      name: string;
+      role: string;
+      tech?: string;
+      type?: string;
+    }>;
   };
   sql_migration_script?: string;
   ui_design_prompts?: UIDesignPromptScreen[];

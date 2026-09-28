@@ -14,6 +14,8 @@ import {
   LayoutGrid,
   ListTodo,
   ArrowRight,
+  ArrowLeft,
+  Loader2,
   Layers,
 } from 'lucide-react';
 
@@ -50,7 +52,10 @@ export interface InteractiveTreeCanvasProps {
   onToggleShowTasks?: () => void;
   onGenerateTasks?: () => void;
   onProceedWizard?: () => void;
+  onBackWizard?: () => void;
   isGeneratingPrd?: boolean;
+  isLoading?: boolean;
+  loadingMessage?: string;
 }
 
 const PHASE_COLORS: Record<string, { badge: string; text: string; dot: string; line: string }> = {
@@ -113,7 +118,10 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
   onToggleShowTasks,
   onGenerateTasks,
   onProceedWizard,
+  onBackWizard,
   isGeneratingPrd = false,
+  isLoading = false,
+  loadingMessage = 'Sedang merancang arsitektur modul dan pohon fitur...',
 }) => {
   const isLight = theme === 'light';
   const isSplit = mode === 'split';
@@ -373,15 +381,41 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
             </button>
           )}
 
+          {isWizard && onBackWizard && (
+            <button
+              type="button"
+              onClick={onBackWizard}
+              disabled={isGeneratingPrd}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                isLight
+                  ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
+                  : 'border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white'
+              }`}
+              title="Kembali ke pertanyaan klarifikasi"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              <span>Ubah Tanya Jawab</span>
+            </button>
+          )}
+
           {isWizard && onProceedWizard && (
             <button
               type="button"
               onClick={onProceedWizard}
               disabled={isGeneratingPrd}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-bold transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-bold transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
             >
-              <span>{isGeneratingPrd ? 'Memproses...' : 'Lanjut ke Studio PRD'}</span>
-              <ArrowRight className="h-3 w-3" />
+              {isGeneratingPrd ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin text-zinc-950" />
+                  <span>Menyusun PRD...</span>
+                </>
+              ) : (
+                <>
+                  <span>Generate Dokumen PRD</span>
+                  <ArrowRight className="h-3 w-3" />
+                </>
+              )}
             </button>
           )}
         </div>
@@ -421,7 +455,132 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
           }}
         >
           {/* Main Horizontal Mindmap Tree Flow */}
-          <div className="flex items-start relative">
+          {isLoading ? (
+            /* GHOST / SKELETON FEATURE TREE (Matching Gambar 1) */
+            <div className="flex items-start relative select-none animate-in fade-in duration-500">
+              {/* Central Status Pill */}
+              <div className="absolute -top-14 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-amber-500/30 bg-[#0c1017]/90 text-xs font-medium text-amber-400 shadow-xl backdrop-blur-md">
+                <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                <span>{loadingMessage}</span>
+              </div>
+
+              {/* 1. ROOT GHOST NODE (PERENCANAAN) */}
+              <div
+                className="shrink-0 w-48 sm:w-52"
+                style={{ transform: 'translateY(110px)' }}
+              >
+                <div className="rounded-2xl border border-zinc-800/80 bg-[#111724]/90 p-4 shadow-xl relative backdrop-blur-sm">
+                  <span className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-semibold block mb-2.5">
+                    PERENCANAAN
+                  </span>
+                  <div className="space-y-2">
+                    <div className="h-2 w-32 bg-zinc-700/60 rounded-full animate-pulse" />
+                    <div className="h-1.5 w-20 bg-zinc-800/80 rounded-full animate-pulse" />
+                  </div>
+                  {/* Right Anchor Dot */}
+                  <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-zinc-600 border-2 border-[#111724] shrink-0" />
+                </div>
+              </div>
+
+              {/* 2. SVG FANNING BEZIER CURVES */}
+              <div className="w-56 shrink-0 relative self-stretch pointer-events-none" style={{ height: '360px' }}>
+                <svg className="w-full h-full overflow-visible">
+                  <circle cx="0" cy="140" r="4.5" className="fill-zinc-500 stroke-zinc-900" strokeWidth="1.5" />
+                  {/* Curve to top */}
+                  <path
+                    d="M 0 140 C 90 140, 134 40, 224 40"
+                    fill="none"
+                    stroke="#475569"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                    strokeOpacity="0.6"
+                    className="animate-pulse"
+                  />
+                  <circle cx="224" cy="40" r="3" className="fill-zinc-600" />
+                  {/* Curve to middle */}
+                  <path
+                    d="M 0 140 C 90 140, 134 140, 224 140"
+                    fill="none"
+                    stroke="#475569"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                    strokeOpacity="0.6"
+                    className="animate-pulse"
+                  />
+                  <circle cx="224" cy="140" r="3" className="fill-zinc-600" />
+                  {/* Curve to bottom */}
+                  <path
+                    d="M 0 140 C 90 140, 134 240, 224 240"
+                    fill="none"
+                    stroke="#475569"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                    strokeOpacity="0.6"
+                    className="animate-pulse"
+                  />
+                  <circle cx="224" cy="240" r="3" className="fill-zinc-600" />
+                </svg>
+              </div>
+
+              {/* 3. 3 FITUR + SUB FITUR GHOST NODES */}
+              <div className="space-y-6">
+                {[0, 1, 2].map((idx) => (
+                  <div key={idx} className="flex items-center">
+                    {/* FITUR CARD */}
+                    <div className="w-52 sm:w-56 shrink-0 rounded-2xl border border-zinc-800/80 bg-[#111724]/90 p-3.5 shadow-md relative backdrop-blur-sm">
+                      <span className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-semibold block mb-2">
+                        FITUR
+                      </span>
+                      <div className="space-y-1.5">
+                        <div className="h-2 w-36 bg-zinc-700/50 rounded-full animate-pulse" />
+                        <div className="h-1.5 w-24 bg-zinc-800/60 rounded-full animate-pulse" />
+                      </div>
+                      {/* Right Anchor Dot */}
+                      <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-zinc-600 border-2 border-[#111724]" />
+                    </div>
+
+                    {/* SVG CONNECTOR TO SUB FITUR */}
+                    <div className="w-24 shrink-0 relative self-stretch pointer-events-none" style={{ height: '80px' }}>
+                      <svg className="w-full h-full overflow-visible">
+                        <path
+                          d="M 0 40 C 45 40, 55 40, 96 40"
+                          fill="none"
+                          stroke="#475569"
+                          strokeWidth="1.5"
+                          strokeDasharray="4 4"
+                          strokeOpacity="0.5"
+                          className="animate-pulse"
+                        />
+                        <circle cx="96" cy="40" r="3" className="fill-zinc-600" />
+                      </svg>
+                    </div>
+
+                    {/* SUB FITUR CARD */}
+                    <div className="w-60 sm:w-64 shrink-0 rounded-2xl border border-zinc-800/80 bg-[#0e121d]/90 p-3.5 shadow-md backdrop-blur-sm">
+                      <span className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-semibold block mb-2.5">
+                        SUB FITUR
+                      </span>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
+                          <div className="h-2 w-40 bg-zinc-700/50 rounded-full animate-pulse" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
+                          <div className="h-2 w-32 bg-zinc-700/50 rounded-full animate-pulse" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
+                          <div className="h-2 w-24 bg-zinc-800/60 rounded-full animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start relative">
             {/* 1. ROOT NODE (Compact Horizontal Capsule - matching Image 2) */}
             <div
               className="shrink-0 w-48 sm:w-52 transition-transform duration-200"
@@ -868,6 +1027,7 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
               })}
             </div>
           </div>
+        )}
         </div>
 
         {/* Floating Minimalist Canvas Controls (Bottom-Left - matching Image 2) */}

@@ -154,6 +154,19 @@ export const geminiPRDResponseSchema = {
         infrastructure_topology: { type: "string" },
         rbac_permission_matrix: { type: "string" },
         data_pipeline_flow: { type: "string" },
+        system_components: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              role: { type: "string" },
+              tech: { type: "string" },
+              type: { type: "string" },
+            },
+            required: ["name", "role"],
+          },
+        },
       },
       required: ["system_flowchart", "user_journey_flow", "database_erd"],
     },
@@ -289,6 +302,16 @@ export const PRDOutputZodSchema = z.object({
       infrastructure_topology: z.string().optional(),
       rbac_permission_matrix: z.string().optional(),
       data_pipeline_flow: z.string().optional(),
+      system_components: z
+        .array(
+          z.object({
+            name: z.string(),
+            role: z.string(),
+            tech: z.string().optional().default(''),
+            type: z.string().optional().default('service'),
+          })
+        )
+        .optional(),
     })
     .optional(),
   ui_design_prompts: z
@@ -540,12 +563,15 @@ export function synthesizeDynamicArchitectureDiagrams(
   archetypeDetection: any,
   featureBreakdown: any[],
   existingDiagrams?: any
-): Record<string, string> {
-  const result: Record<string, string> = { ...(existingDiagrams || {}) };
+): Record<string, any> {
+  const result: Record<string, any> = { ...(existingDiagrams || {}) };
 
   // 1. Database ERD & SQL Migration Synthesis
+  const erdTableMatches = (result.database_erd || '').match(/([a-zA-Z0-9_]+)\s*\{/g);
+  const erdTableCount = erdTableMatches ? erdTableMatches.length : 0;
   const hasGenericErd =
     !result.database_erd ||
+    erdTableCount < 5 ||
     (result.database_erd.includes('TRANSACTIONS') &&
       result.database_erd.includes('LOGS') &&
       !title.toLowerCase().includes('transaksi') &&
@@ -559,24 +585,97 @@ export function synthesizeDynamicArchitectureDiagrams(
 
   const tableNamesFound: string[] = [];
 
+  // A. Kumpulkan tabel dari tech_mapping.db_tables
   featureBreakdown.forEach((f) => {
     if (f.tech_mapping?.db_tables && Array.isArray(f.tech_mapping.db_tables)) {
       f.tech_mapping.db_tables.forEach((t: string) => {
         const clean = t.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-        if (clean && !tableNamesFound.includes(clean)) {
+        if (clean && clean.length > 1 && !tableNamesFound.includes(clean)) {
           tableNamesFound.push(clean);
         }
       });
     }
   });
 
-  // Jika belum ada tabel, bangun dari nama fitur
-  if (tableNamesFound.length === 0) {
-    tableNamesFound.push('users');
-    featureBreakdown.slice(0, 5).forEach((f, idx) => {
-      const words = f.name?.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2);
-      const name = words && words.length > 0 ? words[words.length - 1].replace(/[^a-z0-9]/g, '') : `modul_${idx + 1}`;
-      if (name && !tableNamesFound.includes(name)) tableNamesFound.push(name);
+  // B. Kumpulkan entitas semantik dari nama fitur dan ID fitur jika tabel masih kurang
+  featureBreakdown.forEach((f) => {
+    const fStr = `${f.id || ''} ${f.name || ''} ${f.user_story || ''}`.toLowerCase();
+    if (fStr.includes('booking') || fStr.includes('reservasi') || fStr.includes('jadwal') || fStr.includes('slot')) {
+      if (!tableNamesFound.includes('bookings')) tableNamesFound.push('bookings');
+      if (!tableNamesFound.includes('schedules')) tableNamesFound.push('schedules');
+    }
+    if (fStr.includes('katalog') || fStr.includes('menu') || fStr.includes('produk') || fStr.includes('item') || fStr.includes('barang')) {
+      if (!tableNamesFound.includes('products')) tableNamesFound.push('products');
+      if (!tableNamesFound.includes('categories')) tableNamesFound.push('categories');
+    }
+    if (fStr.includes('layanan') || fStr.includes('service') || fStr.includes('paket')) {
+      if (!tableNamesFound.includes('services')) tableNamesFound.push('services');
+    }
+    if (fStr.includes('pembayaran') || fStr.includes('qris') || fStr.includes('bayar') || fStr.includes('transaksi') || fStr.includes('checkout') || fStr.includes('order')) {
+      if (!tableNamesFound.includes('orders')) tableNamesFound.push('orders');
+      if (!tableNamesFound.includes('payments')) tableNamesFound.push('payments');
+    }
+    if (fStr.includes('notifikasi') || fStr.includes('whatsapp') || fStr.includes('blast') || fStr.includes('pesan') || fStr.includes('dispatch')) {
+      if (!tableNamesFound.includes('notifications')) tableNamesFound.push('notifications');
+    }
+    if (fStr.includes('ulasan') || fStr.includes('rating') || fStr.includes('review') || fStr.includes('testimoni')) {
+      if (!tableNamesFound.includes('reviews')) tableNamesFound.push('reviews');
+    }
+    if (fStr.includes('pelanggan') || fStr.includes('customer') || fStr.includes('member')) {
+      if (!tableNamesFound.includes('customers')) tableNamesFound.push('customers');
+    }
+    if (fStr.includes('siswa') || fStr.includes('santri') || fStr.includes('murid') || fStr.includes('ppdb') || fStr.includes('pendaftaran')) {
+      if (!tableNamesFound.includes('students')) tableNamesFound.push('students');
+      if (!tableNamesFound.includes('registrations')) tableNamesFound.push('registrations');
+      if (!tableNamesFound.includes('guardians')) tableNamesFound.push('guardians');
+    }
+    if (fStr.includes('pasien') || fStr.includes('rekam') || fStr.includes('klinik') || fStr.includes('dokter')) {
+      if (!tableNamesFound.includes('patients')) tableNamesFound.push('patients');
+      if (!tableNamesFound.includes('medical_records')) tableNamesFound.push('medical_records');
+      if (!tableNamesFound.includes('appointments')) tableNamesFound.push('appointments');
+    }
+    if (fStr.includes('rental') || fStr.includes('sewa')) {
+      if (!tableNamesFound.includes('rental_items')) tableNamesFound.push('rental_items');
+      if (!tableNamesFound.includes('fines')) tableNamesFound.push('fines');
+    }
+    if (fStr.includes('shift') || fStr.includes('kasir') || fStr.includes('opname') || fStr.includes('reconciliation')) {
+      if (!tableNamesFound.includes('cash_shifts')) tableNamesFound.push('cash_shifts');
+    }
+  });
+
+  // C. Injeksi tabel domain cerdas sesuai tema produk jika masih kurang dari 6 tabel
+  const titleLower = title.toLowerCase();
+  const archetypeStr = JSON.stringify(archetypeDetection || {}).toLowerCase();
+  const fullContextStr = `${titleLower} ${archetypeStr}`;
+
+  if (fullContextStr.includes('sekolah') || fullContextStr.includes('ppdb') || fullContextStr.includes('edukasi') || fullContextStr.includes('pesantren')) {
+    ['users', 'students', 'guardians', 'registrations', 'document_files', 'payment_bills', 'notifications'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else if (fullContextStr.includes('booking') || fullContextStr.includes('salon') || fullContextStr.includes('barber') || fullContextStr.includes('futsal') || fullContextStr.includes('lapangan') || fullContextStr.includes('jadwal')) {
+    ['users', 'services', 'staff_schedules', 'bookings', 'payments', 'reviews', 'notifications'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else if (fullContextStr.includes('rental') || fullContextStr.includes('sewa')) {
+    ['users', 'rental_items', 'item_units', 'bookings', 'payments', 'deposits', 'fines'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else if (fullContextStr.includes('klinik') || fullContextStr.includes('dokter') || fullContextStr.includes('kesehatan') || fullContextStr.includes('pasien')) {
+    ['users', 'patients', 'doctors', 'appointments', 'medical_records', 'prescriptions', 'payments'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else if (fullContextStr.includes('blast') || fullContextStr.includes('broadcast') || fullContextStr.includes('whatsapp') || fullContextStr.includes('gateway')) {
+    ['users', 'devices', 'contacts', 'contact_groups', 'blast_campaigns', 'blast_messages', 'notifications'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else if (fullContextStr.includes('laundry') || fullContextStr.includes('cuci') || fullContextStr.includes('bengkel') || fullContextStr.includes('jasa')) {
+    ['users', 'services', 'orders', 'order_items', 'tracking_statuses', 'payments', 'reviews'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else {
+    // Default E-commerce / SaaS / App Umum
+    ['users', 'categories', 'products', 'orders', 'order_items', 'payments', 'notifications'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
     });
   }
 
@@ -584,7 +683,8 @@ export function synthesizeDynamicArchitectureDiagrams(
     tableNamesFound.unshift('users');
   }
 
-  const selectedTables = tableNamesFound.slice(0, 6);
+  // Ambil 6 hingga 8 tabel berkualitas tinggi
+  const selectedTables = tableNamesFound.slice(0, 8);
 
   // Buat metadata kolom yang kaya & spesifik domain untuk tiap tabel
   selectedTables.forEach((tName) => {
@@ -605,7 +705,7 @@ export function synthesizeDynamicArchitectureDiagrams(
       // Kolom spesifik domain
       cols.push({ name: 'user_id', type: 'uuid', isFk: true, refTable: 'users' });
 
-      if (tName.includes('order') || tName.includes('transaksi') || tName.includes('rental') || tName.includes('booking')) {
+      if (tName.includes('order') || tName.includes('transaksi') || tName.includes('booking') || tName.includes('rental') || tName.includes('registration')) {
         cols.push(
           { name: 'code', type: 'string' },
           { name: 'total_amount', type: 'numeric' },
@@ -613,7 +713,7 @@ export function synthesizeDynamicArchitectureDiagrams(
           { name: 'payment_method', type: 'string' },
           { name: 'notes', type: 'text' }
         );
-      } else if (tName.includes('product') || tName.includes('item') || tName.includes('alat') || tName.includes('layanan') || tName.includes('course')) {
+      } else if (tName.includes('product') || tName.includes('item') || tName.includes('layanan') || tName.includes('service') || tName.includes('course')) {
         cols.push(
           { name: 'title', type: 'string' },
           { name: 'description', type: 'text' },
@@ -625,6 +725,33 @@ export function synthesizeDynamicArchitectureDiagrams(
           { name: 'name', type: 'string' },
           { name: 'slug', type: 'string' },
           { name: 'description', type: 'text' }
+        );
+      } else if (tName.includes('payment') || tName.includes('bill')) {
+        cols.push(
+          { name: 'invoice_number', type: 'string' },
+          { name: 'amount', type: 'numeric' },
+          { name: 'payment_type', type: 'string' },
+          { name: 'payment_status', type: 'string' },
+          { name: 'paid_at', type: 'datetime' }
+        );
+      } else if (tName.includes('student') || tName.includes('patient') || tName.includes('customer') || tName.includes('guardian') || tName.includes('doctor')) {
+        cols.push(
+          { name: 'full_name', type: 'string' },
+          { name: 'phone_number', type: 'string' },
+          { name: 'address', type: 'text' },
+          { name: 'status', type: 'string' }
+        );
+      } else if (tName.includes('notification') || tName.includes('message')) {
+        cols.push(
+          { name: 'title', type: 'string' },
+          { name: 'content', type: 'text' },
+          { name: 'channel', type: 'string' },
+          { name: 'is_read', type: 'boolean' }
+        );
+      } else if (tName.includes('review')) {
+        cols.push(
+          { name: 'rating', type: 'int' },
+          { name: 'comment', type: 'text' }
         );
       } else {
         cols.push(
@@ -649,6 +776,9 @@ export function synthesizeDynamicArchitectureDiagrams(
     if (detectedTables.length >= 4) {
       erd += `  ${detectedTables[1].name.toUpperCase()} ||--o{ ${detectedTables[2].name.toUpperCase()} : contains\n`;
     }
+    if (detectedTables.length >= 6) {
+      erd += `  ${detectedTables[3].name.toUpperCase()} ||--o{ ${detectedTables[4].name.toUpperCase()} : generates\n`;
+    }
 
     detectedTables.forEach((t) => {
       const u = t.name.toUpperCase();
@@ -662,8 +792,8 @@ export function synthesizeDynamicArchitectureDiagrams(
     result.database_erd = erd;
   }
 
-  // Generate / Lengkapi SQL Migration Script jika belum ada
-  if (!result.sql_migration_script || result.sql_migration_script.trim().length < 50) {
+  // Generate / Lengkapi SQL Migration Script jika belum ada atau jika tabel di ERD lebih lengkap
+  if (!result.sql_migration_script || result.sql_migration_script.trim().length < 50 || hasGenericErd) {
     result.sql_migration_script = synthesizeProductionSqlMigration(title, detectedTables);
   }
 
@@ -707,38 +837,160 @@ export function synthesizeDynamicArchitectureDiagrams(
     result.user_journey_flow = journey;
   }
 
-  // 3. System Flowchart: pastikan diagram terstruktur vertikal, bersih dan berstandar tinggi
+  // 3. System Flowchart: pastikan diagram terstruktur vertikal, bersih, dan adaptif domain
   const hasGenericSystemFlowchart =
     !result.system_flowchart ||
     result.system_flowchart.includes('Client([Klien Pengguna])') ||
-    result.system_flowchart.trim().length < 50;
+    result.system_flowchart.includes('Simpan nota & lampiran') ||
+    result.system_flowchart.trim().length < 30;
 
   if (hasGenericSystemFlowchart) {
     const safeAudience = (archetypeDetection?.target_audience || 'Pemilik Usaha / Pengguna')
       .replace(/["'[\]]/g, '')
       .slice(0, 30);
-    const actionTerms =
-      featureBreakdown.length > 0
-        ? featureBreakdown
-            .slice(0, 4)
-            .map((f: any) => (f.name || '').replace(/^modul\s*\d*[:\s-]*/i, '').trim())
-            .filter(Boolean)
-            .join(', ')
-            .slice(0, 40)
-        : 'stok, katalog, opname, laporan';
 
-    result.system_flowchart = `flowchart TD
+    const fullContext = (
+      title +
+      ' ' +
+      safeAudience +
+      ' ' +
+      featureBreakdown.map((f: any) => (f.name || '') + ' ' + (f.description || '')).join(' ')
+    ).toLowerCase();
+
+    const isPOS = /\b(pos|kasir|point of sale|barista|cafe|coffee|restoran|kitchen|dapur|struk|nota thermal|meja|kds|dine.in|takeaway)\b/i.test(fullContext);
+    const isGaming = /\b(slot|game|gaming|casino|judi|taruhan|bet|betting|aggregator|pragmatic|pgsoft|provider|spin|jackpot|rtp)\b/i.test(fullContext);
+    const isCrypto = /\b(crypto|kripto|usdt|bitcoin|ethereum|wallet|web3|blockchain|token|metamask|smart contract|trc20|erc20)\b/i.test(fullContext);
+    const isLogistics = /\b(ekspedisi|kurir|ongkir|resi|awb|shipping|logistik|j&t|sicepat|jne|rajaongkir|pengiriman|gudang)\b/i.test(fullContext);
+    const isSchool = /\b(sekolah|siswa|santri|guru|ppdb|peserta didik|ujian|cbt|rapor|mapel|kelas|akademik)\b/i.test(fullContext);
+    const isHealthcare = /\b(klinik|rekam medis|pasien|dokter|obat|apotek|rumahsakit|antrean pasien|poli)\b/i.test(fullContext);
+    const hasFileUpload = /\b(lampiran|upload|unggah|foto|gambar|nota bukti|bukti bayar|ktp|ijazah|berkas|dokumen|avatar|pdf file)\b/i.test(fullContext);
+    const hasReports = /\b(laporan|rekap|export|unduh|pdf|excel|spreadsheet|pembukuan|omzet|analitik)\b/i.test(fullContext);
+    const hasPaymentGateway = /\b(payment gateway|qris|midtrans|xendit|tripay|doku|pembayaran online|va bank|virtual account)\b/i.test(fullContext);
+
+    if (isGaming || isCrypto) {
+      result.system_flowchart = `flowchart TD
   User["Pengguna - ${safeAudience}"]
-  User -->|Buka di browser| WebUI["Antarmuka Web - Next.js + Tailwind CSS"]
+  User -->|1. Akses platform & buka lobby| WebUI["Antarmuka Web - Next.js 16 + Tailwind CSS"]
   
-  WebUI -->|Daftar / Login / Ganti Sandi| Auth["Layanan Autentikasi"]
+  WebUI -->|2. Autentikasi akun & PIN sesi| Auth["Layanan Autentikasi (2FA & Session Guard)"]
   Auth --> DB[("Basis Data - PostgreSQL / Supabase")]
   
-  WebUI -->|Aksi ${actionTerms}| Server["Logika Server - Server Actions / API Route"]
-  Server -->|Query & Mutasi SQL| DB
-  Server -->|Simpan nota & lampiran| Storage["Penyimpanan File"]
-  Server -->|Minta laporan PDF & Excel| Reporter["Generator Laporan"]
-  Reporter -->|File siap unduh| WebUI`;
+  WebUI -->|3. Luncurkan game & pasang taruhan| Server["Logika Server - Server Actions & API Routes"]
+  Server -->|4. Validasi taruhan & lock saldo wallet| DB
+  Server -->|5. Panggil sesi game via token| Aggregator["Game Aggregator API"]
+  Aggregator -->|6. Streaming RNG & callback hasil game| GameProvider["Provider Game Eksternal"]
+  
+  WebUI -->|7. Deposit & penarikan instan| Crypto["Crypto / USDT Payment Rail (TRC20/ERC20)"]
+  Crypto -->|8. Webhook konfirmasi transfer on-chain| Server`;
+    } else if (isPOS) {
+      result.system_flowchart = `flowchart TD
+  User["Pengguna - ${safeAudience}"]
+  User -->|1. Akses terminal kasir & pilih menu| WebUI["Antarmuka Kasir & Tablet POS - Next.js 16 + Tailwind CSS"]
+  
+  WebUI -->|2. Quick-switch PIN kasir/barista| Auth["Otorisasi Terminal & Role Guard"]
+  Auth --> DB[("Basis Data - PostgreSQL / Supabase")]
+  
+  WebUI -->|3. Konfirmasi pesanan & bayar| Server["Logika Server - Server Actions / API Routes"]
+  Server -->|4. Catat transaksi atomik & potong stok| DB
+  Server -->|5. Tampilkan QRIS dinamis di layar pelanggan| Payment["Dynamic QRIS Customer Display"]
+  Server -->|6. Kirim antrean pesanan seketika| Realtime["Realtime Engine (WebSocket / SSE)"]
+  Realtime -->|7. Tampilkan tiket antrean dapur| KDS["Kitchen Display System (Layar Barista)"]
+  Server -->|8. Cetak struk belanja & tiket dapur| Printer["Thermal Receipt & Kitchen Printer"]`;
+    } else if (isLogistics) {
+      result.system_flowchart = `flowchart TD
+  User["Pengguna - ${safeAudience}"]
+  User -->|1. Buka dashboard pengiriman & pesanan| WebUI["Dashboard Operasional - Next.js 16 + Tailwind CSS"]
+  
+  WebUI -->|2. Login staf gudang & admin| Auth["Layanan Autentikasi"]
+  Auth --> DB[("Basis Data - PostgreSQL / Supabase")]
+  
+  WebUI -->|3. Proses order & verifikasi stok| Server["Logika Server - Server Actions / API Routes"]
+  Server -->|4. Query & mutasi inventaris gudang| DB
+  Server -->|5. Cek tarif ongkir & generate resi AWB| Logistics["Logistics API (J&T / SiCepat / RajaOngkir)"]
+  Server -->|6. Kirim update resi otomatis| WhatsApp["WhatsApp Gateway Notification"]` +
+  (hasFileUpload ? `\n  Server -->|7. Unggah foto paket & resi fisik| Storage["Penyimpanan Berkas (Cloud Storage)"]` : '') +
+  (hasReports ? `\n  Server -->|8. Export rekap mutasi & penjualan| Reporter["Generator Laporan (Excel & PDF)"]\n  Reporter -->|File siap unduh| WebUI` : '');
+    } else if (isSchool) {
+      result.system_flowchart = `flowchart TD
+  User["Pengguna - ${safeAudience}"]
+  User -->|1. Buka portal pendaftaran siswa| WebUI["Portal Web - Next.js 16 + Tailwind CSS"]
+  
+  WebUI -->|2. Daftar akun & login NISN/email| Auth["Layanan Autentikasi Siswa & Panitia"]
+  Auth --> DB[("Basis Data - PostgreSQL / Supabase")]
+  
+  WebUI -->|3. Pengisian formulir & pilih jalur| Server["Logika Server - Server Actions / API Routes"]
+  Server -->|4. Simpan data pendaftaran siswa| DB
+  Server -->|5. Unggah berkas ijazah, KK, akta| Storage["Penyimpanan Berkas (Cloud Storage)"]
+  Server -->|6. Bayar biaya seleksi/formulir| Payment["Payment Gateway (VA / QRIS)"]
+  Server -->|7. Notifikasi kelulusan & kartu ujian| WhatsApp["WhatsApp / Email Notifier"]` +
+  (hasReports ? `\n  Server -->|8. Cetak kartu peserta & rekap kelulusan| Reporter["Generator Dokumen PDF"]\n  Reporter -->|File siap unduh| WebUI` : '');
+    } else {
+      const actionTerms =
+        featureBreakdown.length > 0
+          ? featureBreakdown
+              .slice(0, 4)
+              .map((f: any) => (f.name || '').replace(/^modul\s*\d*[:\s-]*/i, '').trim())
+              .filter(Boolean)
+              .join(', ')
+              .slice(0, 40)
+          : 'data & transaksi';
+
+      let genChart = `flowchart TD
+  User["Pengguna - ${safeAudience}"]
+  User -->|1. Akses dashboard di browser| WebUI["Antarmuka Web - Next.js 16 + Tailwind CSS"]
+  
+  WebUI -->|2. Autentikasi & manajemen sesi aman| Auth["Layanan Autentikasi"]
+  Auth --> DB[("Basis Data - PostgreSQL / Supabase")]
+  
+  WebUI -->|3. Eksekusi alur ${actionTerms}| Server["Logika Server - Server Actions / API Route"]
+  Server -->|4. Validasi skema Zod & mutasi data| DB`;
+
+      let step = 5;
+      if (hasPaymentGateway) {
+        genChart += `\n  Server -->|${step++}. Proses pembayaran digital| Payment["Payment Gateway (QRIS / VA)"]`;
+      }
+      if (hasFileUpload) {
+        genChart += `\n  Server -->|${step++}. Simpan berkas lampiran & dokumen| Storage["Penyimpanan File (Cloud Storage)"]`;
+      }
+      if (hasReports) {
+        genChart += `\n  Server -->|${step++}. Minta laporan analitik & rekap| Reporter["Generator Laporan (PDF & Excel)"]\n  Reporter -->|File siap unduh| WebUI`;
+      }
+
+      result.system_flowchart = genChart;
+    }
+  }
+
+  // Lengkapi system_components jika belum disediakan oleh model
+  if (!result.system_components || result.system_components.length === 0) {
+    const fullCtx = (title + ' ' + (archetypeDetection?.target_audience || '')).toLowerCase();
+    const isPOS = /\b(pos|kasir|point of sale|barista|cafe|coffee|restoran|kitchen|dapur|struk)\b/i.test(fullCtx);
+    const isGaming = /\b(slot|game|gaming|casino|judi|taruhan|bet|betting|aggregator)\b/i.test(fullCtx);
+    const isLogistics = /\b(ekspedisi|kurir|ongkir|resi|awb|shipping|logistik)\b/i.test(fullCtx);
+
+    if (isPOS) {
+      result.system_components = [
+        { name: 'Terminal Kasir & Tablet POS', role: 'Antarmuka kasir layar sentuh untuk input pesanan cepat, shift kasir, dan integrasi QRIS.', tech: 'Next.js 16 + Tailwind CSS', type: 'frontend' },
+        { name: 'Kitchen Display System (KDS)', role: 'Layar antrean barista/dapur untuk pembaruan status pesanan yang sinkron seketika.', tech: 'WebSocket / Supabase Realtime', type: 'realtime' },
+        { name: 'Thermal Receipt & Ticket Printer', role: 'Hardware printer thermal untuk mencetak struk kasir dan tiket pesanan dapur.', tech: 'ESC/POS Socket Driver', type: 'hardware' },
+        { name: 'Logika Transaksi & Inventaris', role: 'Memproses transaksi penjualan atomik, kalkulasi diskon/pajak, dan pemotongan stok bahan baku.', tech: 'Server Actions & API Routes', type: 'backend' },
+        { name: 'Basis Data POS Relasional', role: 'Menyimpan outlet, meja, produk, mutasi stok, transaksi, dan riwayat shift.', tech: 'PostgreSQL / Supabase', type: 'database' },
+      ];
+    } else if (isGaming) {
+      result.system_components = [
+        { name: 'Lobby & Member Portal', role: 'Antarmuka web interaktif untuk navigasi katalog game, riwayat taruhan, dan profil member.', tech: 'Next.js 16 + Tailwind CSS', type: 'frontend' },
+        { name: 'Wallet & Settlement Engine', role: 'Manajemen saldo dompet member, penguncian saldo taruhan, dan rekonsiliasi hasil putaran.', tech: 'Node.js / Row-Level Lock SQL', type: 'backend' },
+        { name: 'Game Aggregator API Adapter', role: 'Menghubungkan platform dengan vendor provider game eksternal dan menangani callback RNG.', tech: 'REST Webhook + Signature Verification', type: 'external_api' },
+        { name: 'Crypto Payment Rail', role: 'Menangani setoran dan penarikan instan mata uang kripto (USDT TRC20/ERC20).', tech: 'On-Chain Webhook Listener', type: 'backend' },
+        { name: 'Basis Data & Audit Ledger', role: 'Penyimpanan data akun, ledger transaksi keuangan yang immutable, dan audit log sesi.', tech: 'PostgreSQL / Supabase', type: 'database' },
+      ];
+    } else if (isLogistics) {
+      result.system_components = [
+        { name: 'Dashboard Monitoring Logistik', role: 'Panel kontrol operasional untuk input order, pemantauan status paket, dan cetak label resi massal.', tech: 'Next.js 16 + Tailwind CSS', type: 'frontend' },
+        { name: 'Tarif & AWB Engine', role: 'Integrasi dengan API kurir ekspedisi untuk kalkulasi ongkos kirim dan penerbitan nomor resi otomatis.', tech: 'Logistics API (J&T/SiCepat/RajaOngkir)', type: 'external_api' },
+        { name: 'WhatsApp Notifier Gateway', role: 'Mengirimkan notifikasi pembaruan status pengiriman dan nomor resi otomatis ke nomor WhatsApp pelanggan.', tech: 'WhatsApp Business API', type: 'external_api' },
+        { name: 'Basis Data Inventaris & Pengiriman', role: 'Menyimpan data pesanan, manifest gudang, status AWB, dan data pelanggan.', tech: 'PostgreSQL / Supabase', type: 'database' },
+      ];
+    }
   }
 
   return result;

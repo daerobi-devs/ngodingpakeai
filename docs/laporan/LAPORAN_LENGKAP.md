@@ -938,7 +938,7 @@ Sistem mengintegrasikan serangkaian pertahanan berlapis (*defense-in-depth*) unt
    * `X-Frame-Options: SAMEORIGIN`: Mencegah serangan *Clickjacking* dengan melarang situs asing membungkus aplikasi di dalam elemen `<iframe>`.
    * `X-Content-Type-Options: nosniff`: Mencegah eksploitasi *MIME Confusion* atau *MIME Sniffing*.
    * `Referrer-Policy: strict-origin-when-cross-origin`: Menjaga kerahasiaan parameter URL sensitif saat pengguna berpindah ke domain eksternal.
-   * `Permissions-Policy: camera=(), microphone=(), geolocation=()`: Mematikan akses peramban ke perangkat keras yang tidak relevan secara eksplisit.
+   * `Permissions-Policy: camera=(), microphone=(self), geolocation=()`: Membatasi akses peramban hanya untuk fitur yang relevan (mengizinkan mikrofon untuk dikte suara internal, mematikan kamera dan geolokasi).
    * `Strict-Transport-Security (HSTS)`: Memaksa koneksi peramban selalu menggunakan jalur HTTPS terenkripsi selama 2 tahun (`max-age=63072000; includeSubDomains; preload`).
 2. **Validasi Kriptografi Webhook Mandiri (HMAC-SHA256)**:
    * Pada `src/app/api/webhook/payment-success/route.ts`, setiap notifikasi pembayaran dari gateway MPG wajib menyertakan header `X-Signature`. Sistem menghitung nilai digest hash:

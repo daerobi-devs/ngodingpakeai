@@ -327,23 +327,6 @@ export const StudioChatDrawer: React.FC<StudioChatDrawerProps> = ({
         </div>
       )}
 
-      {/* Voice Dictation Listening Banner */}
-      {isListening && (
-        <div className="px-3 py-1.5 bg-red-500/15 border-t border-red-500/30 flex items-center justify-between text-xs text-red-300 animate-pulse">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-            <span>Mendengarkan suara kamu (Bahasa Indonesia)...</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => toggleListening()}
-            className="text-[10px] font-bold text-red-400 hover:underline cursor-pointer"
-          >
-            Selesai
-          </button>
-        </div>
-      )}
-
       {/* Bottom Input Field with Voice Dictation Mic Button */}
       <form onSubmit={handleSubmit} className="p-3 border-t border-zinc-800/80 bg-[#0d1117]">
         <div className="relative flex items-center rounded-xl border border-zinc-800 bg-[#161b22] px-3 py-2 focus-within:border-amber-500/60 transition-colors">
@@ -354,7 +337,9 @@ export const StudioChatDrawer: React.FC<StudioChatDrawerProps> = ({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              activeMode === 'chat'
+              isListening
+                ? 'Mendengarkan suara Anda... Silakan bicara (atau klik mic lagi untuk stop)'
+                : activeMode === 'chat'
                 ? 'Ajak diskusi arsitektur... (Enter)'
                 : 'Instruksi revisi (cth: ganti SQLite jadi Postgres)... (Enter)'
             }
@@ -371,12 +356,19 @@ export const StudioChatDrawer: React.FC<StudioChatDrawerProps> = ({
             }}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer mr-1 ${
               isListening
-                ? 'bg-red-500/20 text-red-400 ring-2 ring-red-500/30 animate-pulse'
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40'
                 : 'text-zinc-400 hover:text-amber-400 hover:bg-zinc-800'
             }`}
-            title={isListening ? 'Hentikan rekaman suara' : 'Dikte lewat suara (Bahasa Indonesia)'}
+            title={isListening ? 'Klik untuk menghentikan rekaman suara' : 'Dikte lewat suara'}
           >
-            {isListening ? <MicOff className="h-4 w-4 text-red-400" /> : <Mic className="h-4 w-4" />}
+            {isListening ? (
+              <div className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <Mic className="h-4 w-4 text-amber-400" />
+              </div>
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
           </button>
 
           <button

@@ -15,6 +15,7 @@ import {
   Loader2,
   ChevronRight,
   Download,
+  ListTodo,
 } from 'lucide-react';
 
 interface ImplementationModalProps {
@@ -23,6 +24,7 @@ interface ImplementationModalProps {
   prd: PRDOutput;
   versionNumber?: number;
   onDownloadPrd: () => void;
+  onDownloadPrdAndTasks?: () => void;
   onDownloadZip: () => void;
   isExportingZip?: boolean;
   theme?: 'dark' | 'light';
@@ -34,6 +36,7 @@ export const ImplementationModal: React.FC<ImplementationModalProps> = ({
   prd,
   versionNumber = 1,
   onDownloadPrd,
+  onDownloadPrdAndTasks,
   onDownloadZip,
   isExportingZip = false,
   theme = 'dark',
@@ -135,7 +138,34 @@ export const ImplementationModal: React.FC<ImplementationModalProps> = ({
               </div>
             </button>
 
-            {/* Option 2: Download ZIP */}
+            {/* Option 2: Download PRD & Task */}
+            <button
+              type="button"
+              onClick={() => {
+                onDownloadPrdAndTasks?.();
+                onClose();
+              }}
+              className={`w-full flex items-center gap-4 p-3.5 rounded-xl border text-left transition-all cursor-pointer group ${
+                isLight
+                  ? 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 hover:border-zinc-300'
+                  : 'border-zinc-800/80 bg-[#161d2b]/80 hover:bg-[#1a2334] hover:border-zinc-700'
+              }`}
+            >
+              <div className="h-10 w-10 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[#ea580c] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <ListTodo className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold group-hover:text-amber-400 transition-colors flex items-center justify-between">
+                  <span>Download PRD &amp; Task</span>
+                  <Download className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400" />
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Dokumen PRD (.md) + checklist TASKS.md.
+                </p>
+              </div>
+            </button>
+
+            {/* Option 3: Download ZIP */}
             <button
               type="button"
               onClick={onDownloadZip}
