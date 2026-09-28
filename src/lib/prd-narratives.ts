@@ -133,29 +133,76 @@ export function generateCleanRequirements(prd: PRDOutput): CleanRequirements {
   // Fallback default jika masih kosong
   if (functional.length === 0) {
     functional.push(
-      'Pengguna dapat membuat akun, login/logout, dan mengelola profil toko/gudang.',
-      'Pengguna dapat mengelola katalog barang (tambah, ubah, kelompokkan, nonaktifkan).',
-      'Sistem mencatat semua pergerakan stok: barang masuk, barang keluar, retur ke supplier, dan retur dari pembeli.',
-      'Stok pada dashboard dan katalog otomatis ter-update setiap ada pencatatan masuk/keluar/retur.',
-      'Sistem memberi peringatan saat stok suatu barang menipis.',
-      'Pengguna dapat melakukan sesi stock opname, memasukkan stok fisik, melihat selisih, dan menyetujui penyesuaian.',
-      'Pengguna dapat melihat dan mengunduh laporan (stok terkini & mutasi) dalam format PDF dan Excel, dengan filter periode.'
+      `Pengguna dapat membuat akun, login/logout, dan mengelola profil akun pada ${prd.title || 'sistem'}.`,
+      'Pengguna dapat membuat, melihat, memperbarui, dan mengarsipkan data utama sesuai alur operasional aplikasi.',
+      'Sistem memvalidasi input data pengguna secara realtime untuk mencegah kesalahan format dan duplikasi.',
+      'Pengguna dapat mencari, memfilter, dan mengelompokkan data berdasarkan parameter kategori yang relevan.',
+      'Sistem menyajikan ringkasan metrik dan status operasional terkini pada antarmuka dasbor.',
+      'Pengguna dapat mengekspor atau mencadangkan riwayat data dalam format standar yang mudah diakses.'
     );
   }
 
   // 2. Persyaratan Non-Fungsional
-  const audience = prd.archetype_detection?.target_audience || 'pengguna non-teknis';
+  const audience = prd.archetype_detection?.target_audience || 'pengguna';
   const appDomain = prd.title ? prd.title.toLowerCase() : 'sistem';
-  const isInventory = appDomain.includes('stok') || appDomain.includes('gudang') || appDomain.includes('inventori');
+
+  // Comprehensive domain context inspection
+  const techStackStr = prd.tech_stack ? JSON.stringify(prd.tech_stack) : '';
+  const domainContext = [
+    prd.title || '',
+    prd.opportunity_framing?.core_problem || '',
+    prd.opportunity_framing?.strategy_fit || '',
+    prd.archetype_detection?.archetype || '',
+    audience,
+    ...(prd.boundaries?.scope || []),
+    ...(prd.boundaries?.non_goals || []),
+    ...(prd.feature_breakdown?.map((f) => `${f.name} ${f.user_story || ''}`) || []),
+    ...(prd.roadmap_tree?.map((r) => `${r.title} ${r.description || ''}`) || []),
+    techStackStr,
+  ].join(' ').toLowerCase();
+
+  const isEdu = /kuliah|mahasiswa|siswa|kampus|akademik|sekolah|edukasi|pelajaran|dosen|guru|kursus|belajar/i.test(domainContext);
+  const isAudioOrMedia = /audio|suara|rekam|mediarecorder|transkrip|speech|podcast|mic|mp3|wav|m4a/i.test(domainContext);
+  const isOfflineOrPwa = /offline|indexeddb|pwa|service\s*worker|cache\s*first/i.test(domainContext);
+  const isAIOrLLM = /gemini|ai\b|llm|gpt|openai|transkripsi|kecerdasan buatan|machine learning/i.test(domainContext);
+  const isInventory = /stok|stock|gudang|inventori|opname|sku/i.test(domainContext) && !isEdu;
+  const isPOS = /kasir|pos\b|point of sale|barista|struk|meja restoran/i.test(domainContext);
+  const isHealth = /klinik|pasien|rekam medis|dokter|kesehatan|obat|farmasi/i.test(domainContext);
+  const isBookingOrRental = /booking|reservasi|sewa|rental|jadwal sewa/i.test(domainContext);
+  const isFinance = /pembayaran|qris|fintech|transaksi keuangan|wallet|saldo|faktur/i.test(domainContext);
+  const hasMarkdownOrDoc = /markdown|catatan|dokumen|catatin|notetaking|notes/i.test(domainContext);
 
   nonFunctional.push(
-    `Antarmuka sederhana dan ramah untuk ${audience} (sedikit klik, istilah mudah).`,
-    'Responsif: nyaman dipakai di laptop maupun HP (banyak pemilik toko banyak memakai HP).',
-    `Data ${isInventory ? 'stok' : 'operasional'} hanya bisa diakses oleh pemilik akun (terproteksi login).`,
-    'Nota/lampiran tersimpan aman dan bisa dibuka kembali.',
-    'Riwayat pencatatan tidak hilang walau barang dinonaktifkan.',
-    'Proses simpan pencatatan terasa cepat (< 2 detik) agar tidak mengganggu aktivitas harian.'
+    `Antarmuka sederhana dan ramah untuk ${audience} (navigasi intuitif, alur ringkas, istilah mudah dipahami).`,
+    `Responsif: nyaman dan optimal dipakai di perangkat mobile/HP, tablet, maupun laptop/desktop untuk menunjang fleksibilitas ${audience}.`,
+    `Keamanan Data: data ${appDomain} terisolasi dan hanya bisa diakses oleh akun terautentikasi sesuai hak akses (terproteksi sesi login aman).`
   );
+
+  if (isAudioOrMedia) {
+    nonFunctional.push('Penyimpanan Berkas Media: file rekaman audio tersimpan aman di penyimpanan awan/storage dengan integritas berkas terjamin dan pemutaran kembali lancar.');
+  } else if (hasMarkdownOrDoc) {
+    nonFunctional.push('Integritas Dokumen: catatan dan berkas terstruktur tersimpan aman, utuh, serta dapat dibuka dan diekspor kembali kapan saja.');
+  } else if (isFinance) {
+    nonFunctional.push('Keamanan Transaksi: integritas data pembayaran dan bukti transaksi terlindungi dengan pencatatan audit log terenkripsi.');
+  } else {
+    nonFunctional.push('Penyimpanan Aman: berkas dokumen, lampiran, dan data operasional tersimpan aman secara persisten serta dapat diakses kembali.');
+  }
+
+  if (isInventory) {
+    nonFunctional.push('Integritas Riwayat: rekaman mutasi stok dan riwayat transaksi tidak hilang meskipun status item dinonaktifkan.');
+  } else {
+    nonFunctional.push('Integritas Riwayat: riwayat pencatatan dan aktivitas tidak hilang (didukung mekanisme soft-delete dan jejak audit) untuk akuntabilitas data.');
+  }
+
+  nonFunctional.push('Proses simpan dan pemuatan data terasa cepat (< 2 detik) agar tidak mengganggu aktivitas harian pengguna.');
+
+  if (isOfflineOrPwa) {
+    nonFunctional.push('Ketersediaan Offline-First: fungsionalitas pencatatan/perekaman tetap dapat berjalan lancar saat jaringan terputus dan otomatis tersinkronisasi saat terhubung kembali.');
+  }
+
+  if (isAIOrLLM) {
+    nonFunctional.push('Keandalan Layanan AI: integrasi transkripsi/inferensi AI dilengkapi penanganan timeout otomatis, penanganan batas kuota, dan indikator status progres yang transparan.');
+  }
 
   if (prd.risk_management?.fallback_kill_switch) {
     const cleanKill = cleanLabel(prd.risk_management.fallback_kill_switch).replace(/[.;,]+$/, '');
@@ -163,41 +210,48 @@ export function generateCleanRequirements(prd: PRDOutput): CleanRequirements {
   }
 
   // 3. Asumsi & Batasan
-  const archetype = (prd.archetype_detection?.archetype || '').toLowerCase();
-  if (archetype.includes('sekolah') || archetype.includes('edukasi')) {
-    assumptionsAndConstraints.push('Skala pengguna: institusi pendidikan/organisasi dengan kapasitas data terpusat.');
-  } else {
-    assumptionsAndConstraints.push('Skala pengguna: usaha kecil-menengah (jumlah barang dalam ratusan hingga beberapa ribu).');
-  }
-
-  assumptionsAndConstraints.push('Satu akun terhubung ke satu toko/gudang pada versi awal.');
-
-  if (prd.boundaries?.non_goals && Array.isArray(prd.boundaries.non_goals) && prd.boundaries.non_goals.length > 0) {
-    prd.boundaries.non_goals.forEach((ng) => {
-      let clean = ng
-        .replace(/^\[NON-GOAL\]\s*/i, '')
-        .replace(/^\[OUT-OF-SCOPE\]\s*/i, '')
-        .replace(/^[-*•\d.]+\s*/, '')
-        .trim();
-      if (!clean) return;
-
-      if (clean.toLowerCase().includes('integrasi marketplace')) {
-        clean = 'Integrasi marketplace (Shopee/Tokopedia) ditunda untuk fokus pada stabilitas gudang internal.';
-      } else if (clean.toLowerCase().includes('akuntansi')) {
-        clean = 'Sistem akuntansi keuangan penuh berada di luar lingkup untuk fokus pada operasional gudang.';
-      } else if (clean.toLowerCase().includes('mobile app')) {
-        clean = 'Fokus pada web responsive untuk workstation sebelum pengembangan mobile app native.';
-      } else if (clean.toLowerCase().includes('payroll')) {
-        clean = 'Sistem payroll staf berada di luar lingkup operasional sistem ini.';
-      } else {
-        clean = clean.replace(/[.;,]+$/, '') + '.';
+  if (prd.assumptions_and_constraints && Array.isArray(prd.assumptions_and_constraints) && prd.assumptions_and_constraints.length > 0) {
+    prd.assumptions_and_constraints.forEach((a) => {
+      if (a && typeof a === 'string') {
+        const trimmed = a.trim();
+        if (trimmed) assumptionsAndConstraints.push(trimmed);
       }
-
-      assumptionsAndConstraints.push(clean);
     });
-  }
+  } else {
+    // Dynamic fallback when assumptions_and_constraints is absent
+    const audience = prd.archetype_detection?.target_audience || 'pengguna';
+    const appTitle = prd.title || 'aplikasi';
+    assumptionsAndConstraints.push(`Skala pengguna: dirancang untuk ${audience} dengan kapasitas dan struktur data terkelola.`);
+    assumptionsAndConstraints.push(`Satu akun pengguna terhubung ke profil/ruang kerja utama pada versi rilis awal ${appTitle}.`);
 
-  assumptionsAndConstraints.push('Bahasa antarmuka Indonesia.');
+    if (prd.boundaries?.non_goals && Array.isArray(prd.boundaries.non_goals) && prd.boundaries.non_goals.length > 0) {
+      prd.boundaries.non_goals.forEach((ng) => {
+        let clean = ng
+          .replace(/^\[NON-GOAL\]\s*/i, '')
+          .replace(/^\[OUT-OF-SCOPE\]\s*/i, '')
+          .replace(/^[-*•\d.]+\s*/, '')
+          .trim();
+        if (!clean) return;
+
+        const lower = clean.toLowerCase();
+        if (lower.includes('integrasi marketplace')) {
+          clean = 'Integrasi marketplace pihak ketiga ditunda untuk fokus pada stabilitas alur kerja utama aplikasi.';
+        } else if (lower.includes('akuntansi')) {
+          clean = 'Sistem akuntansi pembukuan penuh berada di luar lingkup rilis awal untuk berfokus pada fitur inti.';
+        } else if (lower.includes('mobile app')) {
+          clean = 'Fokus pada aplikasi web responsif/PWA terlebih dahulu sebelum pengembangan aplikasi native terpisah.';
+        } else if (lower.includes('payroll')) {
+          clean = 'Sistem payroll staf berada di luar lingkup operasional sistem ini.';
+        } else {
+          clean = clean.replace(/[.;,]+$/, '') + '.';
+        }
+
+        assumptionsAndConstraints.push(clean);
+      });
+    }
+
+    assumptionsAndConstraints.push('Bahasa antarmuka Indonesia.');
+  }
 
   const uniqueAssumptions = Array.from(new Set(assumptionsAndConstraints));
 
@@ -235,7 +289,7 @@ function deriveSubFeatureExplanation(rawName: string, moduleTitle: string): stri
     return 'Mencatat transaksi entri baru dengan validasi instan agar data bertambah secara akurat.';
   }
   if (n.includes('keluar') || n.includes('jual') || n.includes('pesanan') || n.includes('order')) {
-    return 'Mencatat pengurangan atau penyaluran barang agar stok otomatis terpotong.';
+    return 'Mencatat pengurangan kuantitas, pemenuhan pesanan, atau mutasi data keluar secara akurat.';
   }
   if (n.includes('hitung') || n.includes('opname') || n.includes('fisik') || n.includes('selisih')) {
     return 'Membandingkan hasil hitungan fisik lapangan dengan data sistem untuk mendeteksi selisih.';
@@ -249,7 +303,7 @@ function deriveSubFeatureExplanation(rawName: string, moduleTitle: string): stri
   if (n.includes('audit') || n.includes('riwayat') || n.includes('log') || n.includes('jejak')) {
     return 'Merekam riwayat perubahan dan aktivitas operasional untuk menjaga akuntabilitas kerja.';
   }
-  return `Mendukung proses operasional ${rawName.toLowerCase()} secara cepat dan sistematis.`;
+  return `Memfasilitasi eksekusi alur teknis ${rawName.toLowerCase()} dengan validasi data terstruktur.`;
 }
 
 function deriveModuleSummary(moduleTitle: string, userDescription?: string): string {
@@ -269,10 +323,10 @@ function deriveModuleSummary(moduleTitle: string, userDescription?: string): str
     return `${moduleTitle} — mencatat transaksi operasional harian agar data sistem otomatis diperbarui.`;
   }
   if (t.includes('katalog') || t.includes('barang') || t.includes('produk') || t.includes('kategori')) {
-    return `${moduleTitle} — mengelola data master item dan kategori sebagai pusat acuan operasional.`;
+    return `${moduleTitle} — mengelola data master item dan entitas acuan operasional.`;
   }
   if (t.includes('opname') || t.includes('akurasi') || t.includes('hitung')) {
-    return `${moduleTitle} — verifikasi fisik periodik untuk mencocokkan stok nyata dengan data sistem.`;
+    return `${moduleTitle} — verifikasi fisik periodik untuk mencocokkan kondisi nyata dengan data sistem.`;
   }
   if (t.includes('laporan') || t.includes('pelaporan') || t.includes('analisis') || t.includes('rekap')) {
     return `${moduleTitle} — menyajikan rekapitulasi performa bisnis dan cetak berkas laporan siap pakai.`;
@@ -280,7 +334,7 @@ function deriveModuleSummary(moduleTitle: string, userDescription?: string): str
   if (t.includes('akun') || t.includes('keamanan') || t.includes('staf') || t.includes('autentikasi')) {
     return `${moduleTitle} — perlindungan akses, tata kelola wewenang peran staf, dan pencatatan audit.`;
   }
-  return `${moduleTitle} — modul operasional terpadu untuk memfasilitasi kebutuhan ${t}.`;
+  return `${moduleTitle} — antarmuka terintegrasi untuk menjalankan fungsionalitas ${t} secara terstruktur.`;
 }
 
 function derivePhaseTitle(idx: number, rawPhase: string | undefined, moduleTitle: string): string {
@@ -398,32 +452,8 @@ export function generateCleanCoreFeatures(prd: PRDOutput): CleanCoreFeaturePhase
     return phases;
   }
 
-  // 3. Fallback Sintesis Default jika belum ada data modul
-  return [
-    {
-      id: 'feature-phase-1',
-      phaseTitle: 'Fase 1 — Fondasi: Dashboard Stok',
-      moduleTitle: 'Dashboard Stok',
-      moduleSummary: 'Dashboard Stok — satu layar untuk melihat kondisi seluruh stok sekilas.',
-      subFeatures: [
-        { name: 'Ringkasan Stok', description: 'Menampilkan jumlah jenis barang dan total nilai stok dalam angka besar yang mudah dibaca.' },
-        { name: 'Cari & Filter Barang', description: 'Menemukan barang tertentu dengan cepat lewat pencarian atau filter kategori.' },
-        { name: 'Peringatan Stok Menipis', description: 'Menandai barang yang hampir habis agar bisa segera ditambah.' },
-        { name: 'Grafik Pergerakan Stok', description: 'Menampilkan naik-turunnya barang masuk dan keluar dalam beberapa hari terakhir.' },
-      ],
-    },
-    {
-      id: 'feature-phase-2',
-      phaseTitle: 'Fase 2 — Pencatatan Harian & Katalog',
-      moduleTitle: 'Catat Barang Masuk',
-      moduleSummary: 'Catat Barang Masuk — mencatat barang yang datang agar stok otomatis bertambah.',
-      subFeatures: [
-        { name: 'Pilih Barang', description: 'Memilih barang dari katalog tanpa perlu ketik ulang.' },
-        { name: 'Isi Jumlah & Harga', description: 'Memasukkan jumlah barang datang beserta harga belinya.' },
-        { name: 'Catatan & Foto Nota', description: 'Menyimpan nomor surat jalan atau foto nota fisik sebagai bukti.' },
-      ],
-    },
-  ];
+  // 3. Jika belum ada data modul atau roadmap (misal saat masih proses generate), kembalikan array kosong
+  return [];
 }
 
 /**
@@ -455,7 +485,7 @@ export function generateDynamicUserFlowSteps(prd: PRDOutput): UserFlowStep[] {
       step: stepCount++,
       title: 'Daftar & Masuk',
       phaseTag: `${authPhase} – tersedia lebih awal sebagai pondasi akses`,
-      description: `Pengguna (${targetAudience}) membuat akun, lalu login ke dalam sistem. Setelah berhasil masuk, pengguna melengkapi profil awal dan preferensi toko/organisasi yang akan menjadi identitas pada seluruh laporan dan transaksi ${appTitle}.`,
+      description: `Pengguna (${targetAudience}) membuat akun, lalu login ke dalam sistem. Setelah berhasil masuk, pengguna melengkapi konfigurasi profil awal dan preferensi kerja pada ${appTitle}.`,
     });
 
     // Langkah-langkah modul fungsional berikutnya
@@ -567,13 +597,13 @@ export function generateDynamicUserFlowSteps(prd: PRDOutput): UserFlowStep[] {
       step: 1,
       title: 'Daftar & Masuk',
       phaseTag: 'Fase 1 – pondasi akses',
-      description: `Pengguna membuat akun baru dan melakukan autentikasi login. Setelah masuk, pengguna melengkapi profil identitas toko/organisasi pada ${appTitle}.`,
+      description: `Pengguna membuat akun baru dan melakukan autentikasi login. Setelah masuk, pengguna melengkapi konfigurasi profil pengguna pada ${appTitle}.`,
     },
     {
       step: 2,
-      title: 'Siapkan Master Data & Katalog',
+      title: 'Kelola Data Master & Preferensi',
       phaseTag: 'Fase 2',
-      description: 'Pengguna menginput data referensi awal, kategori item, harga, dan parameter konfigurasi operasional.',
+      description: 'Pengguna menginput data referensi awal, parameter pengaturan, dan konfigurasi operasional.',
     },
     {
       step: 3,
@@ -601,6 +631,7 @@ function enrichOrSynthesizeSystemFlowchart(
     backend: string;
     database: string;
     moduleNames: string[];
+    isAudioOrEdu: boolean;
     isPOS: boolean;
     isGaming: boolean;
     isCrypto: boolean;
@@ -622,12 +653,11 @@ function enrichOrSynthesizeSystemFlowchart(
     .trim();
 
   const isStaleTemplate =
-    Boolean(cleanChart) &&
-    (cleanChart.includes('Simpan nota & lampiran') ||
-      cleanChart.includes('Client([Klien Pengguna])') ||
-      (cleanChart.includes('Layanan Autentikasi') &&
-        cleanChart.includes('Penyimpanan File') &&
-        cleanChart.includes('Generator Laporan')));
+    !cleanChart ||
+    cleanChart.includes('Simpan nota & lampiran') ||
+    cleanChart.includes('Client([Klien Pengguna])') ||
+    cleanChart.length < 60 ||
+    (!cleanChart.includes('|1.') && !cleanChart.includes('| 1.') && !cleanChart.includes('|1 '));
 
   // Jika AI sudah menghasilkan diagram kustom yang valid dan BUKAN template basi
   if (cleanChart.length >= 40 && !isStaleTemplate) {
@@ -722,6 +752,19 @@ function enrichOrSynthesizeSystemFlowchart(
 
   // JIKA TIDAK ADA DIAGRAM DARI AI ATAU BERUPA TEMPLATE STENCIL LAMA:
   // Bangun flowchart alur kritis bernomor urut yang 100% spesifik untuk domain produk!
+  if (context.isAudioOrEdu) {
+    return `flowchart TD
+  User["Mahasiswa - ${context.audience}"]
+  User -->|1. Mulai sesi rekam perkuliahan| WebUI["Antarmuka Perekam & Editor - ${context.frontend}"]
+  WebUI -->|2. Buffer audio lokal aman offline| LocalBuffer[("Penyimpanan Buffer Lokal (IndexedDB)")]
+  LocalBuffer -.->|3. Sinkronisasi berkas saat terhubung online| Server["Logika Server - ${context.backend}"]
+  Server -->|4. Simpan berkas audio mentah (.m4a/.wav)| Storage[("Penyimpanan Berkas - Supabase Storage")]
+  Server -->|5. Teruskan stream audio & prompt ekstraksi| GeminiAI["Google Gemini Multimodal Audio API"]
+  GeminiAI -->|6. Kembalikan teks transkrip & ringkasan terstruktur| Server
+  Server -->|7. Transformasi ke format Markdown & simpan| DB[("Basis Data - ${context.database}")]
+  DB -->|8. Sajikan catatan interaktif & player audio tersinkron| WebUI`;
+  }
+
   if (context.isGaming || context.isCrypto) {
     return `flowchart TD
   User["Pengguna - ${context.audience}"]
@@ -897,6 +940,9 @@ export function generateArchitectureOverview(prd: PRDOutput): ArchitectureOvervi
     (prd.feature_breakdown || []).map((f) => (f.name || '') + ' ' + (f.user_story || '')).join(' ')
   ).toLowerCase();
 
+  const isAudioOrEdu = /\b(audio|suara|rekam|kuliah|mahasiswa|transkrip|transkripsi|podcast|mediarecorder|catatan kuliah|speech)\b/i.test(
+    fullContext
+  );
   const isPOS = /\b(pos|kasir|point of sale|barista|cafe|coffee|restoran|kitchen|dapur|struk|nota thermal|meja|kds|dine.in|takeaway)\b/i.test(
     fullContext
   );
@@ -1085,6 +1131,7 @@ export function generateArchitectureOverview(prd: PRDOutput): ArchitectureOvervi
     backend: cleanBackendTech,
     database: cleanDbTech,
     moduleNames,
+    isAudioOrEdu,
     isPOS,
     isGaming,
     isCrypto,
@@ -1131,19 +1178,24 @@ function getTableDescription(rawTableName: string): string {
   const t = rawTableName.toLowerCase().trim();
   if (t === 'users') return 'data akun pengguna (dikelola sistem autentikasi / Supabase Auth)';
   if (t === 'sessions') return 'sesi login aktif (dikelola sistem autentikasi)';
-  if (t === 'stores' || t === 'warung' || t === 'toko' || t === 'gudang') return 'profil warung/toko';
-  if (t === 'categories' || t === 'kategori') return 'kelompok/kategori barang';
-  if (t === 'products' || t === 'items' || t === 'barang') return 'katalog barang dagangan';
-  if (t === 'stock_movements' || t === 'mutasi_stok') return 'catatan riwayat barang masuk & keluar';
-  if (t === 'opname_sessions' || t === 'stok_opname') return 'sesi hitung stok fisik mingguan';
+  if (t === 'workspaces') return 'ruang kerja atau grup profil pengguna';
+  if (t === 'recordings' || t === 'audio' || t.includes('recording')) return 'berkas rekaman audio dan metadata durasi';
+  if (t === 'notes' || t === 'catatan') return 'dokumen catatan dan penanda waktu perkuliahan';
+  if (t === 'transcriptions' || t === 'transkripsi') return 'hasil konversi audio ke teks via model AI';
+  if (t === 'summaries' || t === 'ringkasan') return 'ringkasan materi berstruktur Markdown';
+  if (t === 'stores' || t === 'warung' || t === 'toko' || t === 'gudang') return 'profil warung/toko/unit operasional';
+  if (t === 'categories' || t === 'kategori') return 'pengelompokan atau kategori entitas';
+  if (t === 'products' || t === 'items' || t === 'barang') return 'katalog item atau entitas layanan';
+  if (t === 'stock_movements' || t === 'mutasi_stok') return 'catatan riwayat mutasi stok masuk & keluar';
+  if (t === 'opname_sessions' || t === 'stok_opname') return 'sesi hitung fisik periodik';
   if (t === 'opname_items' || t === 'opname_details') return 'rincian hasil hitung fisik dan selisih per item';
-  if (t === 'orders' || t === 'transactions' || t === 'pesanan') return 'transaksi pesanan penjualan';
-  if (t === 'order_items' || t === 'order_details') return 'rincian barang dalam tiap transaksi pesanan';
-  if (t === 'customers' || t === 'pelanggan') return 'data master pelanggan';
+  if (t === 'orders' || t === 'transactions' || t === 'pesanan') return 'catatan transaksi pesanan / layanan';
+  if (t === 'order_items' || t === 'order_details') return 'rincian item dalam tiap transaksi pesanan';
+  if (t === 'customers' || t === 'pelanggan') return 'data master pelanggan / klien';
   if (t === 'batch_lots' || t === 'lots' || t === 'batches') return 'kelompok batch masa kadaluarsa (FEFO)';
   if (t === 'returns' || t === 'retur') return 'pengajuan retur barang dari pelanggan';
   if (t === 'return_videos' || t === 'bukti_retur') return 'lampiran video unboxing bukti komplain retur';
-  if (t === 'notifications' || t === 'notifikasi') return 'log notifikasi peringatan & pesan WhatsApp';
+  if (t === 'notifications' || t === 'notifikasi') return 'log notifikasi peringatan & pesan sistem';
   if (t.includes('blast_campaign') || t.includes('campaign')) return 'kampanye pengiriman pesan massal / broadcast';
   if (t.includes('blast_message') || t.includes('broadcast_message')) return 'antrean dan riwayat pengiriman pesan blast';
   if (t.includes('device') || t.includes('session_device')) return 'perangkat WhatsApp gateway yang terhubung';
@@ -1998,16 +2050,32 @@ export function generateDatabaseSchemaDictionary(prd: PRDOutput): DatabaseSchema
       'reviews',
       'notifications',
     ];
-  } else {
-    // Default E-commerce / SaaS / Aplikasi Modern
+  } else if (
+    fullDomainStr.includes('toko') ||
+    fullDomainStr.includes('belanja') ||
+    fullDomainStr.includes('ecommerce') ||
+    fullDomainStr.includes('katalog') ||
+    fullDomainStr.includes('kasir') ||
+    fullDomainStr.includes('pos')
+  ) {
     baseFoundationList = [
       'users',
-      'sessions',
       'categories',
       'products',
       'orders',
       'order_items',
       'payments',
+      'notifications',
+    ];
+  } else {
+    // Default Neutral SaaS / Modern Application
+    baseFoundationList = [
+      'users',
+      'workspaces',
+      'core_records',
+      'attachments',
+      'activity_logs',
+      'settings',
       'notifications',
     ];
   }

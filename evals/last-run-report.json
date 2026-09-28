@@ -1,0 +1,16 @@
+[
+  {
+    "id": "eval_01_audio_ai",
+    "name": "Catatin (Audio AI & Offline Note)",
+    "domain": "Edukasi & Audio AI",
+    "generatedTitle": "Catatin",
+    "passed": true,
+    "domainLeakageCount": 0,
+    "genericFillerCount": 0,
+    "missingTableCount": 0,
+    "criticScore": 3.6,
+    "retriesPerformed": 1,
+    "durationSec": 51.7,
+    "violations": []
+  }
+]

@@ -71,22 +71,23 @@ const DEFAULT_10_SLOTS: GeminiKeySlot[] = Array.from({ length: 10 }, (_, i) => (
 }));
 
 const POPULAR_GEMINI_FREE_MODELS = [
+  { id: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Ultra Rendah Latensi & Hemat Kuota - Stabil)' },
+  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (Ringan & Cepat Generasi 3.5)' },
+  { id: 'gemini-3.6-flash', label: 'gemini-3.6-flash (Generasi 3.6 Cerdas)' },
   { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Generasi 3.8 - Coding & Reasoning Unggul)' },
   { id: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Generasi 3.5 - Agentic & Cepat)' },
-  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (Ultra Rendah Latensi & Hemat Kuota)' },
   { id: 'gemini-flash-latest', label: 'gemini-flash-latest (Auto Latest Flash Stable)' },
-  { id: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Stabil & Akurat LTS)' },
-  { id: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite (Ringan Generasi 2.5)' },
+  { id: 'gemini-flash-lite-latest', label: 'gemini-flash-lite-latest (Auto Latest Flash Lite)' },
 ];
 
 const POPULAR_GEMINI_PRO_MODELS = [
   { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Generasi 3.8 Flagship Fast Reasoning)' },
+  { id: 'gemini-3.6-flash', label: 'gemini-3.6-flash (Generasi 3.6 Cerdas Mendalam)' },
   { id: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Generasi 3.5 Agentic Pro)' },
-  { id: 'gemini-2.5-pro', label: 'gemini-2.5-pro (Generasi 2.5 PRO Analitis Mendalam)' },
   { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (Ultra Low-Latency Flash)' },
-  { id: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Cepat & Kualitas Tinggi)' },
-  { id: 'gemini-flash-latest', label: 'gemini-flash-latest (Cepat Tanpa Jeda)' },
-  { id: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite (Lite Edition)' },
+  { id: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Hemat Kuota & Sangat Cepat)' },
+  { id: 'gemini-flash-latest', label: 'gemini-flash-latest (Auto Latest Flash Stable)' },
+  { id: 'gemini-flash-lite-latest', label: 'gemini-flash-lite-latest (Auto Latest Flash Lite)' },
 ];
 
 const POPULAR_OPENROUTER_MODELS = [
@@ -2977,7 +2978,7 @@ CREATE INDEX IF NOT EXISTS idx_prd_history_user_id ON public.prd_history(user_id
                               }}
                               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 font-mono focus:border-amber-400 focus:outline-none"
                             >
-                              <option value="">Default Otomatis (gemini-2.5-flash)</option>
+                              <option value="">Default Otomatis (gemini-3.1-flash-lite)</option>
                               {slot.models && slot.models.length > 0 && (
                                 <optgroup label="Model Terdeteksi di Slot Ini">
                                   {slot.models.map((m) => (
@@ -2987,12 +2988,14 @@ CREATE INDEX IF NOT EXISTS idx_prd_history_user_id ON public.prd_history(user_id
                                   ))}
                                 </optgroup>
                               )}
-                              <optgroup label="Model Standar Gemini">
-                                <option value="gemini-2.5-flash">gemini-2.5-flash (Cepat & Direkomendasikan)</option>
-                                <option value="gemini-2.5-pro">gemini-2.5-pro (Penalaran Kompleks)</option>
-                                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                              <optgroup label="Model Standar Gemini (Generasi 3)">
+                                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Stabil &amp; Hemat Kuota)</option>
+                                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Ultra Cepat)</option>
+                                <option value="gemini-3.6-flash">gemini-3.6-flash (Generasi 3.6 Cerdas)</option>
+                                <option value="gemini-3.8-flash">gemini-3.8-flash (Flagship Fast Reasoning)</option>
+                                <option value="gemini-3.5-flash">gemini-3.5-flash (Agentic Pro)</option>
+                                <option value="gemini-flash-latest">gemini-flash-latest (Auto Latest Flash)</option>
+                                <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
                               </optgroup>
                             </select>
                             <p className="text-[10px] text-zinc-500 mt-1">

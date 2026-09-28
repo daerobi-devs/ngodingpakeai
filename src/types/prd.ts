@@ -33,9 +33,42 @@ export interface PRDFormData {
   };
 }
 
+export interface TechStackInfo {
+  name?: string;
+  version?: string;
+  description?: string;
+  frontend?: string;
+  backend?: string;
+  database?: string;
+  deployment?: string;
+  templateId?: string;
+  language?: string;
+  styling?: string;
+  package_manager?: string;
+}
+
+export interface ArchitectureDiagrams {
+  system_flowchart?: string;
+  user_journey_flow?: string;
+  database_erd?: string;
+  sql_migration_script?: string;
+  api_integration_matrix?: string;
+  sequence_diagram?: string;
+  infrastructure_topology?: string;
+  rbac_permission_matrix?: string;
+  data_pipeline_flow?: string;
+  system_components?: Array<{
+    name: string;
+    role: string;
+    tech?: string;
+    type?: string;
+  }>;
+}
+
 export interface DeepFeature {
   id: string;
   name: string;
+  phase?: string;
   priority: 'P0' | 'P1';
   user_story: string;
   happy_path: string[];
@@ -100,6 +133,7 @@ export interface PRDOutput {
     };
     guardrails: string[];
   };
+  assumptions_and_constraints?: string[];
   task_breakdown: string[];
   roadmap_tree?: RoadmapPhaseNode[];
   architecture_diagrams?: {
@@ -142,6 +176,7 @@ export interface PRDOutput {
     geminiSlotUsed?: string | null;
     isServerKey?: boolean;
     costEstimateRp?: number;
+    validation_report?: any;
   };
 }
 

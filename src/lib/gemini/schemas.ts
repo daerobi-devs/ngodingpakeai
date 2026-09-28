@@ -672,9 +672,13 @@ export function synthesizeDynamicArchitectureDiagrams(
     ['users', 'services', 'orders', 'order_items', 'tracking_statuses', 'payments', 'reviews'].forEach((t) => {
       if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
     });
-  } else {
-    // Default E-commerce / SaaS / App Umum
+  } else if (fullContextStr.includes('toko') || fullContextStr.includes('belanja') || fullContextStr.includes('ecommerce') || fullContextStr.includes('katalog') || fullContextStr.includes('kasir') || fullContextStr.includes('pos')) {
     ['users', 'categories', 'products', 'orders', 'order_items', 'payments', 'notifications'].forEach((t) => {
+      if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
+    });
+  } else {
+    // Default Neutral SaaS / Modern Digital Application (NON-COMMERCE)
+    ['users', 'workspaces', 'core_records', 'attachments', 'activity_logs', 'notifications', 'settings'].forEach((t) => {
       if (!tableNamesFound.includes(t)) tableNamesFound.push(t);
     });
   }
@@ -842,7 +846,10 @@ export function synthesizeDynamicArchitectureDiagrams(
     !result.system_flowchart ||
     result.system_flowchart.includes('Client([Klien Pengguna])') ||
     result.system_flowchart.includes('Simpan nota & lampiran') ||
-    result.system_flowchart.trim().length < 30;
+    result.system_flowchart.trim().length < 60 ||
+    (!result.system_flowchart.includes('|1.') &&
+      !result.system_flowchart.includes('| 1.') &&
+      !result.system_flowchart.includes('|1 '));
 
   if (hasGenericSystemFlowchart) {
     const safeAudience = (archetypeDetection?.target_audience || 'Pemilik Usaha / Pengguna')
@@ -857,17 +864,29 @@ export function synthesizeDynamicArchitectureDiagrams(
       featureBreakdown.map((f: any) => (f.name || '') + ' ' + (f.description || '')).join(' ')
     ).toLowerCase();
 
+    const isAudioOrEdu = /\b(audio|suara|rekam|kuliah|mahasiswa|transkrip|transkripsi|podcast|mediarecorder|catatan kuliah|speech)\b/i.test(fullContext);
     const isPOS = /\b(pos|kasir|point of sale|barista|cafe|coffee|restoran|kitchen|dapur|struk|nota thermal|meja|kds|dine.in|takeaway)\b/i.test(fullContext);
     const isGaming = /\b(slot|game|gaming|casino|judi|taruhan|bet|betting|aggregator|pragmatic|pgsoft|provider|spin|jackpot|rtp)\b/i.test(fullContext);
     const isCrypto = /\b(crypto|kripto|usdt|bitcoin|ethereum|wallet|web3|blockchain|token|metamask|smart contract|trc20|erc20)\b/i.test(fullContext);
     const isLogistics = /\b(ekspedisi|kurir|ongkir|resi|awb|shipping|logistik|j&t|sicepat|jne|rajaongkir|pengiriman|gudang)\b/i.test(fullContext);
-    const isSchool = /\b(sekolah|siswa|santri|guru|ppdb|peserta didik|ujian|cbt|rapor|mapel|kelas|akademik)\b/i.test(fullContext);
+    const isSchool = /\b(sekolah|siswa|santri|guru|ppdb|peserta didik|ujian|cbt|rapor|mapel|kelas|akademik)\b/i.test(fullContext) && !isAudioOrEdu;
     const isHealthcare = /\b(klinik|rekam medis|pasien|dokter|obat|apotek|rumahsakit|antrean pasien|poli)\b/i.test(fullContext);
     const hasFileUpload = /\b(lampiran|upload|unggah|foto|gambar|nota bukti|bukti bayar|ktp|ijazah|berkas|dokumen|avatar|pdf file)\b/i.test(fullContext);
     const hasReports = /\b(laporan|rekap|export|unduh|pdf|excel|spreadsheet|pembukuan|omzet|analitik)\b/i.test(fullContext);
     const hasPaymentGateway = /\b(payment gateway|qris|midtrans|xendit|tripay|doku|pembayaran online|va bank|virtual account)\b/i.test(fullContext);
 
-    if (isGaming || isCrypto) {
+    if (isAudioOrEdu) {
+      result.system_flowchart = `flowchart TD
+  User["Mahasiswa - ${safeAudience}"]
+  User -->|1. Mulai sesi rekam perkuliahan| WebUI["Antarmuka Perekam & Editor - Next.js 16 + Tailwind CSS"]
+  WebUI -->|2. Buffer audio lokal aman offline| LocalBuffer[("Penyimpanan Buffer Lokal (IndexedDB)")]
+  LocalBuffer -.->|3. Sinkronisasi berkas saat terhubung online| Server["Logika Server - Server Actions / Ingestion API"]
+  Server -->|4. Simpan berkas audio mentah (.m4a/.wav)| Storage[("Penyimpanan Berkas - Supabase Storage")]
+  Server -->|5. Teruskan stream audio & prompt ekstraksi| GeminiAI["Google Gemini Multimodal Audio API"]
+  GeminiAI -->|6. Kembalikan teks transkrip & ringkasan terstruktur| Server
+  Server -->|7. Transformasi ke format Markdown & simpan| DB[("Basis Data - PostgreSQL / Supabase")]
+  DB -->|8. Sajikan catatan interaktif & player audio tersinkron| WebUI`;
+    } else if (isGaming || isCrypto) {
       result.system_flowchart = `flowchart TD
   User["Pengguna - ${safeAudience}"]
   User -->|1. Akses platform & buka lobby| WebUI["Antarmuka Web - Next.js 16 + Tailwind CSS"]

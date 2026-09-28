@@ -238,7 +238,7 @@ export async function generateRoadmapAI(options: GenerateRoadmapOptions): Promis
     }
 
     const pool = createKeyPool(keyList);
-    const chosenGeminiModel = slotPreferredModel?.trim() || userPreferredModel?.trim() || preferredModel || 'gemini-2.5-flash';
+    const chosenGeminiModel = slotPreferredModel?.trim() || userPreferredModel?.trim() || preferredModel || 'gemini-3.1-flash-lite';
     const ladder = [chosenGeminiModel, ...MODEL_LADDER.filter((m) => m !== chosenGeminiModel)];
 
     let success = false;

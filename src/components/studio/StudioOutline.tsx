@@ -11,6 +11,7 @@ interface StudioOutlineProps {
   onSelectSection: (id: string) => void;
   theme?: 'dark' | 'light';
   prd?: PRDOutput;
+  isLoading?: boolean;
 }
 
 export const StudioOutline: React.FC<StudioOutlineProps> = ({
@@ -18,9 +19,13 @@ export const StudioOutline: React.FC<StudioOutlineProps> = ({
   onSelectSection,
   theme = 'dark',
   prd,
+  isLoading = false,
 }) => {
   const isLight = theme === 'light';
-  const cleanFeatures = React.useMemo(() => (prd ? generateCleanCoreFeatures(prd) : []), [prd]);
+  const cleanFeatures = React.useMemo(() => {
+    if (isLoading || !prd) return [];
+    return generateCleanCoreFeatures(prd);
+  }, [prd, isLoading]);
 
   return (
     <nav

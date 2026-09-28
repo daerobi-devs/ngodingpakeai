@@ -108,7 +108,7 @@ function GeneratorContent() {
     refreshProfile,
   } = useAuth();
   const [keys, setKeys] = useState<string[]>([]);
-  const [preferredModel, setPreferredModel] = useState<string>('gemini-3.8-flash');
+  const [preferredModel, setPreferredModel] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePrdId, setActivePrdId] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<PrdHistorySummary[]>([]);

@@ -1,4 +1,4 @@
-import { PRDOutput, ClarificationQuestion } from '@/types/prd';
+import { PRDOutput, ClarificationQuestion, PRDFormData, TechStackInfo } from '@/types/prd';
 import {
   PRDOutputZodSchema,
   normalizeAndSanitizePRDOutput,
@@ -15,16 +15,23 @@ import {
   generateGeminiFeatureTree,
   getKeysFromSettings,
   resolveGeminiKeysAndSlot,
+  resolveOrderedGeminiSlots,
+  GeminiSlotTarget,
 } from '@/lib/gemini/gemini-client';
 import { SystemSettings, AiProvider } from '@/lib/supabase/types';
 import { normalizeOpenAiEndpoint, parseOpenAiChatResponse, repairAndParseJSON } from './openai-compat';
 import { getDomainDiscoveryQuestions } from '@/lib/gemini/domain-discovery';
+import { generatePRDPipeline } from '@/lib/pipeline/prd-pipeline';
 
 interface GenerateOptions {
   systemSettings: SystemSettings;
   userGeminiKey?: string;
   systemPrompt: string;
   userPrompt: string;
+  formData?: PRDFormData;
+  techStack?: TechStackInfo;
+  selectedModules?: any[];
+  language?: 'id' | 'en';
   isPro?: boolean;
   userId?: string;
   assignedGeminiSlot?: string | null;
@@ -155,23 +162,48 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
   }
 
   // 3. Default: Gemini Direct
+  let slotTargets: GeminiSlotTarget[] = [];
   let keyList: string[] = [];
   let slotUsedLabel: string | undefined = undefined;
-  let slotPreferredModel: string | undefined = undefined;
+
   if (systemSettings.api_key_mode === 'server_managed') {
-    const resolved = resolveGeminiKeysAndSlot(systemSettings, userId, options.assignedGeminiSlot);
-    keyList = resolved.keys;
-    slotUsedLabel = resolved.slotUsedLabel;
-    slotPreferredModel = resolved.slotPreferredModel;
+    slotTargets = resolveOrderedGeminiSlots(systemSettings, userId, options.assignedGeminiSlot, isPro);
+    keyList = slotTargets.map((s) => s.key);
+    if (slotTargets.length > 0) {
+      slotUsedLabel = slotTargets[0].label;
+    }
     if (keyList.length === 0) {
-      const envKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+      const envKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean);
       keyList = envKeys;
-      if (envKeys.length > 0) slotUsedLabel = 'Env Key';
+      if (envKeys.length > 0) {
+        slotUsedLabel = 'Env Key';
+        slotTargets = envKeys.map((k, idx) => ({
+          id: `env_${idx + 1}`,
+          label: `Env Key #${idx + 1}`,
+          key: k,
+          preferredModel: (isPro ? systemSettings.pro_model : systemSettings.free_model) || 'gemini-3.1-flash-lite',
+        }));
+      }
     }
   } else {
     if (userGeminiKey) {
       keyList = [userGeminiKey.trim()];
       slotUsedLabel = 'BYOK Key';
+      slotTargets = [
+        {
+          id: 'byok',
+          label: 'BYOK Key',
+          key: userGeminiKey.trim(),
+          preferredModel: userPreferredModel?.trim() || (isPro ? systemSettings.pro_model : systemSettings.free_model) || 'gemini-3.1-flash-lite',
+        },
+      ];
+    } else {
+      slotTargets = resolveOrderedGeminiSlots(systemSettings, userId, options.assignedGeminiSlot, isPro);
+      keyList = slotTargets.map((s) => s.key);
+      if (slotTargets.length > 0) slotUsedLabel = slotTargets[0].label;
     }
   }
 
@@ -179,14 +211,40 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
     throw new Error('API Key belum diisi. Masukkan Gemini API Key atau aktifkan Server Managed Key / Multi-Key Slot di Admin.');
   }
 
-  const chosenGeminiModel = slotPreferredModel?.trim() || userPreferredModel?.trim() || preferredModel || 'gemini-2.5-flash';
+  const defaultModel = (isPro ? systemSettings.pro_model : systemSettings.free_model)?.trim() || 'gemini-3.1-flash-lite';
+  const chosenGeminiModel = slotTargets[0]?.preferredModel || userPreferredModel?.trim() || defaultModel;
   const pool = createKeyPool(keyList);
+
+  if (options.formData) {
+    const pipelineResult = await generatePRDPipeline({
+      formData: options.formData,
+      techStack: options.techStack,
+      selectedModules: options.selectedModules,
+      language: options.language || 'id',
+      apiKeyPool: pool,
+      preferredModel: chosenGeminiModel,
+      slotTargets,
+      signal,
+    });
+
+    return {
+      ...pipelineResult,
+      metadata: {
+        ...pipelineResult.metadata,
+        modelUsed: pipelineResult.metadata?.modelUsed || chosenGeminiModel,
+        generatedAt: pipelineResult.metadata?.generatedAt || new Date().toISOString(),
+        geminiSlotUsed: pipelineResult.metadata?.geminiSlotUsed || slotUsedLabel,
+      },
+    };
+  }
+
   const geminiResult = await generateGeminiDirect({
     apiKeyPool: pool,
     systemPrompt,
     userPrompt,
     preferredModel: chosenGeminiModel,
     signal,
+    slotTargets,
   });
 
   return {
@@ -196,7 +254,7 @@ export async function generatePRDUnified(options: GenerateOptions): Promise<PRDO
       generatedAt: geminiResult.metadata?.generatedAt || new Date().toISOString(),
       retries: geminiResult.metadata?.retries,
       fallbackCount: geminiResult.metadata?.fallbackCount,
-      geminiSlotUsed: slotUsedLabel,
+      geminiSlotUsed: geminiResult.metadata?.geminiSlotUsed || slotUsedLabel,
     },
   };
 }
@@ -325,23 +383,40 @@ export async function generateClarificationsUnified(
     }
 
     // 3. Default: Gemini Direct
+    let slotTargets: GeminiSlotTarget[] = [];
     let keyList: string[] = [];
     if (systemSettings.api_key_mode === 'server_managed') {
-      keyList = getKeysFromSettings(systemSettings, userId);
+      slotTargets = resolveOrderedGeminiSlots(systemSettings, userId, undefined, isPro);
+      keyList = slotTargets.map((s) => s.key);
       if (keyList.length === 0) {
         const envKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
           .split(',')
           .map((k) => k.trim())
           .filter(Boolean);
         keyList = envKeys;
+        if (envKeys.length > 0) {
+          slotTargets = envKeys.map((k, idx) => ({
+            id: `env_${idx + 1}`,
+            label: `Env Key #${idx + 1}`,
+            key: k,
+            preferredModel: (isPro ? systemSettings.pro_model : systemSettings.free_model) || 'gemini-3.1-flash-lite',
+          }));
+        }
       }
     } else {
       if (userGeminiKey) {
         keyList = [userGeminiKey.trim()];
+        slotTargets = [
+          {
+            id: 'byok',
+            label: 'BYOK Key',
+            key: userGeminiKey.trim(),
+            preferredModel: userPreferredModel?.trim() || (isPro ? systemSettings.pro_model : systemSettings.free_model) || 'gemini-3.1-flash-lite',
+          },
+        ];
       } else {
-        // In BYOK or hybrid without header, check if server slots exist as backup
-        const slots = getKeysFromSettings(systemSettings, userId);
-        if (slots.length > 0) keyList = slots;
+        slotTargets = resolveOrderedGeminiSlots(systemSettings, userId, undefined, isPro);
+        keyList = slotTargets.map((s) => s.key);
       }
     }
 
@@ -349,7 +424,8 @@ export async function generateClarificationsUnified(
       return fallbackQuestions;
     }
 
-    const chosenModel = userPreferredModel?.trim() || preferredModel || 'gemini-2.5-flash';
+    const defaultModel = (isPro ? systemSettings.pro_model : systemSettings.free_model)?.trim() || 'gemini-3.1-flash-lite';
+    const chosenModel = slotTargets[0]?.preferredModel || userPreferredModel?.trim() || defaultModel;
     const pool = createKeyPool(keyList);
 
     return await generateGeminiClarifications({
@@ -357,6 +433,7 @@ export async function generateClarificationsUnified(
       userIdea,
       prompt,
       preferredModel: chosenModel,
+      slotTargets,
     });
   } catch (err) {
     console.warn('generateClarificationsUnified error, returning smart domain questions:', err);
@@ -494,22 +571,40 @@ export async function generateFeatureTreeUnified(
     }
 
     // 3. Default: Gemini Direct
+    let slotTargets: GeminiSlotTarget[] = [];
     let keyList: string[] = [];
     if (systemSettings.api_key_mode === 'server_managed') {
-      keyList = getKeysFromSettings(systemSettings, userId);
+      slotTargets = resolveOrderedGeminiSlots(systemSettings, userId, undefined, isPro);
+      keyList = slotTargets.map((s) => s.key);
       if (keyList.length === 0) {
         const envKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
           .split(',')
           .map((k) => k.trim())
           .filter(Boolean);
         keyList = envKeys;
+        if (envKeys.length > 0) {
+          slotTargets = envKeys.map((k, idx) => ({
+            id: `env_${idx + 1}`,
+            label: `Env Key #${idx + 1}`,
+            key: k,
+            preferredModel: (isPro ? systemSettings.pro_model : systemSettings.free_model) || 'gemini-3.1-flash-lite',
+          }));
+        }
       }
     } else {
       if (userGeminiKey) {
         keyList = [userGeminiKey.trim()];
+        slotTargets = [
+          {
+            id: 'byok',
+            label: 'BYOK Key',
+            key: userGeminiKey.trim(),
+            preferredModel: userPreferredModel?.trim() || (isPro ? systemSettings.pro_model : systemSettings.free_model) || 'gemini-3.1-flash-lite',
+          },
+        ];
       } else {
-        const slots = getKeysFromSettings(systemSettings, userId);
-        if (slots.length > 0) keyList = slots;
+        slotTargets = resolveOrderedGeminiSlots(systemSettings, userId, undefined, isPro);
+        keyList = slotTargets.map((s) => s.key);
       }
     }
 
@@ -517,7 +612,8 @@ export async function generateFeatureTreeUnified(
       return fallbackModules;
     }
 
-    const chosenModel = userPreferredModel?.trim() || preferredModel || 'gemini-2.5-flash';
+    const defaultModel = (isPro ? systemSettings.pro_model : systemSettings.free_model)?.trim() || 'gemini-3.1-flash-lite';
+    const chosenModel = slotTargets[0]?.preferredModel || userPreferredModel?.trim() || defaultModel;
     const pool = createKeyPool(keyList);
 
     return await generateGeminiFeatureTree({
@@ -527,6 +623,7 @@ export async function generateFeatureTreeUnified(
       preferredModel: chosenModel,
       answers,
       questions,
+      slotTargets,
     });
   } catch (err) {
     console.warn('generateFeatureTreeUnified error, returning synthesized modules:', err);
@@ -898,11 +995,11 @@ Langsung keluarkan teks elaborasi lengkap sekarang:`;
 
     const pool = createKeyPool(keyList);
     const candidateModels = [
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.8-flash',
       'gemini-flash-latest',
-      'gemini-2.0-flash-lite',
-      'gemini-2.5-flash',
     ];
 
     for (const model of candidateModels) {
@@ -1155,11 +1252,11 @@ ${featureSummaries || '1. Core Features\n2. User Authentication\n3. Admin Dashbo
     const rawCandidateModels = [
       preferredModel,
       isPro ? systemSettings.pro_model : systemSettings.free_model,
-      'gemini-1.5-pro',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.8-flash',
       'gemini-flash-latest',
-      'gemini-2.0-flash-lite',
     ].filter(Boolean) as string[];
 
     // Filter unik dengan mempertahankan urutan prioritas

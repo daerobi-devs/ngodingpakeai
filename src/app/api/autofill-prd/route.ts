@@ -112,12 +112,11 @@ DILARANG memberikan teks selain JSON. Gunakan Bahasa Indonesia profesional.`;
 
     const preferredModel = req.headers.get("x-gemini-preferred-model");
     const baseModels = [
-      "gemini-3.8-flash",
-      "gemini-3.5-flash",
+      "gemini-3.1-flash-lite",
       "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.8-flash",
       "gemini-flash-latest",
-      "gemini-2.5-flash",
-      "gemini-2.5-flash-lite",
       "gemini-flash-lite-latest",
     ];
     const modelsToTry = preferredModel

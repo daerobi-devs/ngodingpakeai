@@ -1,0 +1,183 @@
+[
+  {
+    "id": "eval_01_audio_ai",
+    "name": "Catatin (Audio AI & Offline Note)",
+    "domain": "Edukasi & Audio AI",
+    "formData": {
+      "appName": "Catatin",
+      "description": "Aplikasi asisten pencatat kuliah berbasis audio cerdas untuk mahasiswa. Mahasiswa merekam penjelasan dosen secara offline di ruang kuliah menggunakan browser (MediaRecorder & IndexedDB). Ketika online, rekaman disinkronisasikan ke Supabase Storage dan diproses menggunakan Gemini API untuk menghasilkan transkrip perkuliahan, ringkasan topik utama, serta glosarium istilah penting dalam format Markdown. Mahasiswa dapat mengedit catatan secara interaktif berdampingan dengan pemutar audio dan mengekspor hasilnya ke format PDF/DOCX.",
+      "targetAudience": "Mahasiswa perguruan tinggi dan akademisi",
+      "coreProblem": "Mahasiswa kesulitan mencatat penjelasan dosen yang cepat dan sinyal internet di ruang kuliah seringkali buruk.",
+      "keyFlow": "1. Rekam audio offline di kelas -> 2. Simpan lokal di IndexedDB -> 3. Sinkronkan ke cloud saat online -> 4. Transkripsi & ringkasan via AI -> 5. Editor Markdown & ekspor dokumen."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 (App Router) + Tailwind CSS v4",
+      "backend": "Next.js Server Actions & API Routes",
+      "database": "Supabase PostgreSQL dengan Row Level Security (RLS)",
+      "auth": "Supabase Auth (JWT & Email / Google OAuth)",
+      "deployment": "Docker / Coolify"
+    }
+  },
+  {
+    "id": "eval_02_ecommerce",
+    "name": "KatalogKu (UMKM Commerce)",
+    "domain": "E-Commerce UMKM",
+    "formData": {
+      "appName": "KatalogKu",
+      "description": "Platform katalog produk online dan pemesanan WhatsApp langsung untuk pelaku UMKM lokal. Pemilik toko dapat mengunggah foto produk, mengatur harga, varian, dan stok. Pembeli dapat memilih barang, melihat total keranjang, dan langsung checkout ke WhatsApp penjual dengan format pesan terstruktur.",
+      "targetAudience": "Pelaku UMKM dan pembeli online lokal",
+      "coreProblem": "UMKM kesulitan mengelola pesanan manual yang berceceran di chat tanpa katalog digital yang rapi.",
+      "keyFlow": "1. Pembeli membuka katalog web -> 2. Memilih varian produk -> 3. Masukkan ke keranjang -> 4. Checkout langsung kirim rekap pesanan ke WhatsApp penjual."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Route Handlers",
+      "database": "Supabase PostgreSQL",
+      "deployment": "Vercel"
+    }
+  },
+  {
+    "id": "eval_03_booking",
+    "name": "CourtReserve (Sports Booking)",
+    "domain": "Booking & Reservasi Olahraga",
+    "formData": {
+      "appName": "CourtReserve",
+      "description": "Sistem reservasi lapangan badminton dan futsal online dengan jadwal ketersediaan real-time, mekanisme slot-lock atomik selama 15 menit untuk mencegah double-booking, pembayaran instan QRIS dinamis, dan bukti tiket digital dengan barcode.",
+      "targetAudience": "Pengelola sarana olahraga dan komunitas pecinta olahraga",
+      "coreProblem": "Jadwal booking sering tabrakan (double-booking) dan konfirmasi pembayaran manual via transfer bank sangat merepotkan pengelola.",
+      "keyFlow": "1. Pilih cabang & jenis lapangan -> 2. Pilih tanggal dan slot jam -> 3. Sistem mengunci slot selama 15 menit -> 4. Bayar via QRIS dinamis -> 5. Tiket digital aktif."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Server Actions",
+      "database": "Supabase PostgreSQL (RLS & Lock Transaction)",
+      "deployment": "Coolify Docker"
+    }
+  },
+  {
+    "id": "eval_04_education",
+    "name": "EduTrack (PPDB Sekolah)",
+    "domain": "Institusi Sekolah & PPDB",
+    "formData": {
+      "appName": "EduTrack",
+      "description": "Portal Penerimaan Peserta Didik Baru (PPDB) dan direktori akademik sekolah menengah. Calon siswa dan orang tua dapat mengisi formulir biodata, mengunggah berkas ijazah/kartu keluarga, memantau status verifikasi panitia, dan melihat pengumuman kelulusan seleksi.",
+      "targetAudience": "Panitia PPDB sekolah, calon siswa baru, dan orang tua wali",
+      "coreProblem": "Antrean berkas fisik formulir pendaftaran manual yang menumpuk dan verifikasi berkas yang rawan hilang atau tercecer.",
+      "keyFlow": "1. Registrasi akun wali murid -> 2. Pengisian formulir siswa & upload berkas -> 3. Verifikasi berkas oleh panitia admin -> 4. Pengumuman hasil seleksi online."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Server Actions",
+      "database": "Supabase PostgreSQL",
+      "deployment": "VPS Linux"
+    }
+  },
+  {
+    "id": "eval_05_health",
+    "name": "KlinikKita (Rekam Medis Digital)",
+    "domain": "Kesehatan & Rekam Medis",
+    "formData": {
+      "appName": "KlinikKita",
+      "description": "Aplikasi manajemen klinik mandiri dan rekam medis elektronik (RME) terstandar. Pasien dapat mengambil nomor antrean online, dokter mencatat anamnesis, diagnosis ICD-10, tindakan, dan resep obat secara digital, serta kasir memproses pembayaran obat dan tindakan.",
+      "targetAudience": "Dokter praktik mandiri, perawat, petugas administrasi, dan pasien klinik",
+      "coreProblem": "Rekam medis kertas sering hilang atau rusak dan antrean ruang tunggu klinik yang tidak teratur.",
+      "keyFlow": "1. Pasien daftar antrean -> 2. Perawat cek tensi & tanda vital -> 3. Dokter input rekam medis & resep obat -> 4. Kasir cetak invoice & pembayaran."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Route Handlers",
+      "database": "PostgreSQL dengan enkripsi data sensitif",
+      "deployment": "Coolify Self-Hosted"
+    }
+  },
+  {
+    "id": "eval_06_gaming",
+    "name": "QuestHero (Gamified Habits)",
+    "domain": "Game & Produktivitas Gamifikasi",
+    "formData": {
+      "appName": "QuestHero",
+      "description": "Aplikasi pelacak kebiasaan harian yang diubah menjadi game RPG fantasi. Pengguna membuat karakter hero, menyelesaikan quest kebiasaan harian (misal membaca, olahraga) untuk mendapatkan EXP dan gold, membeli perlengkapan virtual, dan membentuk party untuk mengalahkan boss quest mingguan.",
+      "targetAudience": "Generasi muda dan profesional yang ingin membangun kebiasaan positif melalui pendekatan gamifikasi",
+      "coreProblem": "Aplikasi to-do list konvensional terasa membosankan sehingga pengguna kehilangan motivasi setelah beberapa hari.",
+      "keyFlow": "1. Buat karakter hero -> 2. Tentukan target kebiasaan harian -> 3. Centang kebiasaan selesai -> 4. Terima reward EXP & koin -> 5. Belanja avatar gear."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 (App Router) + Tailwind CSS",
+      "backend": "Next.js Server Actions",
+      "database": "Supabase PostgreSQL",
+      "deployment": "Vercel"
+    }
+  },
+  {
+    "id": "eval_07_devtool",
+    "name": "ApiShield (API Monitoring Proxy)",
+    "domain": "Developer Tools & API Infrastructure",
+    "formData": {
+      "appName": "ApiShield",
+      "description": "Dashboard proxy dan pemantauan API gateway cerdas untuk backend developer. Memantau kuota rate limiting secara real-time, mendeteksi lonjakan latency p95/p99, merekam log payload request/response yang bermasalah, dan mengirimkan notifikasi instan via webhook Discord/Slack jika error rate melampaui ambang batas.",
+      "targetAudience": "Backend software engineer, DevOps engineer, dan lead developer",
+      "coreProblem": "Developer terlambat mengetahui ketika endpoint API pihak ketiga down atau kuota API habis hingga pengguna akhir komplain.",
+      "keyFlow": "1. Pasang proxy URL di aplikasi -> 2. Sistem mencatat metrik latensi dan kode status -> 3. Dashboard menampilkan grafik performa real-time -> 4. Dispatch alert webhook saat ada error spike."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "FastAPI / Next.js Server Actions",
+      "database": "Supabase PostgreSQL + ClickHouse / TimescaleDB",
+      "deployment": "Docker Compose"
+    }
+  },
+  {
+    "id": "eval_08_logistics",
+    "name": "RentDrive (Rental Mobil & Armada)",
+    "domain": "Rental & Logistik Transportasi",
+    "formData": {
+      "appName": "RentDrive",
+      "description": "Platform manajemen rental mobil dan armada kendaraan. Pelanggan dapat memilih unit mobil (lepas kunci atau dengan driver), mengunggah foto KTP/SIM untuk verifikasi cepat, membayar deposit jaminan, dan menerima jadwal serah terima. Pengelola dapat melacak status ketersediaan unit, riwayat servis, serta denda keterlambatan pengembalian.",
+      "targetAudience": "Pengusaha rental kendaraan dan penyewa mobil harian/mingguan",
+      "coreProblem": "Pencatatan unit kendaraan yang bentrok jadwal, risiko keamanan penyewa lepas kunci, dan klaim denda lecet/terlambat yang sering dipersengketakan.",
+      "keyFlow": "1. Penyewa pilih mobil & durasi -> 2. Upload identitas KTP/SIM -> 3. Verifikasi & bayar deposit -> 4. Check-in kondisi mobil fisik -> 5. Pengembalian & pencairan deposit."
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Server Actions",
+      "database": "Supabase PostgreSQL",
+      "deployment": "Docker Coolify"
+    }
+  },
+  {
+    "id": "eval_09_vague_short_shop",
+    "name": "Input Samar 1 (Jualan Baju)",
+    "domain": "Input Sangat Pendek / Samar (Retail)",
+    "formData": {
+      "appName": "TokoBaju",
+      "description": "Bikin web buat jualan baju online",
+      "targetAudience": "pembeli baju",
+      "coreProblem": "belum punya toko online",
+      "keyFlow": "lihat baju terus beli"
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Server Actions",
+      "database": "Supabase PostgreSQL",
+      "deployment": "Vercel"
+    }
+  },
+  {
+    "id": "eval_10_vague_short_notes",
+    "name": "Input Samar 2 (Catatan Simpel)",
+    "domain": "Input Sangat Pendek / Samar (Produktivitas)",
+    "formData": {
+      "appName": "CatatanKu",
+      "description": "App catatan simpel",
+      "targetAudience": "orang yang mau nyatet",
+      "coreProblem": "sering lupa ide",
+      "keyFlow": "buka app ketik catatan simpan"
+    },
+    "techStack": {
+      "frontend": "Next.js 16 + Tailwind CSS",
+      "backend": "Next.js Server Actions",
+      "database": "Supabase PostgreSQL",
+      "deployment": "Vercel"
+    }
+  }
+]

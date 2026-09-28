@@ -735,6 +735,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               onSelectSection={handleSelectSection}
               theme={theme}
               prd={currentPrd}
+              isLoading={isLoadingPrd}
             />
           </div>
         )}
