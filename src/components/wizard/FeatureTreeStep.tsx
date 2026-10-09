@@ -237,7 +237,7 @@ export const FeatureTreeStep: React.FC<FeatureTreeStepProps> = ({
   }, [modules]);
 
   return (
-    <div className="w-full h-[calc(100vh-6rem)] min-h-[660px] flex flex-col animate-in fade-in duration-300 relative">
+    <div className="w-full h-[calc(100vh-5.5rem)] min-h-[580px] flex flex-col animate-in fade-in duration-300 relative">
       {/* Main Interactive Infinite Tree Canvas */}
       <div className="flex-1 w-full h-full relative overflow-hidden rounded-2xl border border-zinc-800/90 shadow-2xl flex flex-col">
         <InteractiveTreeCanvas

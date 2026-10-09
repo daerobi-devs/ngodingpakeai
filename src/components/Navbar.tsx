@@ -16,7 +16,6 @@ import {
   Settings,
   Users,
   Zap,
-  Network,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -75,7 +74,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     logout,
     systemSettings,
   } = useAuth();
-  const isArchitectEnabled = systemSettings?.is_architect_enabled !== false;
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [stats, setStats] = useState<{ users: number; prds: number }>({ users: 0, prds: 0 });
 
@@ -281,17 +279,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <FileText className="h-3.5 w-3.5" />
                         <span>Buka Studio Generator</span>
                       </Link>
-
-                      {isArchitectEnabled && (
-                        <Link
-                          href="/architect"
-                          onClick={() => setIsUserMenuOpen(false)}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-purple-400 hover:bg-zinc-900 transition-colors font-medium"
-                        >
-                          <Network className="h-3.5 w-3.5" />
-                          <span>Studio Arsitek &amp; Bab 3</span>
-                        </Link>
-                      )}
 
                       {isPlus && onOpenPricing && (
                         <button

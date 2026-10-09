@@ -221,19 +221,6 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     return true; // 'all'
   };
 
-  const isArchitectEnabled = systemSettings?.is_architect_enabled !== false;
-
-  const isArchitectAllowed = () => {
-    const policy = systemSettings?.architect_access_tier || 'paid_only';
-    if (policy === 'pro_only') {
-      return isPro || isAdmin;
-    }
-    if (policy === 'paid_only') {
-      return isPaid || isPro || isPlus || isAdmin;
-    }
-    return true; // 'all'
-  };
-
   const handleSelectCreationMode = (mode: 'prd' | 'roadmap' | 'wizard' | 'studio') => {
     const targetMode = mode === 'roadmap' ? 'roadmap' : 'prd';
     if (targetMode === 'roadmap' && !isRoadmapAllowed()) {
@@ -244,16 +231,7 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
     setShowModeHub(false);
   };
 
-  const handleSelectModeFromHub = (mode: 'prd' | 'roadmap' | 'wizard' | 'studio' | 'architect') => {
-    if (mode === 'architect') {
-      if (!isArchitectEnabled) return;
-      if (!isArchitectAllowed()) {
-        setIsPricingModalOpen(true);
-        return;
-      }
-      router.push('/architect');
-      return;
-    }
+  const handleSelectModeFromHub = (mode: 'prd' | 'roadmap' | 'wizard' | 'studio') => {
     handleSelectCreationMode(mode);
   };
 
@@ -1127,15 +1105,6 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               >
                 <span>Roadmap</span>
               </button>
-              {isArchitectEnabled && (
-                <Link
-                  href="/architect"
-                  className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all text-zinc-400 hover:text-purple-300 hover:bg-purple-950/40"
-                  title="Studio Arsitek & Bab 3"
-                >
-                  <span>Studio Arsitek</span>
-                </Link>
-              )}
             </div>
           </div>
 
@@ -1370,8 +1339,6 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
               theme={theme}
               isStudioLocked={!isStudioAllowed()}
               isRoadmapLocked={!isRoadmapAllowed()}
-              isArchitectLocked={!isArchitectAllowed()}
-              isArchitectEnabled={isArchitectEnabled}
               onOpenPricing={() => setIsPricingModalOpen(true)}
             />
           ) : creationMode === 'roadmap' ? (
@@ -1429,16 +1396,18 @@ Saya ingin berkonsultasi mengenai kendala / pertanyaan berikut:
           ) : (
             /* Condition: 3-Step Anti-Ramen PRD Creation Flow */
             <div className="w-full">
-              <div className="max-w-4xl mx-auto mb-2 flex items-center justify-start">
-                <button
-                  type="button"
-                  onClick={() => setShowModeHub(true)}
-                  className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-amber-400 transition-colors py-1 px-2.5 rounded-lg hover:bg-zinc-900/80 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Kembali ke Pilihan Alur</span>
-                </button>
-              </div>
+              {wizardStep !== 'feature_tree' && (
+                <div className="max-w-4xl mx-auto mb-2 flex items-center justify-start">
+                  <button
+                    type="button"
+                    onClick={() => setShowModeHub(true)}
+                    className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-amber-400 transition-colors py-1 px-2.5 rounded-lg hover:bg-zinc-900/80 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Kembali ke Pilihan Alur</span>
+                  </button>
+                </div>
+              )}
 
               <div id="wizard-container" className="w-full">
                 {wizardStep === 'input' ? (

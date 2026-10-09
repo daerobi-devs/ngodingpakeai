@@ -56,8 +56,6 @@ const DEFAULT_SETTINGS: SystemSettings = {
   admin_emails: ['daerobi.devs@gmail.com'],
   studio_access_tier: 'paid_only',
   roadmap_access_tier: 'paid_only',
-  architect_access_tier: 'paid_only',
-  is_architect_enabled: true,
 };
 
 export async function GET() {
@@ -88,16 +86,8 @@ export async function GET() {
         }))
       : undefined;
 
-    const isArchitectEnabledFinal =
-      data.is_architect_enabled !== undefined
-        ? data.is_architect_enabled
-        : localOverrides.is_architect_enabled !== undefined
-        ? localOverrides.is_architect_enabled
-        : true;
-
     const publicSettings = {
       ...data,
-      is_architect_enabled: isArchitectEnabledFinal,
       gemini_slots: sanitizedSlots,
       nine_router_key: data.nine_router_key ? '●●●●●●●●' : undefined,
       gemini_master_keys: data.gemini_master_keys ? '●●●●●●●●' : undefined,
@@ -138,10 +128,6 @@ export async function PUT(req: NextRequest) {
     if (updates.mpg_api_key === '●●●●●●●●') delete updates.mpg_api_key;
     if (updates.mpg_webhook_secret === '●●●●●●●●') delete updates.mpg_webhook_secret;
 
-    if (updates.is_architect_enabled !== undefined) {
-      saveLocalOverrides({ is_architect_enabled: updates.is_architect_enabled });
-    }
-
     updates.updated_at = new Date().toISOString();
 
     let { data, error } = await adminSupabase
@@ -159,30 +145,7 @@ export async function PUT(req: NextRequest) {
        error?.message?.includes('Could not find the'));
 
     if (isMissingColumnError && error) {
-      // 1. If error is about is_architect_enabled specifically, retry without removing other valid columns
-      if (error.message?.includes('is_architect_enabled')) {
-        const withoutToggle = { ...updates };
-        delete withoutToggle.is_architect_enabled;
-
-        const retry = await adminSupabase
-          .from('system_settings')
-          .upsert({ id: 'default', ...withoutToggle })
-          .select()
-          .single();
-
-        if (!retry.error) {
-          return NextResponse.json({
-            success: true,
-            settings: {
-              ...retry.data,
-              is_architect_enabled: updates.is_architect_enabled,
-            },
-            note: 'Pengaturan tersimpan. Jalankan supabase_migration_architect_toggle.sql di Supabase SQL Editor jika ingin menyimpannya langsung pada kolom tabel database.',
-          });
-        }
-      }
-
-      // 2. Fallback general retry with core columns
+      // Fallback general retry with core columns
       const coreUpdates = { ...updates };
       delete coreUpdates.gemini_slots;
       delete coreUpdates.global_gemini_slot;
@@ -198,8 +161,6 @@ export async function PUT(req: NextRequest) {
       delete coreUpdates.mpg_webhook_secret;
       delete coreUpdates.studio_access_tier;
       delete coreUpdates.roadmap_access_tier;
-      delete coreUpdates.architect_access_tier;
-      delete coreUpdates.is_architect_enabled;
 
       const retry = await adminSupabase
         .from('system_settings')
@@ -210,11 +171,8 @@ export async function PUT(req: NextRequest) {
       if (!retry.error) {
         return NextResponse.json({
           success: true,
-          settings: {
-            ...retry.data,
-            is_architect_enabled: updates.is_architect_enabled ?? true,
-          },
-          note: 'Pengaturan tersimpan dengan fallback. Silakan jalankan supabase_migration_architect_toggle.sql di Supabase untuk mengaktifkan kolom database.',
+          settings: retry.data,
+          note: 'Pengaturan tersimpan dengan fallback.',
         });
       }
       return NextResponse.json({ success: false, error: retry.error.message }, { status: 500 });
@@ -226,10 +184,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      settings: {
-        ...data,
-        is_architect_enabled: data?.is_architect_enabled ?? updates.is_architect_enabled,
-      },
+      settings: data,
     });
   } catch (e: unknown) {
     const err = e instanceof Error ? e.message : 'Gagal memperbarui pengaturan';

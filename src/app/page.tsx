@@ -29,7 +29,6 @@ import {
   Lock,
   Workflow,
   Cpu,
-  Network,
   Monitor,
   Smartphone,
   RotateCw,
@@ -101,8 +100,7 @@ const LOVABLE_SECTION_FEATURES = [
 
 export default function HomePageHub() {
   const router = useRouter();
-  const { user, systemSettings } = useAuth();
-  const isArchitectEnabled = systemSettings?.is_architect_enabled !== false;
+  const { user } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [ideaInput, setIdeaInput] = useState("");
@@ -110,12 +108,6 @@ export default function HomePageHub() {
   const [activeFeatureIdx, setActiveFeatureIdx] = useState(0);
   const [activeWorkspaceIdx, setActiveWorkspaceIdx] = useState(0);
   const sectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isArchitectEnabled && activeWorkspaceIdx === 2) {
-      setActiveWorkspaceIdx(0);
-    }
-  }, [isArchitectEnabled, activeWorkspaceIdx]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -178,14 +170,9 @@ export default function HomePageHub() {
     router.push("/generator?mode=prd");
   };
 
-  const handleCardClick = (mode: "prd" | "roadmap" | "architect") => {
+  const handleCardClick = (mode: "prd" | "roadmap") => {
     if (!user) {
       setIsAuthModalOpen(true);
-      return;
-    }
-    if (mode === "architect") {
-      if (!isArchitectEnabled) return;
-      router.push("/architect");
       return;
     }
     router.push(`/generator?mode=${mode}`);
@@ -886,7 +873,7 @@ export default function HomePageHub() {
               <span>Workspace Ecosystem</span>
             </div>
             <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white tracking-tight">
-              {isArchitectEnabled ? "Tiga" : "Dua"} Ruang Kerja Utama
+              Dua Ruang Kerja Utama
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
               Arahkan kursor atau pilih mode kerja untuk membuka spesifikasi dan cetak biru pengembangan proyekmu.
@@ -904,7 +891,7 @@ export default function HomePageHub() {
               }}
               className={`group relative flex flex-col justify-between rounded-3xl p-6 sm:p-7 bg-[#0c0e14]/95 backdrop-blur-2xl border transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer overflow-hidden ${
                 activeWorkspaceIdx === 0
-                  ? "lg:flex-[2.8] border-amber-500/40 shadow-[0_20px_50px_rgba(245,158,11,0.12)]"
+                  ? "lg:flex-[1.4] border-amber-500/40 shadow-[0_20px_50px_rgba(245,158,11,0.12)]"
                   : "lg:flex-1 border-white/[0.08] hover:border-amber-500/30 opacity-80 hover:opacity-100"
               }`}
             >
@@ -1028,7 +1015,7 @@ export default function HomePageHub() {
               }}
               className={`group relative flex flex-col justify-between rounded-3xl p-6 sm:p-7 bg-[#0c0e14]/95 backdrop-blur-2xl border transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer overflow-hidden ${
                 activeWorkspaceIdx === 1
-                  ? "lg:flex-[2.8] border-blue-500/40 shadow-[0_20px_50px_rgba(59,130,246,0.12)]"
+                  ? "lg:flex-[1.4] border-blue-500/40 shadow-[0_20px_50px_rgba(59,130,246,0.12)]"
                   : "lg:flex-1 border-white/[0.08] hover:border-blue-500/30 opacity-80 hover:opacity-100"
               }`}
             >
@@ -1170,129 +1157,7 @@ export default function HomePageHub() {
               </div>
             </div>
 
-            {/* CARD 2: STUDIO ARSITEK & BAB 3 */}
-            {isArchitectEnabled && (
-              <div
-                onMouseEnter={() => setActiveWorkspaceIdx(2)}
-                onClick={() => {
-                  if (activeWorkspaceIdx !== 2) setActiveWorkspaceIdx(2);
-                  else handleCardClick("architect");
-                }}
-                className={`group relative flex flex-col justify-between rounded-3xl p-6 sm:p-7 bg-[#0c0e14]/95 backdrop-blur-2xl border transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer overflow-hidden ${
-                  activeWorkspaceIdx === 2
-                    ? "lg:flex-[2.8] border-purple-500/40 shadow-[0_20px_50px_rgba(168,85,247,0.12)]"
-                    : "lg:flex-1 border-white/[0.08] hover:border-purple-500/30 opacity-80 hover:opacity-100"
-                }`}
-              >
-                {/* Ambient Glow */}
-                <div
-                  className={`absolute -top-24 -right-24 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-                    activeWorkspaceIdx === 2 ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-                <div className="absolute top-4 right-6 text-7xl font-mono font-bold text-white/[0.03] select-none pointer-events-none">
-                  03
-                </div>
 
-                {/* Card Header & Content */}
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between gap-2 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400 group-hover:scale-105 group-hover:bg-purple-500/15 transition-all duration-200 shadow-sm">
-                      <Network className="w-5 h-5" />
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/10 border border-purple-500/30 text-purple-400">
-                      UML &amp; Bab 3
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-purple-400 transition-colors mb-1.5 tracking-tight">
-                    Studio Arsitek
-                  </h3>
-                  <p className="text-xs text-purple-300/80 font-mono mb-2">
-                    UML 2.5, Skema ERD &amp; Naskah Skripsi DOCX
-                  </p>
-
-                  {/* Expanded Content Details */}
-                  <div
-                    className={`transition-all duration-300 ${
-                      activeWorkspaceIdx === 2
-                        ? "opacity-100 max-h-[800px] visible"
-                        : "lg:opacity-0 lg:max-h-0 lg:invisible lg:overflow-hidden"
-                    }`}
-                  >
-                    <p className="text-xs text-zinc-300 leading-relaxed mb-4">
-                      Ekstraksi cetak biru dari ide, SQL, folder, atau GitHub repo. Hasilkan 6 diagram UML &amp; ERD presisi, naskah Bab 3 skripsi Word DOCX standar DIKTI, dan kisi tanya-jawab sidang.
-                    </p>
-
-                    {/* Micro-UI Preview: Academic Architecture Console */}
-                    <div className="rounded-2xl border border-white/[0.08] bg-[#07090e]/80 p-3.5 mb-4 font-mono text-xs shadow-inner">
-                      <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-white/[0.06] text-[10px] text-zinc-400">
-                        <div className="flex items-center gap-1.5">
-                          <Network className="w-3 h-3 text-purple-400" />
-                          <span className="text-zinc-200 font-semibold">UML 2.5 &amp; Thesis Studio</span>
-                        </div>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-purple-400 font-semibold">
-                          DOCX 4-4-3-3
-                        </span>
-                      </div>
-                      <div className="space-y-1.5 text-[11px] text-zinc-300">
-                        <div className="text-purple-300/90 font-semibold truncate">
-                          &gt; 6 Diagram: Use Case, ERD, Sequence, Activity, Class, DFD
-                        </div>
-                        <div className="text-zinc-400 text-[10px] truncate">
-                          Status: Format Word Margin 4-4-3-3 &amp; AI Dosen Siap Uji
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Highlights Checklist */}
-                    <ul className="space-y-1.5 text-[11px] text-zinc-300 mb-5">
-                      <li className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span>6 Diagram UML &amp; Terstruktur validasi Mermaid tanpa halusinasi</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span>Ekspor naskah Bab 3 DOCX lengkap kamus data &amp; skenario terstandar</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  {/* Collapsed Teaser on Desktop */}
-                  <div
-                    className={`hidden lg:block transition-all duration-300 ${
-                      activeWorkspaceIdx === 2 ? "hidden" : "block mt-3"
-                    }`}
-                  >
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      6 diagram UML 2.5, ERD presisi, naskah Bab 3 DOCX, &amp; kisi sidang skripsi.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Bottom Action Area */}
-                <div className="relative z-10 pt-3 border-t border-white/[0.06]">
-                  {activeWorkspaceIdx === 2 ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCardClick("architect");
-                      }}
-                      className="w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer bg-purple-600 hover:bg-purple-500 text-white shadow-md active:scale-[0.99]"
-                    >
-                      <span>Buka Studio Arsitek</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  ) : (
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 group-hover:text-purple-400 transition-colors">
-                      <span>Buka Ruang Kerja</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </section>
 

@@ -49,7 +49,6 @@ import {
   Moon,
   Search,
   GitFork,
-  Network,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -143,8 +142,6 @@ export default function AdminDashboard() {
     pro_price_formatted: 'Rp 49.000 / Lifetime Access',
     studio_access_tier: 'paid_only',
     roadmap_access_tier: 'paid_only',
-    architect_access_tier: 'paid_only',
-    is_architect_enabled: true,
   });
 
   const [usersList, setUsersList] = useState<Profile[]>([]);
@@ -2130,87 +2127,7 @@ CREATE INDEX IF NOT EXISTS idx_prd_history_user_id ON public.prd_history(user_id
                   </div>
                 </div>
 
-                {/* Studio Arsitek & Bab 3 Access Policy & Visibility Toggle */}
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
-                    <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
-                      <Network className="h-4 w-4" />
-                      <span>Studio Arsitek &amp; Bab 3 Policy</span>
-                    </div>
-                    {/* Master Visibility Toggle */}
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
-                        settings.is_architect_enabled !== false
-                          ? 'bg-purple-500/15 border-purple-500/30 text-purple-300'
-                          : 'bg-zinc-800/80 border-zinc-700 text-zinc-400'
-                      }`}>
-                        {settings.is_architect_enabled !== false ? 'Aktif (Tampil)' : 'Sembunyi (Hide)'}
-                      </span>
-                      <div className="relative inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={settings.is_architect_enabled !== false}
-                          onChange={(e) =>
-                            setSettings({
-                              ...settings,
-                              is_architect_enabled: e.target.checked,
-                            })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-zinc-850 border border-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:border-purple-500"></div>
-                      </div>
-                    </label>
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    {settings.is_architect_enabled !== false
-                      ? 'Studio Arsitek aktif dan ditampilkan pada Landing Page, Dashboard User (Mode Hub), dan Topbar Generator.'
-                      : 'Studio Arsitek saat ini DISEMBUNYIKAN secara menyeluruh dari Landing Page, Dashboard User, dan Topbar. User umum tidak dapat melihat atau membukanya.'}
-                  </p>
-                  <div className={`space-y-2 text-xs transition-opacity ${settings.is_architect_enabled === false ? 'opacity-40 pointer-events-none' : ''}`}>
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                      Tingkat Akses (Ketika Fitur Aktif):
-                    </div>
-                    {[
-                      {
-                        id: 'paid_only',
-                        title: 'Pelanggan Berbayar (Disarankan)',
-                        desc: 'Khusus user Plus, Pro, & Unlimited. Free user diarahkan upgrade.',
-                      },
-                      {
-                        id: 'pro_only',
-                        title: 'Khusus PRO & Unlimited',
-                        desc: 'Hanya user paket Pro & Unlimited yang dapat mengakses Studio Arsitek & Ekspor DOCX.',
-                      },
-                      {
-                        id: 'all',
-                        title: 'Semua Pengguna (Termasuk Free)',
-                        desc: 'Semua user dapat mengakses Studio Arsitek (kuota harian tetap berlaku).',
-                      },
-                    ].map((m) => (
-                      <label
-                        key={m.id}
-                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                          (settings.architect_access_tier || 'paid_only') === m.id
-                            ? 'border-purple-500/50 bg-purple-500/10 text-white font-semibold'
-                            : 'border-zinc-800/80 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="architect_access_tier"
-                          checked={(settings.architect_access_tier || 'paid_only') === m.id}
-                          onChange={() => setSettings({ ...settings, architect_access_tier: m.id as any })}
-                          className="mt-0.5 text-purple-500 focus:ring-purple-500"
-                        />
-                        <div>
-                          <div className="font-semibold text-white">{m.title}</div>
-                          <div className="text-[11px] text-zinc-400">{m.desc}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                {/* Announcement Banner System */}
 
                 {/* Announcement Banner System */}
                 <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950 p-5 space-y-4 md:col-span-3">

@@ -309,23 +309,23 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col flex-1 relative overflow-hidden select-none">
-      {/* 1. FLOATING TOP ISLAND (Eliminates claustrophobic stacked header bar, makes canvas 100% full-height) */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[#101420]/90 border border-zinc-800/90 rounded-full px-3.5 py-1.5 shadow-2xl backdrop-blur-md max-w-[95vw] overflow-x-auto scrollbar-none transition-all">
-        {/* Project Title / Icon */}
-        <div className="flex items-center gap-1.5 pl-1 pr-2.5 border-r border-zinc-800/80 shrink-0">
-          <div className="h-5 w-5 rounded-md bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+      {/* 1. FLOATING TOP HUD (Decoupled 3-zone layout: Title Left, Filters Center, Actions Pinned Right) */}
+      <div className="absolute top-3.5 inset-x-3.5 sm:inset-x-4 z-30 flex items-center justify-between gap-2 pointer-events-none">
+        {/* Left Island: Project Title & Icon */}
+        <div className="flex items-center gap-1.5 bg-[#101420]/90 border border-zinc-800/90 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-md pointer-events-auto shrink-0 max-w-[180px] sm:max-w-[260px]">
+          <div className="h-5 w-5 rounded-md bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
             <FolderTree className="h-3 w-3" />
           </div>
           <span
-            className="text-xs font-bold text-zinc-200 truncate max-w-[120px] sm:max-w-[200px]"
+            className="text-xs font-bold text-zinc-200 truncate"
             title={title}
           >
             {title}
           </span>
         </div>
 
-        {/* Phase Filter Chips */}
-        <div className="flex items-center gap-1 shrink-0">
+        {/* Center Island: Phase Filter Chips (Scrollable if cramped, gracefully responsive) */}
+        <div className="hidden md:flex items-center gap-1 bg-[#101420]/90 border border-zinc-800/90 rounded-full px-2.5 py-1 shadow-xl backdrop-blur-md pointer-events-auto overflow-x-auto scrollbar-none max-w-[40vw]">
           {availablePhases.map((phaseKey) => {
             const isSelected = selectedPhaseFilter === phaseKey;
             return (
@@ -333,7 +333,7 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
                 key={phaseKey}
                 type="button"
                 onClick={() => setSelectedPhaseFilter(phaseKey)}
-                className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   isSelected
                     ? 'bg-amber-500 text-zinc-950 font-bold shadow-xs'
                     : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
@@ -345,8 +345,8 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
           })}
         </div>
 
-        {/* Action: Bikin Task / Toggle Tasks */}
-        <div className="pl-1.5 border-l border-zinc-800/80 shrink-0 flex items-center gap-1.5">
+        {/* Right Island: Action Hub - ALWAYS PINNED, ALWAYS 100% VISIBLE, NEVER CUT OFF */}
+        <div className="flex items-center gap-1.5 sm:gap-2 bg-[#101420]/90 border border-zinc-800/90 rounded-full p-1 sm:px-2.5 sm:py-1 shadow-2xl backdrop-blur-md pointer-events-auto shrink-0">
           {!isWizard && (onToggleShowTasks || onGenerateTasks) && (
             <button
               type="button"
@@ -386,7 +386,7 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
               type="button"
               onClick={onBackWizard}
               disabled={isGeneratingPrd}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
                 isLight
                   ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
                   : 'border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white'
@@ -394,7 +394,8 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
               title="Kembali ke pertanyaan klarifikasi"
             >
               <ArrowLeft className="h-3 w-3" />
-              <span>Ubah Tanya Jawab</span>
+              <span className="hidden sm:inline">Ubah Tanya Jawab</span>
+              <span className="sm:hidden">Tanya Jawab</span>
             </button>
           )}
 
@@ -403,7 +404,7 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
               type="button"
               onClick={onProceedWizard}
               disabled={isGeneratingPrd}
-              className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-bold transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] sm:text-xs font-bold transition-all shadow-md shadow-amber-500/25 active:scale-95 cursor-pointer disabled:opacity-50 ring-2 ring-amber-400/20"
             >
               {isGeneratingPrd ? (
                 <>
@@ -413,7 +414,7 @@ export const InteractiveTreeCanvas: React.FC<InteractiveTreeCanvasProps> = ({
               ) : (
                 <>
                   <span>Generate Dokumen PRD</span>
-                  <ArrowRight className="h-3 w-3" />
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </>
               )}
             </button>

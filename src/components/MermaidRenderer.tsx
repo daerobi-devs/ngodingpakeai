@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useId } from "react";
-import { Copy, Check, Code2, AlertTriangle, RefreshCw, Maximize2, X, PenTool } from "lucide-react";
-import { InAppExcalidrawModal } from "./architect/InAppExcalidrawModal";
-import { convertMermaidToExcalidraw } from "@/lib/excalidraw/excalidraw-converter";
+import { Copy, Check, Code2, AlertTriangle, RefreshCw, Maximize2, X } from "lucide-react";
 
 interface MermaidRendererProps {
   chart: string;
@@ -67,7 +65,6 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [isExcalidrawModalOpen, setIsExcalidrawModalOpen] = useState<boolean>(false);
   const rawId = useId().replace(/[^a-zA-Z0-9]/g, "");
   // Stable ID across renders for this component instance
   const renderIdRef = useRef<string>(`mermaid_${rawId}`);
@@ -232,16 +229,6 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
               </>
             )}
           </button>
-          {/* Coret di Excalidraw */}
-          <button
-            type="button"
-            onClick={() => setIsExcalidrawModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-md border border-indigo-500/40 bg-indigo-950/30 px-2 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-900/40 transition-colors cursor-pointer"
-            title="Buka atau Coret di Excalidraw"
-          >
-            <PenTool className="h-3 w-3 text-indigo-400" />
-            <span className="hidden sm:inline">Excalidraw</span>
-          </button>
 
           {!loading && !error && !showRaw && (
             <button
@@ -339,14 +326,6 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
           </div>
         </div>
       )}
-
-      {/* Modal Kanvas Papan Tulis Live In-App Excalidraw */}
-      <InAppExcalidrawModal
-        isOpen={isExcalidrawModalOpen}
-        onClose={() => setIsExcalidrawModalOpen(false)}
-        scene={convertMermaidToExcalidraw(chart, title || 'Diagram Arsitektur')}
-        title={title || 'Diagram Arsitektur'}
-      />
     </div>
   );
 };
