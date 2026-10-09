@@ -204,80 +204,103 @@ export function generateStudioFullMarkdown(prd: PRDOutput): string {
   return md;
 }
 
+import { getAllTreeModulesWithTasks } from '@/lib/tree-task-generator';
+
 /**
- * Generates actionable TASKS.md for AI Coding Agent or developer checklist.
+ * Generates actionable TASKS.md for AI Coding Agent or developer checklist,
+ * dynamically extracted from the Feature Tree (Pohon Fitur) modules and their engineering tasks.
  */
-export function generateStudioTasksMarkdown(prd: PRDOutput): string {
-  let md = `# Implementation Tasks & Execution Backlog: ${prd.title}\n\n`;
-  md += `> Dokumen rincian tugas koding berfase yang diekstrak dari Pohon Fitur & PRD.\n`;
-  md += `> Gunakan checklist ini sebagai panduan eksekusi untuk AI Coding Agent (Claude Code, Cursor, Aider, Devin) atau Software Engineer.\n\n`;
-
-  // 1. Fondasi & Arsitektur
-  md += `## FASE 1: Fondasi & Arsitektur Sistem (P0)\n\n`;
-  md += `- [ ] **[TASK-FOUNDATION-01] Inisialisasi Project, Design Tokens & Shell Layout** (Prioritas: P0)\n`;
-  md += `  - **User Story**: Membangun kerangka dasar aplikasi ${prd.title}, navigasi responsif, layout header-footer, dan mock data interaktif.\n`;
-  md += `  - **Target Komponen**: \`App Router Layout\`, \`Navigation Shell\`, \`Theme Provider\`, \`UI Design System\`\n\n`;
-
-  md += `- [ ] **[TASK-DB-01] Skema Database, Relasi, Indeks & RLS Policies** (Prioritas: P0)\n`;
-  md += `  - **User Story**: Merancang tabel relasional PostgreSQL di Supabase lengkap dengan Row-Level Security dan indeks performa mengacu pada skema PRD.\n`;
-  md += `  - **Target Entitas**: Tabel relasional sesuai spesifikasi PRD\n\n`;
-
-  md += `- [ ] **[TASK-AUTH-01] Sistem Autentikasi Pengguna & Route Guards** (Prioritas: P0)\n`;
-  md += `  - **User Story**: Menyediakan alur login/register, sinkronisasi profil pengguna, dan proteksi rute middleware server-side.\n`;
-  md += `  - **Target Komponen**: \`Auth Modal / Page\`, \`Session Verifier\`, \`Auth Middleware Route Guard\`\n\n`;
-
-  // 2. Modul Berfase & Sub-Fitur
-  if (prd.roadmap_tree && prd.roadmap_tree.length > 0) {
-    prd.roadmap_tree.forEach((node, nodeIdx) => {
-      const phaseLabel = node.phase || (nodeIdx < 2 ? 'FASE 1' : nodeIdx < 4 ? 'FASE 2' : 'FASE 3');
-      const phasePriority = phaseLabel.includes('1') ? 'P0' : 'P1';
-      const nodeSlug = node.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `mod-${nodeIdx + 1}`;
-      const subList = (node.sub_features || []).map((s) => (typeof s === 'string' ? s : s.label)).filter(Boolean);
-
-      md += `## [${phaseLabel}] Modul ${nodeIdx + 1}: ${node.title}\n\n`;
-      md += `- [ ] **[TASK-MOD-${nodeIdx + 1}] Arsitektur & Shell Modul: ${node.title}** (Prioritas: ${phasePriority})\n`;
-      md += `  - **Deskripsi**: ${node.description || `Membangun alur utama modul ${node.title} untuk aplikasi ${prd.title}.`}\n`;
-      md += `  - **Komponen Target**: \`components/${nodeSlug}/MainView.tsx\`, \`/api/${nodeSlug}\`\n\n`;
-
-      if (subList.length > 0) {
-        subList.forEach((subTitle, sIdx) => {
-          const cleanSub = subTitle.replace(/^[-*•\d.]+\s*/, '').trim();
-          const subSlug = cleanSub.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 25) || `sub-${sIdx + 1}`;
-          md += `- [ ] **[TASK-SUB-${nodeIdx + 1}.${sIdx + 1}] Sub-Fitur: ${cleanSub}** (Prioritas: ${phasePriority})\n`;
-          md += `  - **User Story**: Mengimplementasikan antarmuka dan alur bisnis "${cleanSub}" pada modul ${node.title}.\n`;
-          md += `  - **File Target**: \`components/${nodeSlug}/${subSlug}.tsx\` & \`/api/${nodeSlug}/${subSlug}\`\n\n`;
-        });
+export function generateStudioTasksMarkdown(
+  prd: PRDOutput,
+  taskCompletion?: Record<string, boolean>
+): string {
+  // Check localStorage fallback if in browser
+  let completionMap: Record<string, boolean> = taskCompletion || {};
+  if (!taskCompletion && typeof window !== 'undefined') {
+    try {
+      const prdIdentifier = (prd as { id?: string }).id || prd.title || 'default';
+      const saved = localStorage.getItem(`ngodingpakeprd_studio_tree_tasks_${prdIdentifier}`);
+      if (saved) {
+        completionMap = JSON.parse(saved);
       }
-    });
-  } else if (prd.feature_breakdown && prd.feature_breakdown.length > 0) {
-    prd.feature_breakdown.forEach((feat, idx) => {
-      const p = feat.priority || (idx < 2 ? 'P0' : 'P1');
-      md += `## Fitur Inti ${idx + 1}: ${feat.name} (${p})\n\n`;
-      md += `- [ ] **[TASK-FEAT-${idx + 1}] Implementasi Menyeluruh: ${feat.name}**\n`;
-      md += `  - **User Story**: ${feat.user_story}\n`;
-      if (feat.tech_mapping?.frontend_components) {
-        md += `  - **Frontend**: \`${feat.tech_mapping.frontend_components.join('`, `')}\`\n`;
-      }
-      if (feat.tech_mapping?.api_endpoints) {
-        md += `  - **API**: \`${feat.tech_mapping.api_endpoints.join('`, `')}\`\n`;
-      }
-      md += `\n`;
-    });
+    } catch {
+      // fallback
+    }
   }
 
-  // 3. Integrasi & Resiliensi
-  md += `## FASE KESIAPAN: Integrasi, Resiliensi & Kesiapan Produksi (P1)\n\n`;
-  md += `- [ ] **[TASK-API-01] Pembangunan Route Handlers, Safe Actions & Validasi Skema Zod** (Prioritas: P1)\n`;
-  md += `  - **Target**: Next.js Route Handlers, Zod Input Schema, dan middleware rate limiting.\n\n`;
+  const modulesWithTasks = getAllTreeModulesWithTasks(prd, completionMap);
 
-  md += `- [ ] **[TASK-EXT-01] Integrasi Transaksional & Webhook Gateway** (Prioritas: P1)\n`;
-  md += `  - **Target**: Webhook Handler, Signature Verifier, dan antrean event atomik.\n\n`;
+  let totalTasks = 0;
+  let completedTasks = 0;
+  modulesWithTasks.forEach((m) => {
+    m.tasks.forEach((t) => {
+      totalTasks++;
+      if (t.completed) completedTasks++;
+    });
+  });
 
-  md += `- [ ] **[TASK-RESILIENCE-01] Penanganan Edge Cases, Error Boundaries & Fallback UI** (Prioritas: P1)\n`;
-  md += `  - **Target**: Global Error Boundary, Not-Found Page, dan Skeleton Shimmer Loading.\n\n`;
+  const percent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  md += `- [ ] **[TASK-PROD-01] Audit Kualitas Kode, Type Checking, E2E Verification & Kesiapan Rilis** (Prioritas: P1)\n`;
-  md += `  - **Target**: Verifikasi \`npx tsc --noEmit\`, build kompilasi produksi sukses, dan SEO meta tags.\n`;
+  let md = `# Implementation Tasks & Execution Backlog: ${prd.title}\n\n`;
+  md += `> Dokumen rincian tugas koding berfase yang diekstrak langsung secara dinamis dari Pohon Fitur & PRD.\n`;
+  md += `> Gunakan checklist ini sebagai panduan eksekusi untuk AI Coding Agent (Claude Code, Cursor, Aider, Devin) atau Software Engineer.\n\n`;
+
+  md += `## Ringkasan Eksekusi Proyek\n`;
+  md += `- **Aplikasi:** ${prd.title}\n`;
+  md += `- **Total Modul:** ${modulesWithTasks.length} modul terstruktur\n`;
+  md += `- **Total Task Koding:** ${totalTasks} tugas teknis\n`;
+  md += `- **Status Progres:** ${completedTasks} / ${totalTasks} selesai (${percent}%)\n\n`;
+  md += `---\n\n`;
+
+  // Group modules by Phase
+  const phasesMap = new Map<string, typeof modulesWithTasks>();
+  modulesWithTasks.forEach((m) => {
+    const p = m.phaseLabel;
+    if (!phasesMap.has(p)) {
+      phasesMap.set(p, []);
+    }
+    phasesMap.get(p)!.push(m);
+  });
+
+  phasesMap.forEach((modules, phaseKey) => {
+    md += `## [${phaseKey}] Rencana Modul Pengembangan\n\n`;
+
+    modules.forEach((mod) => {
+      const node = mod.node;
+      const subList = (node.sub_features || [])
+        .map((s) => (typeof s === 'string' ? s : (s as { label?: string }).label))
+        .filter(Boolean);
+
+      md += `### Modul ${mod.nodeIndex + 1}: ${node.title}\n`;
+      if (node.description) {
+        md += `- **Deskripsi:** ${node.description}\n`;
+      }
+      if (subList.length > 0) {
+        md += `- **Cakupan Sub-Fitur:**\n`;
+        subList.forEach((sub, sIdx) => {
+          md += `  ${sIdx + 1}. ${sub}\n`;
+        });
+      }
+      md += `\n`;
+      md += `#### Checklist Tugas Koding (Pohon Fitur):\n\n`;
+
+      mod.tasks.forEach((task, tIdx) => {
+        const check = task.completed ? 'x' : ' ';
+        const taskNum = String(tIdx + 1).padStart(2, '0');
+        const codeTag = `[TASK-MOD-${mod.nodeIndex + 1}-${taskNum}]`;
+
+        md += `- [${check}] **${codeTag} ${task.title}** (Prioritas: ${task.priority})\n`;
+        md += `  - **Kategori**: ${task.category}\n`;
+        if (task.targetFiles && task.targetFiles.length > 0) {
+          md += `  - **Target File**: \`${task.targetFiles.join('`, `')}\`\n`;
+        }
+        if (task.instruction) {
+          md += `  - **Instruksi**: ${task.instruction}\n`;
+        }
+        md += `\n`;
+      });
+    });
+  });
 
   return md;
 }
@@ -285,9 +308,12 @@ export function generateStudioTasksMarkdown(prd: PRDOutput): string {
 /**
  * Generates the master CLI prompt for AI Coding Agents (Claude Code, Cursor, Aider, Windsurf).
  */
-export function generateAgentMasterPrompt(prd: PRDOutput): string {
+export function generateAgentMasterPrompt(
+  prd: PRDOutput,
+  taskCompletion?: Record<string, boolean>
+): string {
   const resolvedStack = resolvePrdTechStack(prd);
-  const tasksMarkdown = generateStudioTasksMarkdown(prd);
+  const tasksMarkdown = generateStudioTasksMarkdown(prd, taskCompletion);
 
   return `# MASTER IMPLEMENTATION PROMPT UNTUK AI CODING AGENT
 
@@ -323,6 +349,7 @@ ${tasksMarkdown}
 ---
 
 ## 4. PERINTAH AWAL EKSEKUSI
-Mulai sekarang, bacalah seluruh konteks di atas. Konfirmasikan bahwa kamu memahami struktur proyek, lalu langsung mulai eksekusi [TASK-FOUNDATION-01] dan laporkan progres begitu selesai!
+Mulai sekarang, bacalah seluruh konteks di atas. Konfirmasikan bahwa kamu memahami struktur proyek, lalu langsung mulai eksekusi dari task checklist pertama yang belum dicentang dan laporkan progres begitu selesai!
 `;
 }
+

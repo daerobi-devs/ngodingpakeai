@@ -28,6 +28,7 @@ interface ImplementationModalProps {
   onDownloadZip: () => void;
   isExportingZip?: boolean;
   theme?: 'dark' | 'light';
+  taskCompletion?: Record<string, boolean>;
 }
 
 export const ImplementationModal: React.FC<ImplementationModalProps> = ({
@@ -40,6 +41,7 @@ export const ImplementationModal: React.FC<ImplementationModalProps> = ({
   onDownloadZip,
   isExportingZip = false,
   theme = 'dark',
+  taskCompletion,
 }) => {
   const [view, setView] = useState<'options' | 'prompt'>('options');
   const [copied, setCopied] = useState(false);
@@ -48,7 +50,7 @@ export const ImplementationModal: React.FC<ImplementationModalProps> = ({
   if (!isOpen) return null;
 
   const isLight = theme === 'light';
-  const masterPrompt = generateAgentMasterPrompt(prd);
+  const masterPrompt = generateAgentMasterPrompt(prd, taskCompletion);
 
   const handleCopyPrompt = async () => {
     try {

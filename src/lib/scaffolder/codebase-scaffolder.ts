@@ -14,6 +14,7 @@ import { resolveGenericStack } from "./stack-resolvers/generic-resolver";
 export interface ScaffolderOptions {
   versionNumber?: number;
   mode?: "full_starter" | "docs_only";
+  taskCompletion?: Record<string, boolean>;
 }
 
 export interface GeneratedZipResult {
@@ -225,7 +226,7 @@ export async function generateStarterCodebaseZip(
   const prdMarkdown = formatPrdAsMarkdown(prd);
   const palette = getDesignPalette(prd);
   const designMarkdown = generateDesignDoc(prd, palette);
-  const tasksMarkdown = generateStudioTasksMarkdown(prd);
+  const tasksMarkdown = generateStudioTasksMarkdown(prd, options?.taskCompletion);
 
   const docsFolder = rootFolder.folder("docs");
   if (docsFolder) {

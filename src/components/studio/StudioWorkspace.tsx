@@ -152,6 +152,36 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
   const [isGeneratingTasks, setIsGeneratingTasks] = useState<boolean>(false);
   const [generatingProgressText, setGeneratingProgressText] = useState<string>('Menganalisis modul & sub-fitur dari PRD...');
 
+  const storageTreeTasksKey = `ngodingpakeprd_studio_tree_tasks_${prdId}`;
+  const [treeTaskCompletion, setTreeTaskCompletion] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`ngodingpakeprd_studio_tree_tasks_${prdId}`);
+        if (saved) return JSON.parse(saved);
+      } catch {
+        // fallback
+      }
+    }
+    return {};
+  });
+
+  const handleToggleTreeTask = useCallback((_modId: string, taskId: string) => {
+    setTreeTaskCompletion((prev) => {
+      const next = {
+        ...prev,
+        [taskId]: !prev[taskId],
+      };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`ngodingpakeprd_studio_tree_tasks_${prdId}`, JSON.stringify(next));
+        } catch {
+          // silent
+        }
+      }
+      return next;
+    });
+  }, [prdId]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentPrdIdRef = useRef<string | null>(null);
@@ -162,6 +192,15 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
       return;
     }
     currentPrdIdRef.current = prdId;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const savedTreeTasks = localStorage.getItem(`ngodingpakeprd_studio_tree_tasks_${prdId}`);
+        setTreeTaskCompletion(savedTreeTasks ? JSON.parse(savedTreeTasks) : {});
+      } catch {
+        setTreeTaskCompletion({});
+      }
+    }
 
     if (typeof window !== 'undefined') {
       try {
@@ -511,6 +550,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
       const { blob, filename } = await generateStarterCodebaseZip(currentPrd, {
         mode,
         versionNumber: activeVersionNumber,
+        taskCompletion: treeTaskCompletion,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -562,9 +602,9 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
       document.body.removeChild(a1);
       URL.revokeObjectURL(prdUrl);
 
-      // 2. Download file TASKS.md
+      // 2. Download file TASKS.md with dynamic tasks from the Feature Tree
       setTimeout(() => {
-        const tasksMarkdown = generateStudioTasksMarkdown(currentPrd);
+        const tasksMarkdown = generateStudioTasksMarkdown(currentPrd, treeTaskCompletion);
         const tasksBlob = new Blob([tasksMarkdown], { type: 'text/markdown;charset=utf-8' });
         const tasksUrl = URL.createObjectURL(tasksBlob);
         const a2 = document.createElement('a');
@@ -775,6 +815,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               mode="studio"
               isTasksGenerated={hasGeneratedTasks}
               onGenerateTasks={handleBikinTask}
+              taskCompletion={treeTaskCompletion}
+              onToggleTask={handleToggleTreeTask}
             />
           </div>
         ) : viewMode === 'split' ? (
@@ -810,6 +852,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                 mode="split"
                 isTasksGenerated={hasGeneratedTasks}
                 onGenerateTasks={handleBikinTask}
+                taskCompletion={treeTaskCompletion}
+                onToggleTask={handleToggleTreeTask}
               />
             </div>
           </div>
@@ -877,6 +921,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         onDownloadZip={() => handleExportZip('full_starter')}
         isExportingZip={isExportingZip}
         theme={theme}
+        taskCompletion={treeTaskCompletion}
       />
 
       {/* Task Generation Progress Modal Overlay */}
