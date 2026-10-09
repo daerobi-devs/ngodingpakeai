@@ -47,6 +47,7 @@ import {
   WindsurfLogo,
   VsCodeLogo,
 } from "@/components/icons/AgentIcons";
+import { HeroCharacterCompanion } from "@/components/landing/HeroCharacterCompanion";
 
 const QUICK_INSPIRATION_CHIPS = [
   "Rental Lapangan Badminton + WA Gateway",
@@ -219,77 +220,93 @@ export default function HomePageHub() {
       {/* ================= MAIN CONTENT WRAPPER ================= */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-20 space-y-16 sm:space-y-24 relative z-10">
         
-        {/* ================= SECTION 1: HERO & PROMPT GATEWAY ================= */}
-        <section className="text-center space-y-6 sm:space-y-8 max-w-4xl mx-auto">
-          {/* Main Headline - Option 1: Clean & Inviting */}
-          <div className="space-y-4 max-w-3xl mx-auto">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.15]">
-              Rancang Arsitekturnya Sekarang, Biarkan AI yang Mengeksekusi.
-            </h1>
-            <p className="text-sm sm:text-lg text-zinc-300 font-medium max-w-2xl mx-auto leading-relaxed">
-              Cukup ketik satu kalimat ide untuk membuat PRD lengkap, diagram sistem, dan skema SQL yang siap pakai.
-            </p>
-          </div>
-
-          {/* Interactive Hero Prompt Console (Clean, Pristine & Tactile) */}
-          <div className="w-full max-w-2xl mx-auto text-left relative group">
-            {/* Ambient Multi-Stop Glow behind Prompt Box */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-amber-500/20 rounded-2xl blur-lg opacity-30 group-focus-within:opacity-80 group-hover:opacity-50 transition duration-500 pointer-events-none" />
-
-            <div className="relative rounded-2xl bg-[#0c0e14]/95 border border-white/[0.12] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] p-3.5 sm:p-5 backdrop-blur-xl transition-all duration-200 focus-within:border-amber-500/50">
-              <div className="px-1 py-1">
-                <textarea
-                  rows={2}
-                  value={ideaInput}
-                  onChange={(e) => setIdeaInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleStartIdea();
-                    }
-                  }}
-                  placeholder="Ketik ide aplikasimu di sini (contoh: Aplikasi sewa lapangan badminton dengan Midtrans dan notifikasi WhatsApp)..."
-                  className="w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder:text-zinc-500 focus:outline-none resize-none leading-relaxed"
-                />
+        {/* ================= SECTION 1: HERO & PROMPT GATEWAY (SPLIT KIRI - KANAN) ================= */}
+        <section className="w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+            
+            {/* Sisi Kiri: Headline, Deskripsi & Prompt Console */}
+            <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
+              <div className="space-y-4">
+                <h1 className="text-3xl sm:text-5xl lg:text-5xl xl:text-[54px] font-black tracking-tight text-white leading-[1.12]">
+                  Rancang Arsitekturnya Sekarang, Biarkan AI yang Mengeksekusi.
+                </h1>
+                <p className="text-sm sm:text-base lg:text-lg text-zinc-300 font-medium max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                  Cukup ketik satu kalimat ide untuk membuat PRD lengkap, diagram sistem, dan skema SQL yang siap pakai.
+                </p>
               </div>
 
-              {/* Bottom Control Bar */}
-              <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-2 px-1">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400">
-                    <Layers className="w-3 h-3 text-amber-400/80" />
-                    <span>PRD 4-Lapis</span>
-                  </span>
+              {/* Interactive Hero Prompt Console (Clean, Pristine & Tactile) */}
+              <div className="w-full text-left relative group">
+                {/* Ambient Multi-Stop Glow behind Prompt Box */}
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-amber-500/20 rounded-2xl blur-lg opacity-30 group-focus-within:opacity-80 group-hover:opacity-50 transition duration-500 pointer-events-none" />
+
+                <div className="relative rounded-2xl bg-[#0c0e14]/95 border border-white/[0.12] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] p-3.5 sm:p-5 backdrop-blur-xl transition-all duration-200 focus-within:border-amber-500/50">
+                  <div className="px-1 py-1">
+                    <textarea
+                      rows={2}
+                      value={ideaInput}
+                      onChange={(e) => setIdeaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleStartIdea();
+                        }
+                      }}
+                      placeholder="Ketik ide aplikasimu di sini (contoh: Aplikasi sewa lapangan badminton dengan Midtrans dan notifikasi WhatsApp)..."
+                      className="w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder:text-zinc-500 focus:outline-none resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Bottom Control Bar */}
+                  <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400">
+                        <Layers className="w-3 h-3 text-amber-400/80" />
+                        <span>PRD 4-Lapis</span>
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStartIdea()}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-xs transition-all duration-150 cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <span>Rancang Cetak Biru</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleStartIdea()}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-xs transition-all duration-150 cursor-pointer shadow-xs active:scale-95"
-                >
-                  <span>Rancang Cetak Biru</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
+                {/* Quick Inspiration Pills */}
+                <div className="mt-3.5 flex flex-wrap items-center gap-2 justify-center lg:justify-start">
+                  <span className="text-[11px] text-zinc-500 font-mono">Inspirasi Cepat:</span>
+                  {QUICK_INSPIRATION_CHIPS.map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setIdeaInput(chip);
+                        handleStartIdea(chip);
+                      }}
+                      className="px-3 py-1 rounded-full text-[11px] font-mono bg-white/[0.02] hover:bg-amber-500/10 text-zinc-400 hover:text-amber-300 border border-white/[0.07] hover:border-amber-500/30 transition-all duration-150 cursor-pointer active:scale-95"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Quick Inspiration Pills */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-              <span className="text-[11px] text-zinc-500 font-mono">Inspirasi Cepat:</span>
-              {QUICK_INSPIRATION_CHIPS.map((chip, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setIdeaInput(chip);
-                    handleStartIdea(chip);
-                  }}
-                  className="px-3 py-1 rounded-full text-[11px] font-mono bg-white/[0.02] hover:bg-amber-500/10 text-zinc-400 hover:text-amber-300 border border-white/[0.07] hover:border-amber-500/30 transition-all duration-150 cursor-pointer active:scale-95"
-                >
-                  {chip}
-                </button>
-              ))}
+            {/* Sisi Kanan: Motion Character Companion */}
+            <div className="lg:col-span-5 flex justify-center lg:justify-end items-center">
+              <HeroCharacterCompanion
+                onSelectPrompt={(text) => {
+                  setIdeaInput(text);
+                  handleStartIdea(text);
+                }}
+              />
             </div>
+
           </div>
         </section>
 

@@ -44,3 +44,4 @@ next-env.d.ts
 scratch/
 .settings_override.json
 .vscode/
+/*.mp4
